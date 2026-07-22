@@ -1,0 +1,5600 @@
+(function () {
+  const themePresets = {
+    'wps-dark': { label: 'WPS7 Dark', mode: 'dark', ink: '#08131f', panel: '#0e1c2a', rail: '#0b1926', terminal: '#07131e', surfaceRaised: '#142536', surfaceSoft: '#102131', line: '#25394a', lineStrong: '#385064', text: '#f2f6f7', muted: '#91a3b2', accent: '#48d6b2', accentStrong: '#22b993', warn: '#f1b84b', danger: '#ff7474', shadow: 'rgba(0, 0, 0, .34)', terminalBg: '#06111b', terminalFg: '#eef5f4' },
+    'wps-light': { label: 'WPS7 Light', mode: 'light', ink: '#f5f7f8', panel: '#ffffff', rail: '#f2f5f6', terminal: '#f8fafb', surfaceRaised: '#ffffff', surfaceSoft: '#edf3f3', line: '#d7e0e4', lineStrong: '#b9c8cf', text: '#14202b', muted: '#667582', accent: '#159d83', accentStrong: '#0d806a', warn: '#8a4f00', danger: '#c43d4b', shadow: 'rgba(31, 49, 61, .14)', terminalBg: '#ffffff', terminalFg: '#17232d' },
+    'apple-dark': { label: 'Apple Dark', mode: 'dark', ink: '#101114', panel: '#1c1c1e', rail: '#161618', terminal: '#0b0c0f', surfaceRaised: '#242428', surfaceSoft: '#202024', line: '#38383d', lineStrong: '#54545b', text: '#f5f5f7', muted: '#a1a1a6', accent: '#0a84ff', accentStrong: '#409cff', warn: '#ffd60a', danger: '#ff453a', shadow: 'rgba(0, 0, 0, .34)', terminalBg: '#0b0c0f', terminalFg: '#f5f5f7' },
+    'apple-light': { label: 'Apple Light', mode: 'light', ink: '#f2f2f7', panel: '#ffffff', rail: '#f7f7fa', terminal: '#fbfbfd', surfaceRaised: '#ffffff', surfaceSoft: '#e9e9ee', line: '#d1d1d6', lineStrong: '#aeaeb2', text: '#1c1c1e', muted: '#636366', accent: '#0066cc', accentStrong: '#004f9e', warn: '#7a4b00', danger: '#c9342f', shadow: 'rgba(31, 31, 35, .14)', terminalBg: '#ffffff', terminalFg: '#1c1c1e' },
+    'claude-dark': { label: 'Claude Dark', mode: 'dark', ink: '#1f1b18', panel: '#29231f', rail: '#241f1b', terminal: '#171411', surfaceRaised: '#342c27', surfaceSoft: '#302823', line: '#4a3e36', lineStrong: '#685548', text: '#f5eee8', muted: '#b5a79b', accent: '#e58b55', accentStrong: '#f0a36d', warn: '#f2c14e', danger: '#ff7a70', shadow: 'rgba(20, 12, 7, .38)', terminalBg: '#171411', terminalFg: '#f5eee8' },
+    'claude-light': { label: 'Claude Light', mode: 'light', ink: '#f7f3ee', panel: '#fffaf5', rail: '#f1ebe4', terminal: '#fffdf9', surfaceRaised: '#ffffff', surfaceSoft: '#eee5dc', line: '#d8cbc0', lineStrong: '#bca99b', text: '#2d2723', muted: '#6f6258', accent: '#b84f23', accentStrong: '#963d1c', warn: '#7f4d00', danger: '#b93434', shadow: 'rgba(72, 49, 34, .14)', terminalBg: '#fffdf9', terminalFg: '#2d2723' },
+    'codex-dark': { label: 'Codex Dark', mode: 'dark', ink: '#111311', panel: '#181b18', rail: '#141714', terminal: '#0b0d0c', surfaceRaised: '#202420', surfaceSoft: '#1c201c', line: '#303730', lineStrong: '#465046', text: '#edf3ee', muted: '#9aa79d', accent: '#52d273', accentStrong: '#2fbd56', warn: '#f2b84b', danger: '#ff6b6b', shadow: 'rgba(0, 0, 0, .36)', terminalBg: '#0b0d0c', terminalFg: '#edf3ee' },
+    'codex-light': { label: 'Codex Light', mode: 'light', ink: '#f3f5f2', panel: '#ffffff', rail: '#eef1ed', terminal: '#fcfdfb', surfaceRaised: '#ffffff', surfaceSoft: '#e7ece6', line: '#d0d7cf', lineStrong: '#aeb9ad', text: '#182019', muted: '#5d6b60', accent: '#147a36', accentStrong: '#0c652a', warn: '#7c4d00', danger: '#b7333e', shadow: 'rgba(28, 45, 31, .14)', terminalBg: '#fcfdfb', terminalFg: '#182019' }
+  };
+  const customThemeDefaults = {
+    selected_light: 'wps-light', selected_dark: 'wps-dark', mode: 'dark',
+    ink: '#0c1017', panel: '#161b24', rail: '#111721', surface: '#202735', line: '#394354', text: '#f4f7fa', muted: '#9aa7b8', accent: '#6ee7c2', warn: '#f0b35a', danger: '#ff7676', terminal_bg: '#080c12', terminal_fg: '#f4f7fa',
+    light_ink: '#f5f7f8', light_panel: '#ffffff', light_rail: '#f2f5f6', light_surface: '#edf3f3', light_line: '#d7e0e4', light_text: '#14202b', light_muted: '#667582', light_accent: '#159d83', light_warn: '#8a4f00', light_danger: '#c43d4b', light_terminal_bg: '#ffffff', light_terminal_fg: '#17232d'
+  };
+  const customThemePaletteKeys = ['ink', 'panel', 'rail', 'surface', 'line', 'text', 'muted', 'accent', 'warn', 'danger', 'terminal_bg', 'terminal_fg'];
+  const defaultMobileKeybarButtons = [
+    { label: 'Esc', action: 'shortcut', value: 'Escape', enabled: true },
+    { label: 'Tab', action: 'shortcut', value: 'Tab', enabled: true },
+    { label: 'Ctrl', action: 'modifier', value: 'Control', enabled: true },
+    { label: '←', action: 'shortcut', value: 'ArrowLeft', enabled: true },
+    { label: '↓', action: 'shortcut', value: 'ArrowDown', enabled: true },
+    { label: '↑', action: 'shortcut', value: 'ArrowUp', enabled: true },
+    { label: '→', action: 'shortcut', value: 'ArrowRight', enabled: true },
+    { label: '^C', action: 'shortcut', value: 'Ctrl+C', enabled: true },
+    { label: '^D', action: 'shortcut', value: 'Ctrl+D', enabled: true },
+    { label: '^Z', action: 'shortcut', value: 'Ctrl+Z', enabled: true },
+    { label: '^L', action: 'shortcut', value: 'Ctrl+L', enabled: true },
+    { label: '^R', action: 'shortcut', value: 'Ctrl+R', enabled: true }
+  ];
+  const savedSidebarOpen = localStorage.getItem('wps7.sidebarOpen');
+  const savedSidebarPinned = localStorage.getItem('wps7.sidebarPinned');
+  const state = {
+    token: localStorage.getItem('wps7.token') || sessionStorage.getItem('wps7.token') || '',
+    config: null,
+    sessions: [],
+    activeSessionId: '',
+    activePaneId: '',
+    sidebarOpen: savedSidebarOpen === null
+      ? !window.matchMedia('(max-width: 760px)').matches
+      : savedSidebarOpen === 'true',
+    sidebarWidth: Number(localStorage.getItem('wps7.sidebarWidth')) || 0,
+    sidebarPinned: savedSidebarPinned === 'true',
+    terminals: new Map(),
+    browserConnections: new Map(),
+    browserZoomTimers: new Map(),
+    browserAudioEnabled: localStorage.getItem('wps7.browserAudioEnabled') === 'true',
+    terminalTitleTimers: new Map(),
+    paneFontSizeTimers: new Map(),
+    notepadAutosaveTimers: new Map(),
+    themeTransitionFrame: 0,
+    clickTimer: null,
+    filePanelOpen: false,
+    filePath: '',
+    fileDrives: [],
+    fileEntries: [],
+    fileParent: '',
+    fileError: '',
+    selectedFiles: {},
+    filePaneData: {},
+    filePathHistory: loadFilePathHistory(),
+    notepadTabData: {},
+    layoutPanelOpen: false,
+    displayMode: localStorage.getItem('wps7.displayMode') || 'auto',
+    mobileTerminalDensity: localStorage.getItem('wps7.mobileTerminalDensity') || 'readable',
+    swipeStart: null,
+    toastTimer: 0,
+    shortcutsInstalled: false,
+    lastSessionTap: null,
+    suppressSessionClickUntil: 0,
+    theme: ({ dark: 'wps-dark', light: 'wps-light', custom: 'custom-dark' })[localStorage.getItem('wps7.theme')] || localStorage.getItem('wps7.theme') || 'wps-dark',
+    customThemeDraft: null
+  };
+
+  const app = document.getElementById('app');
+  document.addEventListener('pointerdown', closeFloatingSidebarFromOutside);
+  window.visualViewport?.addEventListener('resize', updateVisualViewport);
+  window.visualViewport?.addEventListener('scroll', updateVisualViewport);
+  updateVisualViewport();
+
+  function saveToken(token, remember) {
+    localStorage.removeItem('wps7.token');
+    sessionStorage.removeItem('wps7.token');
+    (remember ? localStorage : sessionStorage).setItem('wps7.token', token);
+  }
+
+  function clearToken() {
+    localStorage.removeItem('wps7.token');
+    sessionStorage.removeItem('wps7.token');
+    state.token = '';
+  }
+
+  function loadFilePathHistory() {
+    try {
+      const value = JSON.parse(localStorage.getItem('wps7.filePathHistory') || '[]');
+      return Array.isArray(value) ? value.filter((path) => typeof path === 'string' && path) : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function rememberFilePath(path) {
+    if (!path) {
+      return;
+    }
+    state.filePathHistory = [path, ...state.filePathHistory.filter((item) => item.toLowerCase() !== path.toLowerCase())];
+    localStorage.setItem('wps7.filePathHistory', JSON.stringify(state.filePathHistory));
+  }
+
+  function hexToRgba(hex, alpha) {
+    const value = Number.parseInt(hex.slice(1), 16);
+    return `rgba(${value >> 16}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
+  }
+
+  function customThemePalette(mode) {
+    const custom = { ...customThemeDefaults, ...(state.config?.custom_theme || {}), ...(state.customThemeDraft || {}) };
+    const prefix = mode === 'light' ? 'light_' : '';
+    return {
+      label: `Custom ${mode === 'light' ? 'Light' : 'Dark'}`, mode,
+      ink: custom[`${prefix}ink`], panel: custom[`${prefix}panel`], rail: custom[`${prefix}rail`],
+      terminal: custom[`${prefix}terminal_bg`], surfaceRaised: custom[`${prefix}panel`], surfaceSoft: custom[`${prefix}surface`],
+      line: custom[`${prefix}line`], lineStrong: custom[`${prefix}line`], text: custom[`${prefix}text`], muted: custom[`${prefix}muted`],
+      accent: custom[`${prefix}accent`], accentStrong: custom[`${prefix}accent`], warn: custom[`${prefix}warn`], danger: custom[`${prefix}danger`],
+      shadow: mode === 'light' ? 'rgba(31, 49, 61, .14)' : 'rgba(0, 0, 0, .34)',
+      terminalBg: custom[`${prefix}terminal_bg`], terminalFg: custom[`${prefix}terminal_fg`]
+    };
+  }
+
+  function activeTheme() {
+    if (state.theme === 'custom-light' || state.theme === 'custom-dark') {
+      return customThemePalette(state.theme.endsWith('light') ? 'light' : 'dark');
+    }
+    return themePresets[state.theme] || themePresets['wps-dark'];
+  }
+
+  function themeMode() {
+    return activeTheme().mode;
+  }
+
+  function selectedThemeForMode(mode) {
+    const custom = { ...customThemeDefaults, ...(state.config?.custom_theme || {}), ...(state.customThemeDraft || {}) };
+    return custom[`selected_${mode}`] || `wps-${mode}`;
+  }
+
+  function pairedThemeId() {
+    return selectedThemeForMode(themeMode() === 'dark' ? 'light' : 'dark');
+  }
+
+  function applyTheme(theme = state.theme) {
+    state.theme = themePresets[theme] || theme === 'custom-light' || theme === 'custom-dark' ? theme : 'wps-dark';
+    localStorage.setItem('wps7.theme', state.theme);
+    const palette = activeTheme();
+    const root = document.documentElement;
+    root.classList.add('theme-changing');
+    window.cancelAnimationFrame(state.themeTransitionFrame);
+    root.dataset.theme = palette.mode;
+    root.dataset.themeId = state.theme;
+    const variables = {
+      ink: palette.ink, panel: palette.panel, rail: palette.rail, terminal: palette.terminal,
+      'terminal-bg': palette.terminalBg, 'terminal-fg': palette.terminalFg,
+      'surface-raised': palette.surfaceRaised, 'surface-soft': palette.surfaceSoft,
+      line: palette.line, 'line-strong': palette.lineStrong, text: palette.text, muted: palette.muted,
+      accent: palette.accent, 'accent-strong': palette.accentStrong,
+      'accent-soft': hexToRgba(palette.accent, .12), warn: palette.warn, danger: palette.danger, shadow: palette.shadow
+    };
+    for (const [name, value] of Object.entries(variables)) {
+      root.style.setProperty(`--${name}`, value);
+    }
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', palette.ink);
+    state.themeTransitionFrame = window.requestAnimationFrame(() => {
+      state.themeTransitionFrame = window.requestAnimationFrame(() => {
+        root.classList.remove('theme-changing');
+        state.themeTransitionFrame = 0;
+      });
+    });
+  }
+
+  async function api(path, options = {}) {
+    const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) };
+    if (state.token) {
+      headers.Authorization = `Bearer ${state.token}`;
+    }
+    const response = await fetch(path, { ...options, headers });
+    if (!response.ok) {
+      let message = await response.text();
+      try {
+        message = JSON.parse(message).error || message;
+      } catch (error) {
+        // Keep the raw response text.
+      }
+      if (response.status === 401 && path !== '/api/login') {
+        clearToken();
+        showToast(message || 'Login expired. Please log in again.');
+        renderLogin();
+      }
+      const requestError = new Error(message || `Request failed (${response.status}).`);
+      requestError.status = response.status;
+      throw requestError;
+    }
+    return response.json();
+  }
+
+  function showToast(message, type = 'error') {
+    if (!message) {
+      return;
+    }
+    let toast = document.querySelector('.toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.className = 'toast';
+      document.body.appendChild(toast);
+    }
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    if (state.toastTimer) {
+      window.clearTimeout(state.toastTimer);
+    }
+    state.toastTimer = window.setTimeout(() => toast.remove(), 4200);
+  }
+
+  function browserNotificationCapability() {
+    if (window.isSecureContext === false) {
+      return { available: false, state: 'insecure', message: 'Unavailable: this browser requires HTTPS or localhost for notifications.' };
+    }
+    if (!('Notification' in window)) {
+      return { available: false, state: 'unsupported', message: 'Unavailable: this browser does not support notifications.' };
+    }
+    if (Notification.permission === 'denied') {
+      return { available: false, state: 'denied', message: 'Blocked: allow notifications in this browser\'s site settings.' };
+    }
+    if (Notification.permission === 'granted') {
+      return { available: true, state: 'granted', message: 'Available and allowed in this browser.' };
+    }
+    return { available: true, state: 'default', message: 'Available. The browser will ask for permission when enabled.' };
+  }
+
+  function requestBrowserNotificationPermission() {
+    const capability = browserNotificationCapability();
+    if (!capability.available) {
+      return Promise.resolve(capability.state);
+    }
+    if (Notification.permission !== 'default') {
+      return Promise.resolve(Notification.permission);
+    }
+    return Notification.requestPermission();
+  }
+
+  function showTerminalNotification(paneId, message = '', notificationTitle = '') {
+    const found = findPaneState(paneId);
+    if (!found) {
+      return;
+    }
+    const label = `${found.session.name} / ${found.pane.title}`;
+    const detail = String(message || '').replace(/[\x00-\x1f\x7f]/g, '').trim().slice(0, 180);
+    const title = String(notificationTitle || '').replace(/[\x00-\x1f\x7f]/g, '').trim().slice(0, 80);
+    showToast(detail ? `${label}: ${detail}` : `${label} needs attention.`, 'success');
+    if (!state.config.terminal?.browser_notifications || !('Notification' in window) || Notification.permission !== 'granted') {
+      return;
+    }
+    const notification = new Notification(title || 'WPS7 terminal', {
+      body: detail ? `${label}\n${detail}` : label,
+      icon: '/icon.svg',
+      tag: `wps7-terminal-${paneId}`
+    });
+    notification.onclick = () => {
+      window.focus();
+      setActivePane(paneId);
+      notification.close();
+    };
+  }
+
+  function handleTerminalOscNotification(paneId, code, data) {
+    const payload = String(data || '').trim();
+    if (code === 9 && (/^4;/.test(payload) || /^9;/.test(payload))) {
+      return true;
+    }
+    let title = '';
+    let message = payload;
+    if (code === 777 && payload.startsWith('notify;')) {
+      const parts = payload.split(';');
+      title = parts[1] || '';
+      message = parts.slice(2).join(';');
+    } else if (code === 99) {
+      message = payload.split(';').at(-1) || payload;
+    }
+    showTerminalNotification(paneId, message, title);
+    return true;
+  }
+
+  function updatePaneTitleFromTerminal(paneId, title) {
+    const nextTitle = String(title || '').replace(/[\x00-\x1f\x7f]/g, '').trim().slice(0, 80);
+    const found = findPaneState(paneId);
+    if (!nextTitle || !found || found.pane.title === nextTitle) {
+      return;
+    }
+    window.clearTimeout(state.terminalTitleTimers.get(paneId));
+    state.terminalTitleTimers.set(paneId, window.setTimeout(async () => {
+      state.terminalTitleTimers.delete(paneId);
+      try {
+        await api(`/api/panes/${paneId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ title: nextTitle })
+        });
+        const current = findPaneState(paneId);
+        if (!current) {
+          return;
+        }
+        current.pane.title = nextTitle;
+        const paneLabel = document.querySelector(`[data-rename-pane="${paneId}"]`);
+        if (paneLabel) {
+          paneLabel.textContent = nextTitle;
+        }
+        updateSidebarLabels();
+      } catch (error) {
+        // A title sequence must not interrupt the terminal session.
+      }
+    }, 250));
+  }
+
+  function applyUiTypography() {
+    const systemFontSize = Number(state.config?.ui?.system_font_size) || 13;
+    const filePaneFontSize = Number(state.config?.ui?.file_pane_font_size) || 13;
+    document.documentElement.style.setProperty('--system-font-size', `${systemFontSize}px`);
+    document.documentElement.style.setProperty('--file-pane-font-size', `${filePaneFontSize}px`);
+  }
+
+  function renderLogin() {
+    disposeTerminals();
+    document.querySelectorAll('.settings-overlay, .help-overlay, .layout-panel, .file-panel, .usage-overlay').forEach((element) => element.remove());
+    applyTheme();
+    applyUiTypography();
+    app.innerHTML = `
+      <main class="login">
+        <div class="login-brand"><span class="brand-mark">›_</span><span>WPS7</span></div>
+        <button class="theme-toggle login-theme-toggle" type="button" data-theme-toggle aria-label="Switch to ${themeMode() === 'dark' ? 'light' : 'dark'} mode" title="Switch theme">${themeMode() === 'dark' ? '☀' : '☾'}</button>
+        <form class="login-panel">
+          <div class="login-shield">⌾</div>
+          <h1>Welcome back</h1>
+          <p>Sign in to your terminal workspace</p>
+          <label class="login-label">Password
+            <span class="password-field"><input type="password" name="password" autocomplete="current-password" autofocus><span aria-hidden="true">●</span></span>
+          </label>
+          <label class="login-remember"><input name="remember" type="checkbox"> Keep me signed in for 30 days</label>
+          <div class="login-error" data-login-error></div>
+          <button class="primary login-submit" type="submit">Sign in</button>
+          <div class="login-hint"><kbd>Enter</kbd><span>Press Enter to continue</span></div>
+          <div class="restore-note">↻ <span>Your workspaces will be restored</span></div>
+        </form>
+        <div class="login-status"><span class="protected">◇ <b>Protected terminal access</b></span></div>
+      </main>
+    `;
+    app.querySelector('[data-theme-toggle]').onclick = () => {
+      applyTheme(pairedThemeId());
+      renderLogin();
+    };
+    app.querySelector('form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);
+      const password = form.get('password');
+      const remember = form.get('remember') === 'on';
+      const error = app.querySelector('[data-login-error]');
+      error.textContent = '';
+      try {
+        const result = await api('/api/login', { method: 'POST', body: JSON.stringify({ password, remember: form.get('remember') === 'on' }) });
+        state.token = result.token;
+        saveToken(state.token, remember);
+        await load();
+      } catch (loginError) {
+        error.textContent = loginError.message || 'Login failed.';
+      }
+    });
+  }
+
+  function renderConnectionError(error) {
+    disposeTerminals();
+    applyTheme();
+    applyUiTypography();
+    app.innerHTML = `
+      <main class="login">
+        <section class="login-panel connection-error" role="alert">
+          <div class="login-shield">!</div>
+          <h1>Service unavailable</h1>
+          <p>${escapeHtml(error?.message || 'WPS7 could not connect to the local service.')}</p>
+          <button class="primary" type="button" data-retry>Retry connection</button>
+        </section>
+      </main>
+    `;
+    app.querySelector('[data-retry]').onclick = load;
+  }
+
+  function activeSession() {
+    return state.sessions.find((session) => session.id === state.activeSessionId) ||
+      state.sessions.find((session) => session.id === state.persistedActiveSessionId) ||
+      state.sessions[0];
+  }
+
+  function activeTab(session) {
+    return session && session.tabs[0];
+  }
+
+  function allPanes() {
+    return state.sessions.flatMap((session) => (
+      session.tabs.flatMap((tab) => (
+        tab.panes.map((pane) => ({ session, tab, pane }))
+      ))
+    ));
+  }
+
+  function renderSidebarPaneItem(paneSession, pane) {
+    const prefix = paneSession.name;
+    return `
+      <button class="session-item ${pane.id === state.activePaneId ? 'active' : ''}" data-pane-link="${pane.id}" data-session="${paneSession.id}">
+        <span>${escapeHtml(prefix)} / ${escapeHtml(pane.title)}</span>
+      </button>
+    `;
+  }
+
+  function paneGridStyle() {
+    const maxColumns = Number(state.config.ui?.max_pane_columns) || 5;
+    const maxRows = Number(state.config.ui?.max_pane_rows) || 3;
+    return `--pane-columns: ${maxColumns}; --pane-rows: ${maxRows};`;
+  }
+
+  function paneItemStyle(pane) {
+    const maxColumns = Number(state.config.ui?.max_pane_columns) || 5;
+    const maxRows = Number(state.config.ui?.max_pane_rows) || 3;
+    const layout = normalizePaneLayout(pane.layout, maxColumns, maxRows);
+    const fontSize = Number(pane.fontSize);
+    const fontStyle = Number.isInteger(fontSize) ? ` --pane-font-size: ${fontSize}px;` : '';
+    return `${paneLayoutStyle(layout, maxColumns, maxRows)}${fontStyle}`;
+  }
+
+  function paneFontSize(pane) {
+    const savedSize = Number(pane?.fontSize);
+    if (Number.isInteger(savedSize) && savedSize >= 8 && savedSize <= 32) {
+      return savedSize;
+    }
+    return pane?.type === 'files'
+      ? Number(state.config.ui?.file_pane_font_size) || 13
+      : terminalFontSize();
+  }
+
+  function changePaneFontSize(paneId, delta) {
+    const found = findPaneState(paneId);
+    const paneElement = document.querySelector(`[data-pane="${paneId}"]`);
+    if (!found || !paneElement) {
+      return;
+    }
+    const previousSize = paneFontSize(found.pane);
+    const nextSize = Math.max(8, Math.min(32, previousSize + delta));
+    if (nextSize === previousSize) {
+      return;
+    }
+    found.pane.fontSize = nextSize;
+    paneElement.style.setProperty('--pane-font-size', `${nextSize}px`);
+    const terminal = state.terminals.get(paneId);
+    if (terminal) {
+      terminal.term.options.fontSize = nextSize;
+      terminal.sendResize();
+    }
+    const notepadFontSizeValue = paneElement.querySelector('[data-notepad-font-size-value]');
+    if (notepadFontSizeValue) notepadFontSizeValue.textContent = nextSize;
+    window.clearTimeout(state.paneFontSizeTimers.get(paneId));
+    state.paneFontSizeTimers.set(paneId, window.setTimeout(async () => {
+      state.paneFontSizeTimers.delete(paneId);
+      try {
+        await api(`/api/panes/${paneId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ fontSize: nextSize })
+        });
+      } catch (error) {
+        showToast(error.message);
+      }
+    }, 180));
+  }
+
+  function isMobileLayout() {
+    const viewportWidth = window.visualViewport?.width || window.innerWidth;
+    const narrow = window.matchMedia('(max-width: 760px)').matches;
+    const touchDevice = window.matchMedia('(pointer: coarse)').matches && navigator.maxTouchPoints > 0;
+    return state.displayMode === 'mobile' || (state.displayMode === 'auto' && (narrow || (touchDevice && viewportWidth <= 1024)));
+  }
+
+  function terminalFontSize() {
+    if (!isMobileLayout()) {
+      return Number(state.config.ui?.terminal_font_size) || 13;
+    }
+    const mobileSize = Number(state.config.ui?.mobile_terminal_font_size) || 12;
+    const viewportWidth = window.visualViewport?.width || window.innerWidth || 390;
+    const widthScale = Math.max(.9, Math.min(1.1, viewportWidth / 390));
+    const densityScale = Math.max(.96, Math.min(1.04, Math.sqrt(window.devicePixelRatio || 1) / Math.sqrt(2)));
+    const baseSize = state.mobileTerminalDensity === 'dense' ? Math.max(8, mobileSize - 2) : mobileSize;
+    return Math.round(baseSize * widthScale * densityScale * 10) / 10;
+  }
+
+  function updateVisualViewport() {
+    const viewport = window.visualViewport;
+    const height = Math.round(viewport?.height || window.innerHeight);
+    document.documentElement.style.setProperty('--app-height', `${height}px`);
+    app.querySelector('.app')?.classList.toggle('mobile-device', isMobileLayout());
+    if (!state.config || !isMobileLayout()) {
+      return;
+    }
+    const terminal = state.terminals.get(state.activePaneId);
+    if (!terminal) {
+      return;
+    }
+    terminal.term.options.fontSize = paneFontSize(findPaneState(state.activePaneId)?.pane);
+    terminal.sendResize();
+    if (viewport && viewport.height < window.innerHeight * .8) {
+      terminal.term.scrollToBottom();
+    }
+  }
+
+  function terminalTheme() {
+    const palette = activeTheme();
+    return {
+      background: palette.terminalBg,
+      foreground: palette.terminalFg,
+      cursor: palette.accent,
+      selectionBackground: hexToRgba(palette.accent, .28),
+      black: palette.mode === 'light' ? palette.text : '#111111',
+      brightBlack: palette.muted,
+      red: palette.danger,
+      brightRed: palette.danger,
+      green: palette.accentStrong,
+      brightGreen: palette.accent,
+      yellow: palette.warn,
+      brightYellow: palette.warn,
+      blue: palette.accent,
+      brightBlue: palette.accentStrong
+    };
+  }
+
+  function mobileKeybarButtons() {
+    const configured = state.config?.terminal?.mobile_keybar_buttons;
+    return (Array.isArray(configured) ? configured : defaultMobileKeybarButtons).filter((button) => button.enabled !== false);
+  }
+
+  function renderToolbarPageButton(direction) {
+    const previous = direction === 'previous';
+    const label = previous ? 'Previous toolbar buttons' : 'Next toolbar buttons';
+    return `<button class="paged-toolbar-button" type="button" data-toolbar-page="${direction}" aria-label="${label}" title="${label}" hidden>${previous ? '&lt;&lt;' : '&gt;&gt;'}</button>`;
+  }
+
+  function renderMobileKeybar() {
+    return `<div class="mobile-keybar" data-paged-toolbar aria-label="Terminal keys">${renderToolbarPageButton('previous')}${mobileKeybarButtons().map((button) => `
+      <button type="button" data-toolbar-item data-terminal-action="${escapeAttr(button.action)}" data-terminal-value="${escapeAttr(button.value)}" aria-label="${escapeAttr(button.action === 'text' ? `Type ${button.label}` : button.value)}" ${button.action === 'modifier' ? 'aria-pressed="false"' : ''}>${escapeHtml(button.label)}</button>
+    `).join('')}${renderToolbarPageButton('next')}</div>`;
+  }
+
+  function renderPane(pane) {
+    const body = pane.type === 'files' ? renderFilesPane(pane)
+      : pane.type === 'browser' ? renderBrowserPane(pane)
+        : pane.type === 'notepad' ? renderNotepadPane(pane) : `
+          ${renderMobileKeybar()}
+          <div class="terminal" id="terminal-${pane.id}"></div>`;
+    const uploadStatus = pane.type === 'files'
+      ? `<span class="pane-upload-status" data-pane-upload-status="${pane.id}" aria-live="polite"></span>`
+      : '';
+    const header = pane.type === 'browser'
+      ? `<div class="browser-tab-strip" data-browser-tab-strip data-pane-title="${pane.id}">${renderBrowserTabs(pane)}</div>`
+      : pane.type === 'notepad'
+        ? `<div class="notepad-tab-strip" data-notepad-tab-strip data-pane-title="${pane.id}">
+          <span class="pane-kind-icon" aria-hidden="true">${fileActionIcon('notepad')}</span>
+          ${renderNotepadTabs(pane)}
+        </div>`
+        : `<div class="pane-title ${pane.type === 'files' ? 'file-pane-title' : ''}" data-pane-title="${pane.id}">
+          <span class="pane-kind-icon" aria-hidden="true">${fileActionIcon(({ files: 'file', notepad: 'notepad' })[pane.type] || 'terminal')}</span>
+          ${uploadStatus}
+          <span data-rename-pane="${pane.id}">${escapeHtml(pane.title)}</span>
+        </div>`;
+    return `
+      <section class="pane ${pane.id === state.activePaneId ? 'active' : ''}" data-pane="${pane.id}" data-pane-type="${pane.type || 'terminal'}" style="${paneItemStyle(pane)}">
+        ${header}
+        <button class="pane-close" data-close-pane="${pane.id}" title="Close pane">×</button>
+        ${body}
+        <div class="pane-resize pane-resize-n" data-pane-resize="${pane.id}" data-pane-resize-direction="n"></div>
+        <div class="pane-resize pane-resize-ne" data-pane-resize="${pane.id}" data-pane-resize-direction="ne"></div>
+        <div class="pane-resize pane-resize-e" data-pane-resize="${pane.id}" data-pane-resize-direction="e"></div>
+        <div class="pane-resize pane-resize-se" data-pane-resize="${pane.id}" data-pane-resize-direction="se"></div>
+        <div class="pane-resize pane-resize-s" data-pane-resize="${pane.id}" data-pane-resize-direction="s"></div>
+        <div class="pane-resize pane-resize-sw" data-pane-resize="${pane.id}" data-pane-resize-direction="sw"></div>
+        <div class="pane-resize pane-resize-w" data-pane-resize="${pane.id}" data-pane-resize-direction="w"></div>
+        <div class="pane-resize pane-resize-nw" data-pane-resize="${pane.id}" data-pane-resize-direction="nw"></div>
+      </section>
+    `;
+  }
+
+  function filesPaneData(paneId) {
+    if (!state.filePaneData[paneId]) {
+      state.filePaneData[paneId] = {
+        drives: [],
+        entries: [],
+        parent: '',
+        error: '',
+        showHidden: Boolean(state.config.file_manager?.show_hidden),
+        selectionAnchor: -1,
+        sortKey: 'name',
+        sortDirection: 'asc',
+        columnWidths: { name: 150, modified: 130, size: 72 },
+        bookmarks: []
+      };
+    }
+    return state.filePaneData[paneId];
+  }
+
+  const fileActionIcons = {
+    add: '<path d="M12 5v14M5 12h14"/>',
+    'chevron-down': '<path d="m7 10 5 5 5-5"/>',
+    terminal: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M12 15h5"/>',
+    appearance: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+    workspace: '<rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/>',
+    persistence: '<path d="M4 5h13l3 3v11H4z"/><path d="M8 5v6h8V5M8 19v-5h8v5"/>',
+    shell: '<path d="m8 8-4 4 4 4M16 8l4 4-4 4M14 5l-4 14"/>',
+    server: '<rect x="3" y="4" width="18" height="6" rx="1"/><rect x="3" y="14" width="18" height="6" rx="1"/><path d="M7 7h.01M7 17h.01M11 7h7M11 17h7"/>',
+    security: '<path d="M12 3 5 6v5c0 4.6 2.9 8.1 7 10 4.1-1.9 7-5.4 7-10V6z"/><path d="m9 12 2 2 4-4"/>',
+    usage: '<path d="M4 19V9M10 19V5M16 19v-7M22 19V3"/>',
+    pin: '<path d="M9 3h6l1 7 3 3v2H5v-2l3-3zM12 15v6"/>',
+    'pin-off': '<path d="M9 3h6l1 7 3 3v2H8M12 15v6M4 4l16 16"/>',
+    up: '<path d="M9 6 4 11l5 5"/><path d="M4 11h10a6 6 0 0 1 6 6v1"/>',
+    refresh: '<g class="refresh-shape"><path class="refresh-arc" d="M4 9a8.5 8.5 0 0 1 14.4-3.7v3.1h-3.1"/><path class="refresh-arc" d="M20 15a8.5 8.5 0 0 1-14.4 3.7v-3.1h3.1"/></g>',
+    'new-folder': '<path d="M3 6h7l2 2h9v11H3z"/><path d="M12 11v5M9.5 13.5h5"/>',
+    'upload-file': '<path d="M12 16V4M7.5 8.5 12 4l4.5 4.5"/><path d="M5 14v6h14v-6"/>',
+    'upload-folder': '<path d="M3 7h7l2 2h9v10H3z"/><path d="M12 17v-6M9.5 13.5 12 11l2.5 2.5"/>',
+    download: '<path d="M12 4v12M7.5 11.5 12 16l4.5-4.5"/><path d="M5 20h14"/>',
+    copy: '<rect x="8" y="8" width="11" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h2"/>',
+    rename: '<path d="m4 20 4.2-1 10.9-10.9-3.2-3.2L5 15.8z"/><path d="m14.5 6.5 3 3"/>',
+    delete: '<path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/>',
+    'select-all': '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 12 2.5 2.5L16 9"/>',
+    'deselect-all': '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 12h8"/>',
+    hidden: '<path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6z"/><circle cx="12" cy="12" r="2.5"/>',
+    star: '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9z"/>',
+    drive: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 14h18M16 17h2"/>',
+    file: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5"/>',
+    folder: '<path d="M3 6h7l2 2h9v11H3z"/>',
+    browser: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.3 3 14.7 0 18M12 3c-3 3.3-3 14.7 0 18"/>',
+    desktop: '<rect x="3" y="4" width="18" height="13" rx="1.5"/><path d="M8 21h8M12 17v4"/>',
+    mobile: '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M10 5h4M11 19h2"/>',
+    volume: '<path d="M5 10v4h4l5 4V6l-5 4zM17 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12"/>',
+    'volume-off': '<path d="M5 10v4h4l5 4V6l-5 4zM17 10l4 4M21 10l-4 4"/>',
+    'browser-back': '<path d="m10 6-6 6 6 6M4 12h16"/>',
+    'browser-forward': '<path d="m14 6 6 6-6 6M20 12H4"/>',
+    search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/>',
+    zoom: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/><path d="M7.5 10.5h6"/>',
+    subtract: '<path d="M5 12h14"/>',
+    reset: '<path d="M4 8V4h4M4.8 5.2A8 8 0 1 1 4 15"/>',
+    stop: '<rect x="6" y="6" width="12" height="12" rx="1"/>',
+    notepad: '<path d="M6 3h12v18H6zM9 7h6M9 11h6M9 15h4"/>',
+    external: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 13v7H4V6h7"/>',
+    save: '<path d="M5 3h12l2 2v16H5zM8 3v6h8V3M8 21v-8h8v8"/>',
+    cut: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.5 8.5 20 20M8.5 15.5 20 4"/>',
+    paste: '<rect x="5" y="4" width="14" height="17" rx="2"/><rect x="9" y="2" width="6" height="4" rx="1"/>',
+    replace: '<path d="M7 7h10M7 7l3-3M7 7l3 3M17 17H7M17 17l-3-3M17 17l-3 3"/>',
+    wrap: '<path d="M4 7h16M4 12h11a3 3 0 1 1 0 6h-3M4 17h5"/><path d="m14 15 3 3-3 3"/>',
+    indent: '<path d="M4 4v16M9 4v16M4 8h5M4 16h5"/>',
+    autosave: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/>',
+    font: '<path d="M6 20 11 4h2l5 16M8 14h8"/>'
+  };
+
+  function fileActionIcon(name) {
+    return `<svg class="file-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${fileActionIcons[name] || ''}</svg>`;
+  }
+
+  function renderFilePathOption(path, kind, bookmarkPaths) {
+    const bookmarked = Boolean(path) && bookmarkPaths.has(path.toLowerCase());
+    return `
+      <div class="file-path-option ${kind === 'Current' ? 'current' : ''}" role="option" data-path-kind="${kind}" aria-selected="${kind === 'Current'}">
+        <button class="file-path-choice" type="button" data-file-path-choice="${escapeAttr(path)}" title="${escapeAttr(path || 'This PC')}">
+          <span class="file-path-value">${escapeHtml(path || 'This PC')}</span>
+        </button>
+        <button class="file-path-star ${bookmarked ? 'bookmarked' : ''}" type="button" data-path-bookmark="${escapeAttr(path)}" aria-label="${bookmarked ? 'Remove' : 'Add'} bookmark ${escapeAttr(path || 'This PC')}" title="${bookmarked ? 'Remove bookmark' : 'Add bookmark'}" ${path ? '' : 'disabled'}>${fileActionIcon('star')}</button>
+      </div>
+    `;
+  }
+
+  function renderFilePathOptions(pane) {
+    const bookmarks = filesPaneData(pane.id).bookmarks || [];
+    const bookmarkPaths = new Set(bookmarks.map((bookmark) => bookmark.path.toLowerCase()));
+    const history = state.filePathHistory.slice(0, 5);
+    return `
+      <div class="file-path-group" role="group" aria-labelledby="file-path-current-${pane.id}">
+        <div class="file-path-heading" id="file-path-current-${pane.id}">Current</div>
+        ${renderFilePathOption(pane.path || '', 'Current', bookmarkPaths)}
+      </div>
+      <div class="file-path-divider" role="separator"></div>
+      <div class="file-path-group" role="group" aria-labelledby="file-path-history-${pane.id}">
+        <div class="file-path-heading" id="file-path-history-${pane.id}">History</div>
+        ${history.map((path) => renderFilePathOption(path, 'History', bookmarkPaths)).join('')}
+      </div>
+      <div class="file-path-divider" role="separator"></div>
+      <div class="file-path-group" role="group" aria-labelledby="file-path-bookmark-${pane.id}">
+        <div class="file-path-heading" id="file-path-bookmark-${pane.id}">Bookmark</div>
+        ${bookmarks.map((bookmark) => renderFilePathOption(bookmark.path, 'Bookmark', bookmarkPaths)).join('')}
+      </div>
+    `;
+  }
+
+  function sortedFileEntries(paneId) {
+    const paneData = filesPaneData(paneId);
+    const direction = paneData.sortDirection === 'desc' ? -1 : 1;
+    return paneData.entries
+      .filter((entry) => paneData.showHidden || !entry.hidden)
+      .sort((a, b) => {
+        if (a.type !== b.type) {
+          return a.type === 'directory' ? -1 : 1;
+        }
+        let comparison;
+        if (paneData.sortKey === 'modified') {
+          comparison = new Date(a.modifiedAt).getTime() - new Date(b.modifiedAt).getTime();
+        } else if (paneData.sortKey === 'size') {
+          comparison = Number(a.size) - Number(b.size);
+        } else {
+          comparison = a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+        }
+        return comparison === 0 ? a.name.localeCompare(b.name) : comparison * direction;
+      });
+  }
+
+  function fileSortIndicator(paneData, key) {
+    return paneData.sortKey === key ? `<span aria-hidden="true">${paneData.sortDirection === 'asc' ? '↑' : '↓'}</span>` : '';
+  }
+
+  function formatModified(value) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '' : date.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+  }
+
+  function renderFilesPane(pane) {
+    const paneData = filesPaneData(pane.id);
+    const columnWidths = { name: 150, modified: 130, size: 72, ...paneData.columnWidths };
+    const tableWidth = columnWidths.name + columnWidths.modified + columnWidths.size;
+    const showingDrives = !pane.path;
+    const selectedPaths = selectedFileList(pane.id);
+    const entries = sortedFileEntries(pane.id);
+    const allSelected = allVisibleFilesSelected(pane.id);
+    return `
+      <div class="files-pane" data-files-pane="${pane.id}" style="--file-column-template: ${columnWidths.name}px ${columnWidths.modified}px ${columnWidths.size}px; --file-table-width: ${tableWidth}px">
+        <form class="file-toolbar" data-file-path-form>
+          <div class="file-location-row">
+            <button class="file-command-button" type="button" data-file-up aria-label="Up one level" title="Up one level" ${pane.path ? '' : 'disabled'}>${fileActionIcon('up')}</button>
+            <div class="file-path-control" data-file-path-control>
+              <input class="file-path-input" name="path" value="${escapeAttr(pane.path)}" placeholder="This PC or C:\\path" autocomplete="off" aria-controls="file-path-menu-${pane.id}" aria-expanded="false">
+              <button class="file-path-toggle" type="button" data-file-path-toggle aria-label="Show path history and bookmarks" aria-expanded="false" aria-controls="file-path-menu-${pane.id}">${fileActionIcon('chevron-down')}</button>
+              <div class="file-path-menu" id="file-path-menu-${pane.id}" data-file-path-menu role="listbox" aria-label="Current, recent and bookmarked paths" hidden>
+                ${renderFilePathOptions(pane)}
+              </div>
+            </div>
+            <button class="file-command-button" type="button" data-file-refresh aria-label="Refresh" title="Refresh">${fileActionIcon('refresh')}</button>
+          </div>
+          <div class="file-command-bar" data-paged-toolbar aria-label="File actions">
+            ${renderToolbarPageButton('previous')}
+            <button class="file-command-button" type="button" data-toolbar-item data-file-new-file aria-label="New file" title="New file" ${pane.path ? '' : 'disabled'}>${fileActionIcon('file')}</button>
+            <button class="file-command-button" type="button" data-toolbar-item data-file-new-folder aria-label="New folder" title="New folder" ${pane.path ? '' : 'disabled'}>${fileActionIcon('new-folder')}</button>
+            <label class="file-command-button file-upload" data-toolbar-item title="Upload files" aria-label="Upload files">${fileActionIcon('upload-file')}<input type="file" multiple data-file-upload ${pane.path ? '' : 'disabled'}></label>
+            <label class="file-command-button file-upload" data-toolbar-item title="Upload folder" aria-label="Upload folder">${fileActionIcon('upload-folder')}<input type="file" multiple webkitdirectory directory data-folder-upload ${pane.path ? '' : 'disabled'}></label>
+            <button class="file-command-button" type="button" data-toolbar-item data-file-download-selected aria-label="Download selected" title="Download selected" ${selectedPaths.length ? '' : 'disabled'}>${fileActionIcon('download')}</button>
+            <button class="file-command-button" type="button" data-toolbar-item data-file-copy-selected aria-label="Copy selected paths" title="Copy selected paths" ${selectedPaths.length ? '' : 'disabled'}>${fileActionIcon('copy')}</button>
+            <button class="file-command-button" type="button" data-toolbar-item data-file-rename-selected aria-label="Rename selected" title="Rename selected" ${selectedPaths.length === 1 ? '' : 'disabled'}>${fileActionIcon('rename')}</button>
+            <button class="file-command-button" type="button" data-toolbar-item data-file-delete-selected aria-label="Delete selected" title="Delete selected" ${selectedPaths.length ? '' : 'disabled'}>${fileActionIcon('delete')}</button>
+            <button class="file-command-button ${allSelected ? 'active' : ''}" type="button" data-toolbar-item data-file-select-all aria-label="${allSelected ? 'Deselect all' : 'Select all'}" aria-pressed="${allSelected}" title="${allSelected ? 'Deselect all' : 'Select all'}">${fileActionIcon(allSelected ? 'deselect-all' : 'select-all')}</button>
+            <button class="file-command-button ${paneData.showHidden ? 'active' : ''}" type="button" data-toolbar-item data-file-show-hidden aria-label="Show hidden files" aria-pressed="${paneData.showHidden}" title="Show hidden files">${fileActionIcon('hidden')}</button>
+            ${renderToolbarPageButton('next')}
+          </div>
+        </form>
+        <div class="file-error">${escapeHtml(paneData.error)}</div>
+        <div class="file-list" role="listbox" aria-label="Files" aria-multiselectable="true">
+          ${showingDrives ? paneData.drives.map((drive) => `
+            <button class="file-row file-row-button" role="option" aria-selected="false" data-file-open="${escapeAttr(drive.path)}">
+              ${fileActionIcon('drive')}<span>${escapeHtml(drive.name)}</span>
+            </button>
+          `).join('') : `
+            <div class="file-column-header" role="row" aria-label="Sort files">
+              <div class="file-column-heading"><button type="button" data-file-sort="name" aria-label="Sort by name" aria-pressed="${paneData.sortKey === 'name'}">Name ${fileSortIndicator(paneData, 'name')}</button><span class="file-column-resizer" data-file-column-resize="name" role="separator" aria-label="Resize Name column" aria-orientation="vertical" tabindex="0"></span></div>
+              <div class="file-column-heading"><button type="button" data-file-sort="modified" aria-label="Sort by modified date" aria-pressed="${paneData.sortKey === 'modified'}">Modified ${fileSortIndicator(paneData, 'modified')}</button><span class="file-column-resizer" data-file-column-resize="modified" role="separator" aria-label="Resize Modified column" aria-orientation="vertical" tabindex="0"></span></div>
+              <div class="file-column-heading"><button type="button" data-file-sort="size" aria-label="Sort by size" aria-pressed="${paneData.sortKey === 'size'}">Size ${fileSortIndicator(paneData, 'size')}</button><span class="file-column-resizer" data-file-column-resize="size" role="separator" aria-label="Resize Size column" aria-orientation="vertical" tabindex="0"></span></div>
+            </div>
+            <button class="file-row compact-file-row file-parent-row" type="button" role="option" aria-selected="false" data-file-parent="${escapeAttr(paneData.parent)}" aria-label="Up one level, ${entries.length} ${entries.length === 1 ? 'item' : 'items'} in current directory">
+              <span class="file-name">${fileActionIcon('up')}<span>..</span></span>
+              <small></small>
+              <small class="file-item-count">${selectedPaths.length ? `${selectedPaths.length}/${entries.length} items` : `${entries.length} items`}</small>
+            </button>
+          ${entries.map((entry, index) => `
+            <div class="file-row compact-file-row ${selectedPaths.includes(entry.path) ? 'selected' : ''} ${entry.hidden ? 'hidden-entry' : ''}" role="option" aria-selected="${selectedPaths.includes(entry.path)}" data-file-row="${escapeAttr(entry.path)}" data-file-index="${index}" tabindex="0">
+              <div class="file-name" data-file-open="${escapeAttr(entry.path)}" data-file-type="${entry.type}">
+                ${entry.type === 'directory' ? fileActionIcon('folder') : fileActionIcon('file')}<span>${escapeHtml(entry.name)}</span>
+              </div>
+              <small class="file-modified">${escapeHtml(formatModified(entry.modifiedAt))}</small>
+              <small class="file-size">${entry.type === 'file' ? formatBytes(entry.size) : 'Folder'}</small>
+            </div>
+          `).join('')}`}
+        </div>
+        <div class="file-drop-overlay" aria-hidden="true">Drop files or folders to upload</div>
+      </div>
+    `;
+  }
+
+  function renderBrowserUrlOption(url, kind, bookmarkUrls) {
+    const bookmarked = Boolean(url) && bookmarkUrls.has(url);
+    return `
+      <div class="file-path-option ${kind === 'Current' ? 'current' : ''}" role="option">
+        <button class="file-path-choice" type="button" data-browser-url-choice="${escapeAttr(url)}" title="${escapeAttr(url)}"><span class="file-path-value">${escapeHtml(url || 'Enter a website')}</span></button>
+        <button class="file-path-star ${bookmarked ? 'bookmarked' : ''}" type="button" data-browser-bookmark="${escapeAttr(url)}" aria-label="${bookmarked ? 'Remove' : 'Add'} bookmark" ${url ? '' : 'disabled'}>${fileActionIcon('star')}</button>
+      </div>`;
+  }
+
+  function renderBrowserUrlOptions(pane) {
+    const currentUrl = activeBrowserTab(pane).url || '';
+    const bookmarks = state.config.browser?.bookmarks || [];
+    const bookmarkUrls = new Set(bookmarks.map((bookmark) => bookmark.url));
+    const history = (state.config.browser?.history || []).slice(0, 5);
+    return `
+      <div class="file-path-group"><div class="file-path-heading">Current</div>${renderBrowserUrlOption(currentUrl, 'Current', bookmarkUrls)}</div>
+      <div class="file-path-divider" role="separator"></div>
+      <div class="file-path-group"><div class="file-path-heading">History</div>${history.length ? history.map((url) => renderBrowserUrlOption(url, 'History', bookmarkUrls)).join('') : '<div class="browser-menu-empty">No history yet</div>'}</div>
+      <div class="file-path-divider" role="separator"></div>
+      <div class="file-path-group"><div class="file-path-heading">Bookmark</div>${bookmarks.length ? bookmarks.map((bookmark) => renderBrowserUrlOption(bookmark.url, 'Bookmark', bookmarkUrls)).join('') : '<div class="browser-menu-empty">No bookmarks yet</div>'}</div>`;
+  }
+
+  function activeBrowserTab(pane) {
+    const tabs = pane.browserTabs || [];
+    return tabs.find((tab) => tab.id === pane.activeBrowserTabId) || tabs[0] || {
+      id: '', title: 'New tab', url: pane.url || '', zoom: 1, emulationMode: 'desktop'
+    };
+  }
+
+  function renderBrowserTabs(pane) {
+    const active = activeBrowserTab(pane);
+    return `
+      <div class="browser-tab-list" role="tablist">
+        ${(pane.browserTabs || [active]).map((tab) => `
+          <div class="browser-tab ${tab.id === active.id ? 'active' : ''}" role="tab" tabindex="0" aria-selected="${tab.id === active.id}" data-browser-tab="${tab.id}" title="${escapeAttr(tab.title || tab.url || 'New tab')}">
+            <span class="browser-tab-icon" aria-hidden="true">${fileActionIcon('browser')}</span>
+            <span class="browser-tab-label">${escapeHtml(tab.title || 'New tab')}</span>
+            <button class="browser-tab-close" type="button" aria-label="Close ${escapeAttr(tab.title || 'tab')}" data-browser-close-tab="${tab.id}">×</button>
+          </div>`).join('')}
+      </div>
+      <button class="browser-new-tab" type="button" data-browser-new-tab aria-label="New tab" title="New tab">+</button>`;
+  }
+
+  function renderBrowserPane(pane) {
+    const active = activeBrowserTab(pane);
+    return `
+      <div class="browser-pane" data-browser-pane="${pane.id}">
+        <form class="file-toolbar browser-toolbar" data-browser-url-form>
+          <div class="file-location-row">
+            <button class="file-command-button" type="button" data-browser-back aria-label="Back" title="Back">${fileActionIcon('browser-back')}</button>
+            <button class="file-command-button" type="button" data-browser-forward aria-label="Forward" title="Forward">${fileActionIcon('browser-forward')}</button>
+            <div class="file-path-control" data-browser-url-control>
+              <input class="file-path-input" name="url" type="text" inputmode="url" value="${escapeAttr(active.url || '')}" placeholder="Search or enter website" autocomplete="off" autocapitalize="none" spellcheck="false">
+              <button class="file-path-toggle" type="button" data-browser-url-toggle aria-label="Show website history and bookmarks" aria-expanded="false">${fileActionIcon('chevron-down')}</button>
+              <div class="file-path-menu" data-browser-url-menu role="listbox" aria-label="Current, recent and bookmarked websites" hidden>${renderBrowserUrlOptions(pane)}</div>
+            </div>
+            <button class="file-command-button" type="button" data-browser-refresh aria-label="Refresh" title="Refresh">${fileActionIcon('refresh')}</button>
+            <button class="file-command-button" type="button" data-browser-stop aria-label="Stop loading" title="Stop loading" hidden>${fileActionIcon('stop')}</button>
+            <button class="file-command-button" type="button" data-browser-find aria-label="Find in page" title="Find in page">${fileActionIcon('search')}</button>
+            <div class="browser-zoom-control" data-browser-zoom-control>
+              <button class="file-command-button" type="button" data-browser-zoom-toggle aria-label="Zoom controls" aria-expanded="false" title="Zoom controls">${fileActionIcon('zoom')}</button>
+              <div class="browser-zoom-popover" data-browser-zoom-popover role="dialog" aria-label="Page zoom" hidden>
+                <button type="button" data-browser-zoom-out aria-label="Zoom out" title="Zoom out">${fileActionIcon('subtract')}</button>
+                <output data-browser-zoom-value>${Math.round((active.zoom || 1) * 100)}%</output>
+                <button type="button" data-browser-zoom-in aria-label="Zoom in" title="Zoom in">${fileActionIcon('add')}</button>
+                <button type="button" data-browser-zoom-reset aria-label="Reset zoom" title="Reset zoom">${fileActionIcon('reset')}</button>
+              </div>
+            </div>
+            <button class="file-command-button ${active.emulationMode === 'mobile' ? 'active' : ''}" type="button" data-browser-emulation-mode aria-label="${active.emulationMode === 'mobile' ? 'Switch to desktop mode' : 'Switch to mobile mode'}" aria-pressed="${active.emulationMode === 'mobile'}" title="${active.emulationMode === 'mobile' ? 'Mobile mode' : 'Desktop mode'}">${fileActionIcon(active.emulationMode === 'mobile' ? 'mobile' : 'desktop')}</button>
+            <button class="file-command-button" type="button" data-browser-audio-toggle aria-label="Enable browser audio" aria-pressed="false" title="Audio unavailable while checking stream" disabled>${fileActionIcon('volume-off')}</button>
+            <button class="file-command-button" type="button" data-browser-external aria-label="Open in new tab" title="Open in new tab" ${active.url ? '' : 'disabled'}>${fileActionIcon('external')}</button>
+          </div>
+        </form>
+        <div class="browser-find-bar" data-browser-find-bar hidden>
+          <input type="search" data-browser-find-input placeholder="Find in page" aria-label="Find in page">
+          <span data-browser-find-result aria-live="polite"></span>
+          <button type="button" data-browser-find-previous aria-label="Previous match">↑</button>
+          <button type="button" data-browser-find-next aria-label="Next match">↓</button>
+          <button type="button" data-browser-find-close aria-label="Close find">×</button>
+        </div>
+        <div class="browser-viewport" data-browser-viewport>
+          <canvas class="browser-surface" data-browser-surface aria-hidden="true"></canvas>
+          <video class="browser-video" data-browser-video autoplay playsinline muted hidden></video>
+          <div class="browser-input-surface" data-browser-input-surface tabindex="0" role="application" aria-label="Remote browser"></div>
+          <textarea class="browser-keyboard-capture" data-browser-keyboard aria-label="Browser keyboard input" autocomplete="off" autocapitalize="none" spellcheck="false"></textarea>
+          <input type="file" data-browser-file-input hidden>
+          <div class="browser-context-menu" data-browser-context-menu role="menu" hidden>
+            <button type="button" role="menuitem" data-browser-copy>Copy</button>
+            <button type="button" role="menuitem" data-browser-paste>Paste</button>
+            <button type="button" role="menuitem" data-browser-select-all>Select all</button>
+          </div>
+          <div class="browser-status" data-browser-status>${active.url ? 'Connecting…' : 'Enter a website above'}</div>
+          <div class="browser-download-status" data-browser-download-status hidden></div>
+        </div>
+      </div>`;
+  }
+
+  const notepadFontOptions = [
+    { label: 'Consolas', value: 'Consolas, "Cascadia Mono", monospace' },
+    { label: 'Cascadia Mono', value: '"Cascadia Mono", Consolas, monospace' },
+    { label: 'Cascadia Code', value: '"Cascadia Code", Consolas, monospace' },
+    { label: 'JetBrains Mono', value: '"JetBrains Mono", Consolas, monospace' },
+    { label: 'Fira Code', value: '"Fira Code", Consolas, monospace' },
+    { label: 'Lucida Console', value: '"Lucida Console", monospace' }
+  ];
+
+  function notepadTabData(tabId) {
+    if (!state.notepadTabData[tabId]) {
+      state.notepadTabData[tabId] = {
+        content: '', encoding: 'utf8', dirty: false, loadedPath: '', error: '',
+        wrap: false, indentGuides: false, autosave: false, fontFamily: ''
+      };
+    }
+    return state.notepadTabData[tabId];
+  }
+
+  function notepadActiveTab(pane) {
+    const tabs = pane.notepadTabs || [];
+    return tabs.find((tab) => tab.id === pane.activeNotepadTabId) || tabs[0];
+  }
+
+  function lineCount(content) {
+    return String(content || '').split(/\r\n|\r|\n/).length;
+  }
+
+  function lineNumbers(content) {
+    const count = lineCount(content);
+    return Array.from({ length: count }, (_, index) => index + 1).join('\n');
+  }
+
+  function renderNotepadTabs(pane) {
+    const tabs = pane.notepadTabs || [];
+    return `
+      <div class="notepad-tab-list" role="tablist">
+        ${tabs.map((tab) => {
+          const data = notepadTabData(tab.id);
+          const label = tab.path || tab.title || 'Untitled';
+          return `
+          <div class="notepad-tab ${tab.id === pane.activeNotepadTabId ? 'active' : ''}" role="tab" tabindex="0" aria-selected="${tab.id === pane.activeNotepadTabId}" data-notepad-tab="${tab.id}" title="${escapeAttr(label)}">
+            <span class="notepad-tab-label">${data.dirty ? '<span class="notepad-tab-modified">*</span>' : ''}${escapeHtml(label)}</span>
+            <button class="notepad-tab-close" type="button" aria-label="Close ${escapeAttr(label)}" data-notepad-close-tab="${tab.id}">×</button>
+          </div>`;
+        }).join('')}
+      </div>
+      <button class="notepad-new-tab" type="button" data-notepad-new-tab aria-label="New file" title="New file (Ctrl+N)">+</button>`;
+  }
+
+  function renderNotepadPane(pane) {
+    const tab = notepadActiveTab(pane);
+    const data = notepadTabData(tab.id);
+    const fontFamily = data.fontFamily || notepadFontOptions[0].value;
+    return `
+      <div class="notepad-pane" data-notepad-pane="${pane.id}" data-notepad-active-tab="${tab.id}">
+        <div class="notepad-toolbar" data-paged-toolbar>
+          ${renderToolbarPageButton('previous')}
+          <button class="file-command-button" type="button" data-toolbar-item data-notepad-new aria-label="New file" title="New file (Ctrl+N)">${fileActionIcon('add')}</button>
+          <button class="file-command-button" type="button" data-toolbar-item data-notepad-save aria-label="Save" title="Save (Ctrl+S)">${fileActionIcon('save')}</button>
+          <select class="notepad-font-select" data-toolbar-item data-notepad-font aria-label="Font" title="Font">
+            ${notepadFontOptions.map((option) => `<option value="${escapeAttr(option.value)}" ${option.value === fontFamily ? 'selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
+          </select>
+          <button class="file-command-button" type="button" data-toolbar-item data-notepad-font-size aria-label="Font size" title="Font size (Ctrl+scroll or Ctrl+/-)">${fileActionIcon('font')}<span class="notepad-font-size-value" data-notepad-font-size-value>${paneFontSize(pane)}</span></button>
+          <button class="file-command-button" type="button" data-toolbar-item data-notepad-cut aria-label="Cut" title="Cut (Ctrl+X)">${fileActionIcon('cut')}</button>
+          <button class="file-command-button" type="button" data-toolbar-item data-notepad-copy aria-label="Copy" title="Copy (Ctrl+C)">${fileActionIcon('copy')}</button>
+          <button class="file-command-button" type="button" data-toolbar-item data-notepad-paste aria-label="Paste" title="Paste (Ctrl+V)">${fileActionIcon('paste')}</button>
+          <button class="file-command-button" type="button" data-toolbar-item data-notepad-find aria-label="Find" title="Find (Ctrl+F)">${fileActionIcon('search')}</button>
+          <button class="file-command-button" type="button" data-toolbar-item data-notepad-replace aria-label="Replace" title="Replace (Ctrl+H)">${fileActionIcon('replace')}</button>
+          <button class="file-command-button ${data.wrap ? 'active' : ''}" type="button" data-toolbar-item data-notepad-wrap aria-label="Word wrap" aria-pressed="${data.wrap}" title="Word wrap">${fileActionIcon('wrap')}</button>
+          <button class="file-command-button ${data.indentGuides ? 'active' : ''}" type="button" data-toolbar-item data-notepad-indent aria-label="Indent guides" aria-pressed="${data.indentGuides}" title="Indent guides">${fileActionIcon('indent')}</button>
+          <button class="file-command-button ${data.autosave ? 'active' : ''}" type="button" data-toolbar-item data-notepad-autosave aria-label="Auto save" aria-pressed="${data.autosave}" title="Auto save">${fileActionIcon('autosave')}</button>
+          <span class="notepad-status" data-notepad-status>${escapeHtml(data.error || data.encoding.toUpperCase())}</span>
+          ${renderToolbarPageButton('next')}
+        </div>
+        <div class="notepad-find-bar" data-notepad-find-bar hidden>
+          <input type="text" class="notepad-find-input" data-notepad-find-input placeholder="Find" aria-label="Find">
+          <input type="text" class="notepad-find-replace-input" data-notepad-replace-input placeholder="Replace" aria-label="Replace" hidden>
+          <button type="button" class="icon-button" data-notepad-find-prev title="Previous">↑</button>
+          <button type="button" class="icon-button" data-notepad-find-next title="Next">↓</button>
+          <button type="button" class="secondary" data-notepad-replace-one hidden>Replace</button>
+          <button type="button" class="secondary" data-notepad-replace-all hidden>Replace all</button>
+          <button type="button" class="icon-button" data-notepad-find-close title="Close">×</button>
+        </div>
+        <div class="notepad-editor-shell ${data.wrap ? 'wrap-on' : ''} ${data.indentGuides ? 'indent-guides-on' : ''}">
+          <pre class="notepad-gutter" aria-hidden="true" style="font-family: ${escapeAttr(fontFamily)};">${lineNumbers(data.content)}</pre>
+          <textarea class="notepad-editor" aria-label="Text editor" spellcheck="false" wrap="${data.wrap ? 'soft' : 'off'}" style="font-family: ${escapeAttr(fontFamily)};">${escapeHtml(data.content)}</textarea>
+        </div>
+      </div>`;
+  }
+
+  function mountPaneContent(pane) {
+    if ((pane.type || 'terminal') === 'terminal') mountTerminal(pane.id);
+    else if (pane.type === 'browser') mountRemoteBrowser(pane.id);
+    else if (pane.type === 'notepad') {
+      const tab = notepadActiveTab(pane);
+      loadNotepadTab(pane.id, tab?.id, tab?.path || '');
+    }
+    else {
+      loadFilesPane(pane);
+    }
+  }
+
+  function render() {
+    const session = activeSession();
+    const tab = activeTab(session);
+    if (!session || !tab) {
+      return;
+    }
+    state.activeSessionId = session.id;
+    state.activePaneId = state.activePaneId || tab.activePaneId || tab.panes[0].id;
+    const sidebarWidth = state.sidebarWidth || Number(state.config.ui?.sidebar_width) || 286;
+
+    applyTheme();
+    applyUiTypography();
+    disposeTerminals();
+    disposeBrowsers();
+    app.innerHTML = `
+      <main class="app ${state.sidebarOpen ? '' : 'sidebar-closed'} ${state.sidebarPinned ? 'sidebar-pinned' : ''} ${isMobileLayout() ? 'mobile-device' : ''} mode-${state.displayMode} density-${state.mobileTerminalDensity}" style="--sidebar-width: ${sidebarWidth}px">
+        <aside class="sidebar">
+          <nav class="menu-rail" aria-label="Workspace navigation">
+            <div class="sidebar-brand-row">
+              <button class="rail-button sidebar-brand" data-action="toggle" aria-label="Toggle sidebar" aria-expanded="${state.sidebarOpen}" title="${state.sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}"><span class="rail-brand-mark" aria-hidden="true">W7</span><span class="rail-label">WPS7</span></button>
+              <button class="sidebar-pin" type="button" data-sidebar-pin aria-label="${state.sidebarPinned ? 'Unpin' : 'Pin'} sidebar" aria-pressed="${state.sidebarPinned}" title="${state.sidebarPinned ? 'Unpin sidebar' : 'Pin sidebar'}"><span class="rail-icon" aria-hidden="true">${fileActionIcon(state.sidebarPinned ? 'pin-off' : 'pin')}</span></button>
+            </div>
+            <button class="rail-button" data-action="new-powershell" aria-label="New PowerShell" title="New PowerShell">
+              <span class="rail-icon" aria-hidden="true">${fileActionIcon('terminal')}</span><span class="rail-label">New PowerShell</span>
+            </button>
+            <button class="rail-button" data-action="files" aria-label="New file" title="New file">
+              <span class="rail-icon" aria-hidden="true">${fileActionIcon('file')}</span><span class="rail-label">New file</span>
+            </button>
+            <button class="rail-button" data-action="browser" aria-label="New browser" title="New browser">
+              <span class="rail-icon" aria-hidden="true">${fileActionIcon('browser')}</span><span class="rail-label">New browser</span>
+            </button>
+            <button class="rail-button" data-action="notepad" aria-label="New notepad" title="New notepad">
+              <span class="rail-icon" aria-hidden="true">${fileActionIcon('notepad')}</span><span class="rail-label">New notepad</span>
+            </button>
+            <button class="rail-button" data-action="usage" aria-label="Usage" title="Usage"><span class="rail-icon" aria-hidden="true">${fileActionIcon('usage')}</span><span class="rail-label">Usage</span></button>
+            <button class="rail-button" data-action="layout" aria-label="Layouts" title="Layouts"><span class="rail-icon">⊞</span><span class="rail-label">Layouts</span></button>
+            <button class="rail-button" data-action="help" aria-label="Keyboard shortcuts" title="Keyboard shortcuts"><span class="rail-icon">?</span><span class="rail-label">Shortcuts</span></button>
+            <button class="rail-button" data-action="settings" aria-label="Settings" title="Settings"><span class="rail-icon">⚙</span><span class="rail-label">Settings</span></button>
+          </nav>
+          <div class="sidebar-inner">
+            <div class="sidebar-divider" aria-hidden="true"></div>
+            <div class="session-list" aria-label="Workspace list">
+              ${allPanes().map(({ session: paneSession, pane }) => renderSidebarPaneItem(paneSession, pane)).join('')}
+            </div>
+          </div>
+          <footer class="sidebar-footer">
+            <button class="rail-button" type="button" data-theme-toggle aria-label="Switch to ${themeMode() === 'dark' ? 'light' : 'dark'} mode" title="Switch theme"><span class="rail-icon">${themeMode() === 'dark' ? '☀' : '☾'}</span><span class="rail-label">${themeMode() === 'dark' ? 'Light mode' : 'Dark mode'}</span></button>
+          </footer>
+          <div class="sidebar-resizer" data-action="resize-sidebar"></div>
+        </aside>
+        <section class="workspace">
+          <header class="tabs">
+            <div class="mobile-actions">
+              <button class="mobile-brand" data-action="toggle" aria-label="Toggle sidebar" aria-expanded="${state.sidebarOpen}" title="${state.sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}"><span class="rail-brand-mark" aria-hidden="true">W7</span></button>
+            </div>
+            ${state.sessions.map((item) => `
+              <button class="tab ${item.id === session.id ? 'active' : ''}" data-tab-session="${item.id}">
+                <span data-rename-session="${item.id}">${escapeHtml(item.name)}</span>
+                <span class="tab-close" data-close-session="${item.id}" title="Close workspace">×</span>
+              </button>
+            `).join('')}
+            <button class="tab tab-add" data-action="new-session" title="New workspace" aria-label="New workspace">${fileActionIcon('add')}</button>
+            ${state.config.shell.usingFallback ? '<span class="shell-warning">PowerShell 7 not found</span>' : ''}
+          </header>
+          <div class="pane-grid" style="${paneGridStyle(tab.panes.length)}">
+            ${tab.panes.map((pane) => renderPane(pane)).join('')}
+          </div>
+        </section>
+      </main>
+    `;
+
+    wireControls();
+    for (const pane of tab.panes) {
+      mountPaneContent(pane);
+    }
+  }
+
+  function wireControls() {
+    app.querySelectorAll('[data-action="toggle"]').forEach((button) => button.onclick = () => setSidebarOpen(!state.sidebarOpen));
+    app.querySelector('[data-sidebar-pin]').onclick = () => setSidebarPinned(!state.sidebarPinned);
+    app.querySelectorAll('[data-action="new-session"]').forEach((button) => button.onclick = async () => {
+      const session = await api('/api/sessions', { method: 'POST', body: JSON.stringify({}) });
+      state.activeSessionId = session.id;
+      state.activePaneId = '';
+      await loadState();
+    });
+    app.querySelectorAll('[data-action="new-powershell"]').forEach((button) => button.onclick = () => createPane());
+    app.querySelectorAll('[data-action="files"]').forEach((button) => button.onclick = openFilesPane);
+    app.querySelectorAll('[data-action="browser"]').forEach((button) => button.onclick = openBrowserPane);
+    app.querySelectorAll('[data-action="notepad"]').forEach((button) => button.onclick = () => openNotepadPane());
+    app.querySelectorAll('[data-action="usage"]').forEach((button) => button.onclick = openUsage);
+    app.querySelectorAll('[data-action="layout"]').forEach((button) => button.onclick = toggleLayoutPanel);
+    app.querySelectorAll('[data-action="settings"]').forEach((button) => button.onclick = openSettings);
+    app.querySelectorAll('[data-action="help"]').forEach((button) => button.onclick = openHelp);
+    app.querySelector('[data-action="resize-sidebar"]').onpointerdown = startSidebarResize;
+    app.querySelector('[data-theme-toggle]').onclick = () => setThemeLive(pairedThemeId(), true);
+    app.querySelector('.sidebar').addEventListener('click', closeMobileSidebarAfterAction);
+    wireMobileKeybarButtons(app);
+    wirePaneGrid(app);
+    app.querySelectorAll('[data-tab-session]').forEach((button) => {
+      button.onclick = (event) => {
+        if (Date.now() < state.suppressSessionClickUntil) {
+          event.preventDefault();
+          return;
+        }
+        scheduleClick(event, async () => {
+          state.activeSessionId = button.dataset.tabSession;
+          state.activePaneId = '';
+          await api(`/api/sessions/${state.activeSessionId}/activate`, { method: 'POST' });
+          await loadState();
+        });
+      };
+      button.onauxclick = async (event) => {
+        if (event.button !== 1) {
+          return;
+        }
+        event.preventDefault();
+        await closeSession(button.dataset.tabSession);
+      };
+      button.ondblclick = (event) => {
+        cancelClick();
+        event.stopPropagation();
+        const label = button.querySelector('[data-rename-session]');
+        if (label) {
+          renameSession(button.dataset.tabSession, label.textContent);
+        }
+      };
+      installSessionTabTouchRename(button);
+    });
+    app.querySelectorAll('[data-close-session]').forEach((button) => {
+      button.onclick = async (event) => {
+        event.stopPropagation();
+        await closeSession(button.dataset.closeSession);
+      };
+    });
+    wirePaneControls(app);
+    wirePaneLinks(app);
+    wireFilesPane(app);
+    wireBrowserPane(app);
+    wireNotepadPane(app);
+    renderLayoutPanel();
+    app.querySelectorAll('[data-rename-session]').forEach((label) => {
+      label.ondblclick = (event) => {
+        cancelClick();
+        event.stopPropagation();
+        renameSession(label.dataset.renameSession, label.textContent);
+      };
+    });
+  }
+
+  function wireMobileKeybarButtons(root) {
+    wirePagedToolbars(root);
+    findAll(root, '.mobile-keybar').forEach((keybar) => {
+      keybar.querySelectorAll('button').forEach((button) => {
+        button.onpointerdown = (event) => event.preventDefault();
+      });
+    });
+    root.querySelectorAll('[data-terminal-action]').forEach((button) => {
+      button.onclick = () => sendMobileTerminalKey(button);
+    });
+  }
+
+  function updatePagedToolbar(toolbar) {
+    const items = Array.from(toolbar.children).filter((child) => child.hasAttribute('data-toolbar-item'));
+    const previous = toolbar.querySelector('[data-toolbar-page="previous"]');
+    const next = toolbar.querySelector('[data-toolbar-page="next"]');
+    if (!items.length || !previous || !next || !toolbar.clientWidth) {
+      return;
+    }
+    const fixed = Array.from(toolbar.children).filter((child) => !child.hasAttribute('data-toolbar-item') && !child.hasAttribute('data-toolbar-page'));
+    const gap = Number.parseFloat(getComputedStyle(toolbar).gap) || 0;
+    items.forEach((item) => item.hidden = false);
+    previous.hidden = true;
+    next.hidden = true;
+    const visibleWithoutPaging = [...items, ...fixed];
+    const fullWidth = visibleWithoutPaging.reduce((total, item) => total + item.offsetWidth, 0)
+      + Math.max(0, visibleWithoutPaging.length - 1) * gap;
+    if (fullWidth <= toolbar.clientWidth) {
+      toolbar.dataset.toolbarPageIndex = '0';
+      return;
+    }
+    previous.hidden = false;
+    next.hidden = false;
+    const fixedWidth = fixed.reduce((total, item) => total + item.offsetWidth, 0);
+    const availableWidth = toolbar.clientWidth - previous.offsetWidth - next.offsetWidth
+      - fixedWidth - (fixed.length + 2) * gap;
+    const pages = [];
+    let page = [];
+    let usedWidth = 0;
+    items.forEach((item) => {
+      const itemWidth = item.offsetWidth + (page.length ? gap : 0);
+      if (page.length && usedWidth + itemWidth > availableWidth) {
+        pages.push(page);
+        page = [];
+        usedWidth = 0;
+      }
+      page.push(item);
+      usedWidth += item.offsetWidth + (page.length > 1 ? gap : 0);
+    });
+    if (page.length) {
+      pages.push(page);
+    }
+    const pageIndex = Math.min(Number(toolbar.dataset.toolbarPageIndex) || 0, pages.length - 1);
+    toolbar.dataset.toolbarPageIndex = String(pageIndex);
+    const visibleItems = new Set(pages[pageIndex]);
+    items.forEach((item) => item.hidden = !visibleItems.has(item));
+    previous.disabled = pageIndex === 0;
+    next.disabled = pageIndex === pages.length - 1;
+  }
+
+  function activatePagedToolbarPane(toolbar, event) {
+    event.stopPropagation();
+    const pane = toolbar.closest('[data-pane]');
+    if (pane && pane.dataset.pane !== state.activePaneId) {
+      setActivePane(pane.dataset.pane, false);
+    }
+  }
+
+  function wirePagedToolbars(root) {
+    if (!root) {
+      return;
+    }
+    findAll(root, '[data-paged-toolbar]').forEach((toolbar) => {
+      const previous = toolbar.querySelector('[data-toolbar-page="previous"]');
+      const next = toolbar.querySelector('[data-toolbar-page="next"]');
+      previous.onclick = (event) => {
+        activatePagedToolbarPane(toolbar, event);
+        toolbar.dataset.toolbarPageIndex = String(Math.max(0, (Number(toolbar.dataset.toolbarPageIndex) || 0) - 1));
+        updatePagedToolbar(toolbar);
+      };
+      next.onclick = (event) => {
+        activatePagedToolbarPane(toolbar, event);
+        toolbar.dataset.toolbarPageIndex = String((Number(toolbar.dataset.toolbarPageIndex) || 0) + 1);
+        updatePagedToolbar(toolbar);
+      };
+      toolbar._pagedToolbarObserver?.disconnect();
+      toolbar._pagedToolbarObserver = new ResizeObserver(() => updatePagedToolbar(toolbar));
+      toolbar._pagedToolbarObserver.observe(toolbar);
+      requestAnimationFrame(() => updatePagedToolbar(toolbar));
+    });
+  }
+
+  function installKeyboardShortcuts() {
+    if (state.shortcutsInstalled) {
+      return;
+    }
+    state.shortcutsInstalled = true;
+    document.addEventListener('keydown', async (event) => {
+      const key = event.key.toLowerCase();
+      if (event.ctrlKey && !event.altKey && !event.metaKey && (key === '+' || key === '=' || key === '-')) {
+        event.preventDefault();
+        changePaneFontSize(state.activePaneId, key === '-' ? -1 : 1);
+        return;
+      }
+      if (event.target.closest?.('input, textarea, select, .inline-rename')) {
+        return;
+      }
+      if (event.ctrlKey && event.shiftKey && key === 't') {
+        event.preventDefault();
+        app.querySelector('[data-action="new-session"]')?.click();
+      } else if (event.ctrlKey && event.shiftKey && key === 'n') {
+        event.preventDefault();
+        await createPane();
+      } else if (event.ctrlKey && event.shiftKey && key === 'w') {
+        event.preventDefault();
+        await closePane(state.activePaneId);
+      } else if (event.ctrlKey && event.altKey && key === 'arrowright') {
+        event.preventDefault();
+        switchPaneByOffset(1);
+      } else if (event.ctrlKey && event.altKey && key === 'arrowleft') {
+        event.preventDefault();
+        switchPaneByOffset(-1);
+      } else if (event.key === 'F2') {
+        event.preventDefault();
+        const found = findPaneState(state.activePaneId);
+        if (found) {
+          renamePane(found.pane.id, found.pane.title);
+        }
+      } else if (event.key === '?' && !event.ctrlKey && !event.altKey && !event.metaKey) {
+        event.preventDefault();
+        openHelp();
+      }
+    });
+  }
+
+  function openHelp() {
+    document.querySelector('.help-overlay')?.remove();
+    const overlay = document.createElement('div');
+    overlay.className = 'help-overlay';
+    overlay.innerHTML = `
+      <section class="help-panel">
+        <header class="help-header">
+          <div class="settings-title">Shortcuts</div>
+          <button class="icon-button" type="button" data-help-close title="Close">×</button>
+        </header>
+        <div class="help-list">
+          <div><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>T</kbd><span>New workspace</span></div>
+          <div><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>N</kbd><span>New PowerShell pane</span></div>
+          <div><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>W</kbd><span>Close active pane</span></div>
+          <div><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>←</kbd><span>Previous pane</span></div>
+          <div><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>→</kbd><span>Next pane</span></div>
+          <div><kbd>F2</kbd><span>Rename active pane</span></div>
+          <div><kbd>?</kbd><span>Show this help</span></div>
+        </div>
+      </section>
+    `;
+    document.body.appendChild(overlay);
+    overlay.querySelector('[data-help-close]').onclick = () => overlay.remove();
+    overlay.onclick = (event) => {
+      if (event.target === overlay) {
+        overlay.remove();
+      }
+    };
+  }
+
+  async function toggleFilePanel() {
+    state.filePanelOpen = !state.filePanelOpen;
+    if (state.filePanelOpen && !state.filePath) {
+      await loadDrives();
+    }
+    renderFilePanel();
+  }
+
+  async function openFilesPane() {
+    const session = activeSession();
+    const tab = activeTab(session);
+    const basePaneId = state.activePaneId || tab?.activePaneId || tab?.panes[0]?.id;
+    if (!session || !tab || !basePaneId) {
+      return;
+    }
+    try {
+      const pane = await api(`/api/panes/${basePaneId}/files`, {
+        method: 'POST',
+        body: JSON.stringify({ path: '' })
+      });
+      appendPaneToWorkspace(session, tab, pane);
+    } catch (error) {
+      showToast(error.message);
+    }
+  }
+
+  async function openBrowserPane() {
+    const session = activeSession();
+    const tab = activeTab(session);
+    const basePaneId = state.activePaneId || tab?.activePaneId || tab?.panes[0]?.id;
+    if (!session || !tab || !basePaneId) return;
+    try {
+      const pane = await api(`/api/panes/${basePaneId}/browser`, {
+        method: 'POST', body: JSON.stringify({ url: '', emulationMode: isMobileLayout() ? 'mobile' : 'desktop' })
+      });
+      appendPaneToWorkspace(session, tab, pane);
+    } catch (error) {
+      showToast(error.message);
+    }
+  }
+
+  async function openNotepadPane(path = '') {
+    const session = activeSession();
+    const tab = activeTab(session);
+    const basePaneId = state.activePaneId || tab?.activePaneId || tab?.panes[0]?.id;
+    if (!session || !tab || !basePaneId) return;
+    try {
+      const pane = await api(`/api/panes/${basePaneId}/notepad`, {
+        method: 'POST', body: JSON.stringify({ path })
+      });
+      appendPaneToWorkspace(session, tab, pane);
+    } catch (error) {
+      showToast(error.message);
+    }
+  }
+
+  async function setBrowserPaneUrl(paneId, value) {
+    const connection = state.browserConnections.get(paneId);
+    if (!connection) {
+      showToast('Remote browser is still connecting.');
+      return;
+    }
+    connection.send({ type: 'navigate', url: String(value || '').trim() });
+  }
+
+  function updateBrowserPane(paneId) {
+    const found = findPaneState(paneId);
+    const container = document.querySelector(`[data-pane="${paneId}"]`);
+    const existing = container?.querySelector('.browser-pane');
+    if (!found || !existing) return;
+    existing.outerHTML = renderBrowserPane(found.pane);
+    wireBrowserPane(container);
+  }
+
+  function updateBrowserMenu(paneId) {
+    const found = findPaneState(paneId);
+    const paneElement = document.querySelector(`[data-browser-pane="${paneId}"]`);
+    const menu = paneElement?.querySelector('[data-browser-url-menu]');
+    if (found && menu) menu.innerHTML = renderBrowserUrlOptions(found.pane);
+    if (paneElement) wireBrowserMenu(paneElement, paneId);
+  }
+
+  function updateBrowserTabStrip(paneId) {
+    const found = findPaneState(paneId);
+    const paneElement = document.querySelector(`[data-pane="${paneId}"]`);
+    const strip = paneElement?.querySelector('[data-browser-tab-strip]');
+    if (!found || !strip) return;
+    strip.innerHTML = renderBrowserTabs(found.pane);
+    wireBrowserTabs(paneElement, paneId);
+    const active = activeBrowserTab(found.pane);
+    const input = paneElement.querySelector('[name="url"]');
+    const zoom = paneElement.querySelector('[data-browser-zoom-value]');
+    const external = paneElement.querySelector('[data-browser-external]');
+    const modeButton = paneElement.querySelector('[data-browser-emulation-mode]');
+    if (input) input.value = active.url || '';
+    if (zoom) zoom.textContent = `${Math.round((active.zoom || 1) * 100)}%`;
+    if (external) external.disabled = !active.url;
+    if (modeButton) {
+      const mobile = active.emulationMode === 'mobile';
+      modeButton.classList.toggle('active', mobile);
+      modeButton.setAttribute('aria-pressed', String(mobile));
+      modeButton.setAttribute('aria-label', mobile ? 'Switch to desktop mode' : 'Switch to mobile mode');
+      modeButton.title = mobile ? 'Mobile mode' : 'Desktop mode';
+      modeButton.innerHTML = fileActionIcon(mobile ? 'mobile' : 'desktop');
+    }
+    updateBrowserMenu(paneId);
+  }
+
+  async function toggleBrowserBookmark(url, paneId) {
+    if (!url) return;
+    const bookmarked = (state.config.browser?.bookmarks || []).some((bookmark) => bookmark.url === url);
+    try {
+      const result = await api('/api/browser/bookmarks', {
+        method: bookmarked ? 'DELETE' : 'POST',
+        body: JSON.stringify({ url })
+      });
+      state.config.browser = { ...state.config.browser, bookmarks: result.bookmarks || [] };
+      updateBrowserMenu(paneId);
+    } catch (error) {
+      showToast(error.message);
+    }
+  }
+
+  function setBrowserZoomPopover(paneId, open) {
+    const paneElement = document.querySelector(`[data-browser-pane="${paneId}"]`);
+    const popover = paneElement?.querySelector('[data-browser-zoom-popover]');
+    const toggle = paneElement?.querySelector('[data-browser-zoom-toggle]');
+    if (!popover || !toggle) return;
+    popover.hidden = !open;
+    toggle.setAttribute('aria-expanded', String(open));
+  }
+
+  function showBrowserZoomPopover(paneId) {
+    window.clearTimeout(state.browserZoomTimers.get(paneId));
+    setBrowserZoomPopover(paneId, true);
+    state.browserZoomTimers.set(paneId, window.setTimeout(() => {
+      setBrowserZoomPopover(paneId, false);
+      state.browserZoomTimers.delete(paneId);
+    }, 1000));
+  }
+
+  function wireBrowserPane(root) {
+    const browserPane = root?.querySelector?.('.browser-pane') || (root?.matches?.('.browser-pane') ? root : null);
+    if (!browserPane) return;
+    const paneElement = browserPane.closest('[data-pane]') || browserPane;
+    const paneId = browserPane.dataset.browserPane;
+    const found = findPaneState(paneId);
+    if (!found) return;
+    const menu = paneElement.querySelector('[data-browser-url-menu]');
+    const toggle = paneElement.querySelector('[data-browser-url-toggle]');
+    const control = paneElement.querySelector('[data-browser-url-control]');
+    const zoomControl = paneElement.querySelector('[data-browser-zoom-control]');
+    const zoomToggle = paneElement.querySelector('[data-browser-zoom-toggle]');
+    const zoomPopover = paneElement.querySelector('[data-browser-zoom-popover]');
+    const setMenuOpen = (open) => {
+      if (!menu || !toggle) return;
+      menu.hidden = !open;
+      toggle.setAttribute('aria-expanded', String(open));
+    };
+    toggle?.addEventListener('click', () => {
+      setMenuOpen(menu.hidden);
+    });
+    control?.addEventListener('focusout', (event) => {
+      if (!control.contains(event.relatedTarget)) setMenuOpen(false);
+    });
+    const setZoomOpen = (open) => {
+      window.clearTimeout(state.browserZoomTimers.get(paneId));
+      state.browserZoomTimers.delete(paneId);
+      setBrowserZoomPopover(paneId, open);
+    };
+    zoomToggle?.addEventListener('click', () => setZoomOpen(zoomPopover.hidden));
+    zoomControl?.addEventListener('focusout', (event) => {
+      if (!zoomControl.contains(event.relatedTarget)) setZoomOpen(false);
+    });
+    zoomControl?.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setZoomOpen(false);
+        zoomToggle.focus();
+      }
+    });
+    paneElement.querySelector('[data-browser-url-form]')?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      setBrowserPaneUrl(paneId, new FormData(event.currentTarget).get('url'));
+    });
+    wireBrowserMenu(paneElement, paneId, setMenuOpen);
+    paneElement.querySelector('[data-browser-refresh]')?.addEventListener('click', () => {
+      state.browserConnections.get(paneId)?.send({ type: 'reload' });
+    });
+    paneElement.querySelector('[data-browser-stop]')?.addEventListener('click', () => {
+      state.browserConnections.get(paneId)?.send({ type: 'stop' });
+    });
+    paneElement.querySelector('[data-browser-find]')?.addEventListener('click', () => showBrowserFind(paneElement));
+    paneElement.querySelector('[data-browser-zoom-out]')?.addEventListener('click', () => {
+      state.browserConnections.get(paneId)?.send({ type: 'zoom', delta: -0.1 });
+    });
+    paneElement.querySelector('[data-browser-zoom-in]')?.addEventListener('click', () => {
+      state.browserConnections.get(paneId)?.send({ type: 'zoom', delta: 0.1 });
+    });
+    paneElement.querySelector('[data-browser-zoom-reset]')?.addEventListener('click', () => {
+      state.browserConnections.get(paneId)?.send({ type: 'zoom', reset: true });
+    });
+    paneElement.querySelector('[data-browser-external]')?.addEventListener('click', () => {
+      const url = activeBrowserTab(found.pane).url;
+      if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    });
+    paneElement.querySelector('[data-browser-back]')?.addEventListener('click', () => {
+      state.browserConnections.get(paneId)?.send({ type: 'back' });
+    });
+    paneElement.querySelector('[data-browser-forward]')?.addEventListener('click', () => {
+      state.browserConnections.get(paneId)?.send({ type: 'forward' });
+    });
+    paneElement.querySelector('[data-browser-emulation-mode]')?.addEventListener('click', () => {
+      const active = activeBrowserTab(findPaneState(paneId)?.pane || {});
+      state.browserConnections.get(paneId)?.send({
+        type: 'setEmulationMode',
+        emulationMode: active.emulationMode === 'mobile' ? 'desktop' : 'mobile'
+      });
+    });
+    paneElement.querySelector('[data-browser-audio-toggle]')?.addEventListener('click', () => {
+      state.browserAudioEnabled = !state.browserAudioEnabled;
+      localStorage.setItem('wps7.browserAudioEnabled', String(state.browserAudioEnabled));
+      state.browserConnections.get(paneId)?.setAudio(state.browserAudioEnabled);
+    });
+    wireBrowserTabs(paneElement, paneId);
+    wireBrowserFind(paneElement, paneId);
+  }
+
+  function wireBrowserTabs(paneElement, paneId) {
+    paneElement.querySelectorAll('[data-browser-tab]').forEach((button) => {
+      button.onclick = (event) => {
+        if (event.target.closest('[data-browser-close-tab]')) return;
+        state.browserConnections.get(paneId)?.send({ type: 'activateTab', tabId: button.dataset.browserTab });
+      };
+      button.onkeydown = (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          state.browserConnections.get(paneId)?.send({ type: 'activateTab', tabId: button.dataset.browserTab });
+        }
+      };
+    });
+    paneElement.querySelectorAll('[data-browser-close-tab]').forEach((button) => {
+      button.onclick = (event) => {
+        event.stopPropagation();
+        state.browserConnections.get(paneId)?.send({ type: 'closeTab', tabId: button.dataset.browserCloseTab });
+      };
+    });
+    paneElement.querySelector('[data-browser-new-tab]')?.addEventListener('click', () => {
+      state.browserConnections.get(paneId)?.send({ type: 'newTab', emulationMode: isMobileLayout() ? 'mobile' : 'desktop' });
+    });
+  }
+
+  function showBrowserFind(paneElement) {
+    const bar = paneElement.querySelector('[data-browser-find-bar]');
+    if (!bar) return;
+    bar.hidden = false;
+    const input = bar.querySelector('[data-browser-find-input]');
+    input.focus();
+    input.select();
+  }
+
+  function browserViewportSize(viewport) {
+    const rect = viewport.getBoundingClientRect();
+    return {
+      width: Math.max(320, Math.min(3840, Math.round(rect.width || 1280))),
+      height: Math.max(240, Math.min(2160, Math.round(rect.height || 720)))
+    };
+  }
+
+  function wireBrowserFind(paneElement, paneId) {
+    const bar = paneElement.querySelector('[data-browser-find-bar]');
+    const input = bar?.querySelector('[data-browser-find-input]');
+    const find = (backwards = false) => {
+      state.browserConnections.get(paneId)?.send({ type: 'find', query: input.value, backwards });
+    };
+    input?.addEventListener('input', () => find(false));
+    input?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        find(event.shiftKey);
+      } else if (event.key === 'Escape') {
+        bar.hidden = true;
+        paneElement.querySelector('[data-browser-input-surface]')?.focus();
+      }
+    });
+    bar?.querySelector('[data-browser-find-previous]')?.addEventListener('click', () => find(true));
+    bar?.querySelector('[data-browser-find-next]')?.addEventListener('click', () => find(false));
+    bar?.querySelector('[data-browser-find-close]')?.addEventListener('click', () => { bar.hidden = true; });
+  }
+
+  function wireBrowserMenu(paneElement, paneId, closeMenu = () => {}) {
+    paneElement.querySelectorAll('[data-browser-url-choice]').forEach((button) => {
+      button.onclick = () => {
+        closeMenu(false);
+        setBrowserPaneUrl(paneId, button.dataset.browserUrlChoice);
+      };
+    });
+    paneElement.querySelectorAll('[data-browser-bookmark]').forEach((button) => {
+      button.onclick = () => toggleBrowserBookmark(button.dataset.browserBookmark, paneId);
+    });
+  }
+
+  function browserKeyCode(event) {
+    const known = { Enter: 13, Backspace: 8, Tab: 9, Escape: 27, Delete: 46, ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40, Home: 36, End: 35, PageUp: 33, PageDown: 34 };
+    return known[event.key] || (event.key.length === 1 ? event.key.toUpperCase().charCodeAt(0) : 0);
+  }
+
+  function browserModifiers(event) {
+    return (event.altKey ? 1 : 0) | (event.ctrlKey ? 2 : 0) | (event.metaKey ? 4 : 0) | (event.shiftKey ? 8 : 0);
+  }
+
+  function mountRemoteBrowser(paneId) {
+    const paneElement = document.querySelector(`[data-browser-pane="${paneId}"]`);
+    const canvas = paneElement?.querySelector('[data-browser-surface]');
+    const video = paneElement?.querySelector('[data-browser-video]');
+    const inputSurface = paneElement?.querySelector('[data-browser-input-surface]');
+    const viewport = paneElement?.querySelector('[data-browser-viewport]');
+    const keyboard = paneElement?.querySelector('[data-browser-keyboard]');
+    const contextMenu = paneElement?.querySelector('[data-browser-context-menu]');
+    const status = paneElement?.querySelector('[data-browser-status]');
+    const fileInput = paneElement?.querySelector('[data-browser-file-input]');
+    if (!paneElement || !canvas || !video || !inputSurface || !viewport || state.browserConnections.has(paneId)) return;
+    const context = canvas.getContext('2d', { alpha: false });
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    let socket;
+    let disposed = false;
+    let reconnectTimer = 0;
+    let reconnectDelay = 500;
+    let frameNumber = 0;
+    let pendingNavigation = '';
+    let selectedText = '';
+    let hasFrame = false;
+    let resizeFrame = 0;
+    let paneZoomKeydown = null;
+    let rtcPeer = null;
+    let rtcPeerId = '';
+    let streamMode = 'jpeg';
+    let remoteViewport = browserViewportSize(viewport);
+    let pendingRtcCandidates = [];
+    let pendingRtcPeerId = '';
+    const activeTouches = new Map();
+    const hideContextMenu = () => { if (contextMenu) contextMenu.hidden = true; };
+    const closeContextMenu = (event) => {
+      if (!contextMenu?.contains(event.target)) hideContextMenu();
+    };
+    document.addEventListener('pointerdown', closeContextMenu);
+    const updateAudio = (enabled = state.browserAudioEnabled) => {
+      const button = paneElement.querySelector('[data-browser-audio-toggle]');
+      const available = streamMode === 'webrtc' && video.srcObject && video.srcObject.getAudioTracks().length > 0;
+      video.muted = !enabled;
+      if (!button) return;
+      button.disabled = !available;
+      button.classList.toggle('active', available && enabled);
+      button.setAttribute('aria-pressed', String(available && enabled));
+      button.setAttribute('aria-label', available && enabled ? 'Mute browser audio' : 'Enable browser audio');
+      button.title = available ? (enabled ? 'Browser audio on' : 'Browser audio off') : 'Audio unavailable in JPEG fallback';
+      button.innerHTML = fileActionIcon(available && enabled ? 'volume' : 'volume-off');
+      if (available && enabled) video.play().catch(() => {});
+    };
+    const closeRtcPeer = () => {
+      rtcPeer?.close();
+      rtcPeer = null;
+      rtcPeerId = '';
+      pendingRtcCandidates = [];
+      pendingRtcPeerId = '';
+      if (video.srcObject) {
+        video.srcObject = null;
+      }
+    };
+    const connection = {
+      send(message) {
+        if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
+        else if (message.type === 'navigate') pendingNavigation = message.url;
+      },
+      setAudio(enabled) {
+        updateAudio(enabled);
+      },
+      dispose() {
+        disposed = true;
+        clearTimeout(reconnectTimer);
+        window.clearTimeout(state.browserZoomTimers.get(paneId));
+        state.browserZoomTimers.delete(paneId);
+        cancelAnimationFrame(resizeFrame);
+        document.removeEventListener('pointerdown', closeContextMenu);
+        paneElement.removeEventListener('keydown', paneZoomKeydown, true);
+        resizeObserver.disconnect();
+        closeRtcPeer();
+        socket?.close();
+      }
+    };
+    state.browserConnections.set(paneId, connection);
+
+    paneZoomKeydown = (event) => {
+      const shortcut = (event.ctrlKey || event.metaKey) ? event.key.toLowerCase() : '';
+      const delta = shortcut === '+' || shortcut === '=' ? 0.1 : shortcut === '-' ? -0.1 : 0;
+      if (!delta && shortcut !== '0') return;
+      event.preventDefault();
+      event.stopPropagation();
+      connection.send(shortcut === '0' ? { type: 'zoom', reset: true } : { type: 'zoom', delta });
+      showBrowserZoomPopover(paneId);
+    };
+    paneElement.addEventListener('keydown', paneZoomKeydown, true);
+
+    const sendResize = () => {
+      cancelAnimationFrame(resizeFrame);
+      resizeFrame = requestAnimationFrame(() => {
+        const size = browserViewportSize(viewport);
+        connection.send({
+          type: 'resize',
+          width: size.width,
+          height: size.height,
+          deviceScaleFactor: Math.max(1, Math.min(2, window.devicePixelRatio || 1))
+        });
+      });
+    };
+    const resizeObserver = new ResizeObserver(sendResize);
+    resizeObserver.observe(viewport);
+
+    const connect = () => {
+      if (disposed) return;
+      socket = new WebSocket(`${protocol}//${location.host}/ws?mode=browser&paneId=${encodeURIComponent(paneId)}&token=${encodeURIComponent(state.token)}`);
+      socket.onopen = () => {
+        reconnectDelay = 500;
+        status.textContent = 'Loading…';
+        const size = browserViewportSize(viewport);
+        connection.send({
+          type: 'clientCapabilities',
+          webrtc: typeof RTCPeerConnection === 'function',
+          deviceMode: isMobileLayout() ? 'mobile' : 'desktop',
+          width: size.width,
+          height: size.height,
+          deviceScaleFactor: Math.max(1, Math.min(2, window.devicePixelRatio || 1))
+        });
+        if (pendingNavigation) {
+          connection.send({ type: 'navigate', url: pendingNavigation });
+          pendingNavigation = '';
+        }
+      };
+      socket.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+        if (message.type === 'frame') {
+          remoteViewport = {
+            width: Number(message.viewportWidth) || remoteViewport.width,
+            height: Number(message.viewportHeight) || remoteViewport.height
+          };
+          const currentFrame = ++frameNumber;
+          const image = new Image();
+          image.onload = () => {
+            if (disposed || currentFrame !== frameNumber) return;
+            canvas.width = image.naturalWidth;
+            canvas.height = image.naturalHeight;
+            context.drawImage(image, 0, 0);
+            hasFrame = true;
+            status.hidden = true;
+            if (streamMode !== 'webrtc') {
+              canvas.hidden = false;
+              video.hidden = true;
+            }
+          };
+          image.src = `data:image/jpeg;base64,${message.data}`;
+        } else if (message.type === 'webrtcOffer') {
+          const queuedCandidates = pendingRtcPeerId === message.peerId ? pendingRtcCandidates.slice() : [];
+          closeRtcPeer();
+          rtcPeerId = message.peerId;
+          pendingRtcPeerId = message.peerId;
+          pendingRtcCandidates = queuedCandidates;
+          remoteViewport = {
+            width: Number(message.viewportWidth) || remoteViewport.width,
+            height: Number(message.viewportHeight) || remoteViewport.height
+          };
+          rtcPeer = new RTCPeerConnection({ iceServers: [] });
+          rtcPeer.onicecandidate = (candidateEvent) => {
+            if (candidateEvent.candidate) connection.send({
+              type: 'rtcIceCandidate', peerId: rtcPeerId, candidate: candidateEvent.candidate
+            });
+          };
+          rtcPeer.ontrack = (trackEvent) => {
+            const stream = trackEvent.streams[0] || new MediaStream([trackEvent.track]);
+            if (video.srcObject !== stream) video.srcObject = stream;
+            video.hidden = false;
+            canvas.hidden = true;
+            video.play().catch(() => {});
+            updateAudio();
+          };
+          rtcPeer.setRemoteDescription(message.description).then(async () => {
+            for (const candidate of pendingRtcCandidates.splice(0)) await rtcPeer.addIceCandidate(candidate);
+            const answer = await rtcPeer.createAnswer();
+            await rtcPeer.setLocalDescription(answer);
+            connection.send({ type: 'rtcAnswer', peerId: rtcPeerId, description: rtcPeer.localDescription });
+          }).catch(() => {});
+        } else if (message.type === 'webrtcIceCandidate') {
+          if (!message.candidate || (rtcPeerId && message.peerId !== rtcPeerId)) return;
+          if (!rtcPeerId) pendingRtcPeerId = message.peerId;
+          if (rtcPeer?.remoteDescription) rtcPeer.addIceCandidate(message.candidate).catch(() => {});
+          else pendingRtcCandidates.push(message.candidate);
+        } else if (message.type === 'streamMode') {
+          streamMode = message.mode;
+          paneElement.dataset.streamMode = streamMode;
+          if (streamMode === 'webrtc') {
+            video.hidden = false;
+            canvas.hidden = true;
+            status.hidden = true;
+          } else if (streamMode === 'jpeg') {
+            closeRtcPeer();
+            video.hidden = true;
+            canvas.hidden = false;
+            if (message.reason && message.reason !== 'Checking WebRTC support.') {
+              status.title = message.reason;
+            }
+          }
+          updateAudio();
+        } else if (message.type === 'viewportOwner') {
+          paneElement.dataset.viewportOwner = message.mine ? 'true' : 'false';
+        } else if (message.type === 'navigation') {
+          const found = findPaneState(paneId);
+          if (found) {
+            const tab = found.pane.browserTabs?.find((candidate) => candidate.id === message.tabId);
+            if (tab) tab.url = message.url;
+            if (found.pane.activeBrowserTabId === message.tabId) found.pane.url = message.url;
+          }
+          state.config.browser = { ...state.config.browser, history: message.history || [] };
+          const input = paneElement.querySelector('[name="url"]');
+          if (input) input.value = message.url;
+          updateBrowserMenu(paneId);
+        } else if (message.type === 'status') {
+          const loading = message.state === 'loading';
+          paneElement.classList.toggle('browser-loading', loading);
+          paneElement.querySelector('[data-browser-refresh]').hidden = loading;
+          paneElement.querySelector('[data-browser-stop]').hidden = !loading;
+          status.hidden = hasFrame || loading;
+          status.textContent = loading ? 'Loading…' : 'Connected';
+        } else if (message.type === 'error') {
+          status.hidden = false;
+          status.textContent = message.message;
+        } else if (message.type === 'selection') {
+          selectedText = message.text || '';
+        } else if (message.type === 'copy') {
+          selectedText = message.text || '';
+          copyBrowserText(selectedText);
+        } else if (message.type === 'tabs') {
+          const found = findPaneState(paneId);
+          if (found) {
+            found.pane.browserTabs = message.tabs || [];
+            found.pane.activeBrowserTabId = message.activeTabId;
+            found.pane.url = activeBrowserTab(found.pane).url || '';
+            updateBrowserTabStrip(paneId);
+            sendResize();
+          }
+        } else if (message.type === 'findResult') {
+          const result = paneElement.querySelector('[data-browser-find-result]');
+          if (result) result.textContent = message.empty ? '' : message.found ? 'Match' : 'No match';
+        } else if (message.type === 'dialog') {
+          handleBrowserDialog(connection, message);
+        } else if (message.type === 'fileChooser') {
+          fileInput.multiple = Boolean(message.multiple);
+          fileInput.dataset.tabId = message.tabId;
+          fileInput.dataset.nodeId = message.nodeId;
+          fileInput.value = '';
+          fileInput.click();
+        } else if (message.type === 'download') {
+          updateBrowserDownload(paneElement, message.download);
+        }
+      };
+      socket.onclose = (event) => {
+        if (disposed) return;
+        closeRtcPeer();
+        streamMode = 'jpeg';
+        updateAudio();
+        if (event.code === 1008 && event.reason === 'Login required') {
+          clearToken();
+          renderLogin();
+          return;
+        }
+        status.hidden = false;
+        status.textContent = 'Reconnecting…';
+        reconnectTimer = setTimeout(connect, reconnectDelay);
+        reconnectDelay = Math.min(reconnectDelay * 2, 10000);
+      };
+    };
+
+    const pointerPosition = (event) => {
+      const rect = inputSurface.getBoundingClientRect();
+      const contentWidth = Math.max(1, remoteViewport.width);
+      const contentHeight = Math.max(1, remoteViewport.height);
+      const scale = Math.min(rect.width / contentWidth, rect.height / contentHeight);
+      const renderedWidth = contentWidth * scale;
+      const renderedHeight = contentHeight * scale;
+      const offsetX = (rect.width - renderedWidth) / 2;
+      const offsetY = (rect.height - renderedHeight) / 2;
+      return {
+        x: Math.max(0, Math.min(contentWidth, (event.clientX - rect.left - offsetX) / Math.max(.001, scale))),
+        y: Math.max(0, Math.min(contentHeight, (event.clientY - rect.top - offsetY) / Math.max(.001, scale)))
+      };
+    };
+    const sendMouse = (eventName, event, extra = {}) => {
+      const point = pointerPosition(event);
+      connection.send({ type: 'mouse', event: eventName, ...point, modifiers: browserModifiers(event), ...extra });
+    };
+    const touchPoints = () => [...activeTouches.values()];
+    const updateTouch = (event) => {
+      const point = pointerPosition(event);
+      activeTouches.set(event.pointerId, {
+        id: event.pointerId,
+        ...point,
+        radiusX: Math.max(1, event.width / 2),
+        radiusY: Math.max(1, event.height / 2),
+        force: event.pressure || .5
+      });
+    };
+    inputSurface.onpointerdown = (event) => {
+      event.preventDefault();
+      hideContextMenu();
+      inputSurface.setPointerCapture(event.pointerId);
+      inputSurface.focus({ preventScroll: true });
+      if (event.button === 2) return;
+      if (event.pointerType === 'touch') {
+        updateTouch(event);
+        connection.send({ type: 'touch', event: 'touchStart', touchPoints: touchPoints(), modifiers: browserModifiers(event) });
+        return;
+      }
+      sendMouse('mousePressed', event, { button: event.button === 2 ? 'right' : event.button === 1 ? 'middle' : 'left', buttons: event.buttons, clickCount: event.detail || 1 });
+    };
+    inputSurface.onpointermove = (event) => {
+      if (event.pointerType === 'touch') {
+        if (!activeTouches.has(event.pointerId)) return;
+        updateTouch(event);
+        connection.send({ type: 'touch', event: 'touchMove', touchPoints: touchPoints(), modifiers: browserModifiers(event) });
+        return;
+      }
+      sendMouse('mouseMoved', event, { button: event.buttons & 1 ? 'left' : 'none', buttons: event.buttons });
+    };
+    inputSurface.onpointerup = (event) => {
+      if (event.pointerType === 'touch') {
+        activeTouches.delete(event.pointerId);
+        connection.send({ type: 'touch', event: 'touchEnd', touchPoints: touchPoints(), modifiers: browserModifiers(event) });
+        if (isMobileLayout()) keyboard.focus({ preventScroll: true });
+        return;
+      }
+      if (event.button !== 2) {
+        sendMouse('mouseReleased', event, { button: event.button === 1 ? 'middle' : 'left', buttons: 0, clickCount: event.detail || 1 });
+        connection.send({ type: 'selection' });
+      }
+      if (isMobileLayout()) keyboard.focus({ preventScroll: true });
+    };
+    inputSurface.onpointercancel = (event) => {
+      if (event.pointerType !== 'touch') return;
+      activeTouches.delete(event.pointerId);
+      connection.send({ type: 'touch', event: 'touchCancel', touchPoints: touchPoints(), modifiers: browserModifiers(event) });
+    };
+    inputSurface.oncontextmenu = (event) => {
+      event.preventDefault();
+      if (!contextMenu) return;
+      const rect = viewport.getBoundingClientRect();
+      contextMenu.style.left = `${Math.max(4, Math.min(event.clientX - rect.left, rect.width - 120))}px`;
+      contextMenu.style.top = `${Math.max(4, Math.min(event.clientY - rect.top, rect.height - 104))}px`;
+      contextMenu.hidden = false;
+    };
+    inputSurface.onwheel = (event) => {
+      event.preventDefault();
+      if (event.ctrlKey || event.metaKey) {
+        connection.send({ type: 'zoom', delta: event.deltaY < 0 ? 0.1 : -0.1 });
+        showBrowserZoomPopover(paneId);
+        return;
+      }
+      sendMouse('mouseWheel', event, { button: 'none', deltaX: event.deltaX, deltaY: event.deltaY });
+    };
+    const sendKey = (type, event, text = '') => connection.send({
+      type: 'key', event: type, key: event.key, code: event.code, text,
+      windowsVirtualKeyCode: browserKeyCode(event), modifiers: browserModifiers(event)
+    });
+    const keydown = (event) => {
+      const shortcut = (event.ctrlKey || event.metaKey) ? event.key.toLowerCase() : '';
+      if (shortcut === 'l') {
+        event.preventDefault();
+        const input = paneElement.querySelector('[name="url"]');
+        input.focus();
+        input.select();
+        return;
+      }
+      if (shortcut === 'f') {
+        event.preventDefault();
+        showBrowserFind(paneElement);
+        return;
+      }
+      if (shortcut === 't') {
+        event.preventDefault();
+        connection.send({ type: 'newTab', emulationMode: isMobileLayout() ? 'mobile' : 'desktop' });
+        return;
+      }
+      if (shortcut === 'w') {
+        event.preventDefault();
+        const found = findPaneState(paneId);
+        connection.send({ type: 'closeTab', tabId: found?.pane.activeBrowserTabId });
+        return;
+      }
+      if (shortcut === 'tab') {
+        event.preventDefault();
+        const found = findPaneState(paneId);
+        const tabs = found?.pane.browserTabs || [];
+        const index = tabs.findIndex((tab) => tab.id === found?.pane.activeBrowserTabId);
+        const offset = event.shiftKey ? -1 : 1;
+        const next = tabs[(index + offset + tabs.length) % tabs.length];
+        if (next) connection.send({ type: 'activateTab', tabId: next.id });
+        return;
+      }
+      if (shortcut === 'c') {
+        event.preventDefault();
+        if (selectedText) copyBrowserText(selectedText);
+        else connection.send({ type: 'copy' });
+        return;
+      }
+      if (shortcut === 'v') {
+        if (pasteBrowserText(connection, keyboard)) event.preventDefault();
+        return;
+      }
+      if (shortcut === 'a') {
+        event.preventDefault();
+        connection.send({ type: 'selectAll' });
+        return;
+      }
+      event.preventDefault();
+      sendKey('keyDown', event, event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey ? event.key : '');
+    };
+    const keyup = (event) => {
+      event.preventDefault();
+      sendKey('keyUp', event);
+    };
+    inputSurface.onkeydown = keydown;
+    inputSurface.onkeyup = keyup;
+    keyboard.onkeydown = (event) => {
+      if (event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey) return;
+      keydown(event);
+    };
+    keyboard.onkeyup = keyup;
+    keyboard.onbeforeinput = (event) => {
+      if (event.data) connection.send({ type: 'text', text: event.data });
+      event.preventDefault();
+    };
+    keyboard.onpaste = (event) => {
+      const text = event.clipboardData?.getData('text/plain') || '';
+      if (text) connection.send({ type: 'text', text });
+      event.preventDefault();
+    };
+    keyboard.oninput = () => { keyboard.value = ''; };
+    contextMenu?.querySelector('[data-browser-copy]')?.addEventListener('click', () => {
+      hideContextMenu();
+      if (selectedText) copyBrowserText(selectedText);
+      else connection.send({ type: 'copy' });
+    });
+    contextMenu?.querySelector('[data-browser-paste]')?.addEventListener('click', () => {
+      hideContextMenu();
+      pasteBrowserText(connection, keyboard);
+    });
+    contextMenu?.querySelector('[data-browser-select-all]')?.addEventListener('click', () => {
+      hideContextMenu();
+      connection.send({ type: 'selectAll' });
+      inputSurface.focus();
+    });
+    fileInput.onchange = () => uploadBrowserFiles(fileInput);
+    fileInput.oncancel = () => uploadBrowserFiles(fileInput);
+    connect();
+  }
+
+  function copyBrowserText(text) {
+    if (!text) {
+      showToast('No text selected.');
+      return;
+    }
+    const fallback = () => {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      const copied = document.execCommand('copy');
+      textarea.remove();
+      if (!copied) showToast('Clipboard access is unavailable.');
+    };
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).catch(fallback);
+    else fallback();
+  }
+
+  function pasteBrowserText(connection, keyboard) {
+    if (navigator.clipboard?.readText) {
+      navigator.clipboard.readText().then(
+        (text) => { if (text) connection.send({ type: 'text', text }); },
+        () => keyboard.focus()
+      );
+      return true;
+    }
+    const needsFocus = document.activeElement !== keyboard;
+    keyboard.focus();
+    if (needsFocus) showToast('Press Ctrl+V again to paste.');
+    return false;
+  }
+
+  function handleBrowserDialog(connection, message) {
+    if (message.dialogType === 'alert') {
+      window.alert(message.message);
+      connection.send({ type: 'dialog', accept: true });
+      return;
+    }
+    if (message.dialogType === 'confirm') {
+      connection.send({ type: 'dialog', accept: window.confirm(message.message) });
+      return;
+    }
+    const value = window.prompt(message.message, message.defaultPrompt || '');
+    connection.send({ type: 'dialog', accept: value !== null, promptText: value || '' });
+  }
+
+  async function uploadBrowserFiles(input) {
+    const form = new FormData();
+    for (const file of input.files || []) form.append('files', file, file.name);
+    try {
+      const response = await fetch(`/api/browser/upload?tabId=${encodeURIComponent(input.dataset.tabId)}&nodeId=${encodeURIComponent(input.dataset.nodeId)}`, {
+        method: 'POST',
+        headers: state.token ? { Authorization: `Bearer ${state.token}` } : {},
+        body: form
+      });
+      if (!response.ok) throw new Error((await response.json()).error || 'Upload failed.');
+    } catch (error) {
+      showToast(error.message);
+    }
+  }
+
+  function updateBrowserDownload(paneElement, download) {
+    const status = paneElement.querySelector('[data-browser-download-status]');
+    if (!status || !download) return;
+    const percent = download.totalBytes > 0
+      ? `${Math.min(100, Math.round(download.receivedBytes / download.totalBytes * 100))}%`
+      : 'Downloading';
+    status.hidden = false;
+    status.textContent = download.state === 'completed' ? `${download.filename} · Ready` : `${download.filename} · ${percent}`;
+    if (download.state === 'completed') {
+      fetchBrowserDownload(download).finally(() => setTimeout(() => { status.hidden = true; }, 2400));
+    } else if (download.state === 'canceled') {
+      status.textContent = `${download.filename} · Canceled`;
+    }
+  }
+
+  async function fetchBrowserDownload(download) {
+    try {
+      const response = await fetch(`/api/browser/downloads/${encodeURIComponent(download.guid)}`, {
+        headers: state.token ? { Authorization: `Bearer ${state.token}` } : {}
+      });
+      if (!response.ok) throw new Error('Download is not ready.');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = download.filename;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (error) {
+      showToast(error.message);
+    }
+  }
+
+  function disposeBrowsers() {
+    for (const connection of state.browserConnections.values()) connection.dispose();
+    state.browserConnections.clear();
+  }
+
+  async function loadNotepadTab(paneId, tabId, filePath) {
+    const container = document.querySelector(`[data-pane="${paneId}"]`);
+    if (!filePath) {
+      wireNotepadPane(container);
+      return;
+    }
+    const data = notepadTabData(tabId);
+    if (data.loadedPath === filePath && !data.error) {
+      wireNotepadPane(container);
+      return;
+    }
+    try {
+      const result = await api(`/api/files/text?path=${encodeURIComponent(filePath)}`);
+      Object.assign(data, { content: result.content, encoding: result.encoding, loadedPath: result.path, dirty: false, error: '' });
+      const found = findPaneState(paneId);
+      const tab = found?.pane.notepadTabs?.find((candidate) => candidate.id === tabId);
+      if (tab) tab.path = result.path;
+    } catch (error) {
+      data.error = error.message;
+    }
+    updateNotepadPane(paneId);
+  }
+
+  function updateNotepadPane(paneId) {
+    const found = findPaneState(paneId);
+    const container = document.querySelector(`[data-pane="${paneId}"]`);
+    const existing = container?.querySelector('.notepad-pane');
+    if (!found || !existing) return;
+    existing.outerHTML = renderNotepadPane(found.pane);
+    updateNotepadTabStrip(paneId);
+    wireNotepadPane(container);
+  }
+
+  function updateNotepadTabStrip(paneId) {
+    const found = findPaneState(paneId);
+    const container = document.querySelector(`[data-pane="${paneId}"]`);
+    const strip = container?.querySelector('[data-notepad-tab-strip]');
+    if (!found || !strip) return;
+    strip.innerHTML = `<span class="pane-kind-icon" aria-hidden="true">${fileActionIcon('notepad')}</span>${renderNotepadTabs(found.pane)}`;
+    wireNotepadTabs(container, paneId);
+  }
+
+  async function activateNotepadTabClient(paneId, tabId) {
+    const found = findPaneState(paneId);
+    if (!found || found.pane.activeNotepadTabId === tabId) return;
+    try {
+      await api(`/api/panes/${paneId}/notepad/tabs/${tabId}/activate`, { method: 'POST' });
+    } catch (error) {
+      showToast(error.message);
+      return;
+    }
+    found.pane.activeNotepadTabId = tabId;
+    const tab = found.pane.notepadTabs.find((candidate) => candidate.id === tabId);
+    updateNotepadPane(paneId);
+    if (tab?.path) await loadNotepadTab(paneId, tabId, tab.path);
+  }
+
+  async function addNotepadTab(paneId, filePath = '') {
+    try {
+      const result = await api(`/api/panes/${paneId}/notepad/tabs`, {
+        method: 'POST', body: JSON.stringify({ path: filePath })
+      });
+      const found = findPaneState(paneId);
+      if (!found) return;
+      found.pane.notepadTabs.push(result.tab);
+      found.pane.activeNotepadTabId = result.tab.id;
+      updateNotepadPane(paneId);
+      if (result.tab.path) await loadNotepadTab(paneId, result.tab.id, result.tab.path);
+    } catch (error) {
+      showToast(error.message);
+    }
+  }
+
+  async function closeNotepadTabClient(paneId, tabId) {
+    const found = findPaneState(paneId);
+    if (!found) return;
+    if (notepadTabData(tabId).dirty && !window.confirm('This file has unsaved changes. Close anyway?')) {
+      return;
+    }
+    try {
+      await api(`/api/panes/${paneId}/notepad/tabs/${tabId}`, { method: 'DELETE' });
+    } catch (error) {
+      showToast(error.message);
+      return;
+    }
+    const tabs = found.pane.notepadTabs;
+    const index = tabs.findIndex((tab) => tab.id === tabId);
+    if (index === -1) return;
+    if (tabs.length === 1) {
+      tabs[0] = { id: tabId, title: 'Untitled', path: '' };
+      delete state.notepadTabData[tabId];
+    } else {
+      tabs.splice(index, 1);
+      delete state.notepadTabData[tabId];
+    }
+    if (!tabs.some((tab) => tab.id === found.pane.activeNotepadTabId)) {
+      found.pane.activeNotepadTabId = tabs[Math.min(index, tabs.length - 1)].id;
+    }
+    updateNotepadPane(paneId);
+  }
+
+  async function setNotepadTabPath(paneId, tabId, filePath) {
+    try {
+      await api(`/api/panes/${paneId}/notepad/tabs/${tabId}`, {
+        method: 'PATCH', body: JSON.stringify({ path: filePath })
+      });
+      const found = findPaneState(paneId);
+      const tab = found?.pane.notepadTabs?.find((candidate) => candidate.id === tabId);
+      if (tab) tab.path = filePath;
+      notepadTabData(tabId).loadedPath = '';
+      if (found?.pane.activeNotepadTabId === tabId) {
+        await loadNotepadTab(paneId, tabId, filePath);
+      } else {
+        updateNotepadTabStrip(paneId);
+      }
+    } catch (error) {
+      showToast(error.message);
+    }
+  }
+
+  function editNotepadTabPath(paneId, tabId) {
+    const tabElement = document.querySelector(`[data-notepad-tab="${tabId}"]`);
+    const found = findPaneState(paneId);
+    const tab = found?.pane.notepadTabs?.find((candidate) => candidate.id === tabId);
+    const label = tabElement?.querySelector('.notepad-tab-label');
+    if (!label || !tab || tabElement.querySelector('input')) return;
+    const input = document.createElement('input');
+    input.className = 'notepad-tab-path-input';
+    input.setAttribute('aria-label', 'Notepad file path');
+    input.value = tab.path || tab.title;
+    label.replaceWith(input);
+    input.focus();
+    input.select();
+    input.addEventListener('click', (event) => event.stopPropagation());
+    let committed = false;
+    const commit = async () => {
+      if (committed) return;
+      committed = true;
+      const filePath = input.value.trim();
+      if (filePath && filePath !== (tab.path || tab.title)) {
+        await setNotepadTabPath(paneId, tabId, filePath);
+      } else {
+        updateNotepadTabStrip(paneId);
+      }
+    };
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        commit();
+      } else if (event.key === 'Escape') {
+        committed = true;
+        updateNotepadTabStrip(paneId);
+      }
+    });
+    input.addEventListener('blur', commit);
+  }
+
+  function wireNotepadTabs(paneElement, paneId) {
+    paneElement.querySelectorAll('[data-notepad-tab]').forEach((tabElement) => {
+      tabElement.onclick = (event) => {
+        if (event.target.closest('[data-notepad-close-tab]')) return;
+        activateNotepadTabClient(paneId, tabElement.dataset.notepadTab);
+      };
+      tabElement.onkeydown = (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          activateNotepadTabClient(paneId, tabElement.dataset.notepadTab);
+        }
+      };
+      tabElement.ondblclick = (event) => {
+        event.stopPropagation();
+        editNotepadTabPath(paneId, tabElement.dataset.notepadTab);
+      };
+    });
+    paneElement.querySelectorAll('[data-notepad-close-tab]').forEach((button) => {
+      button.onclick = (event) => {
+        event.stopPropagation();
+        closeNotepadTabClient(paneId, button.dataset.notepadCloseTab);
+      };
+    });
+    paneElement.querySelector('[data-notepad-new-tab]')?.addEventListener('click', () => addNotepadTab(paneId, ''));
+  }
+
+  async function saveNotepadTab(paneId, tabId, silent = false) {
+    const found = findPaneState(paneId);
+    const tab = found?.pane.notepadTabs?.find((candidate) => candidate.id === tabId);
+    if (!found || !tab) return;
+    if (!tab.path) {
+      if (silent) return;
+      editNotepadTabPath(paneId, tabId);
+      showToast('Enter a file path before saving.');
+      return;
+    }
+    const data = notepadTabData(tabId);
+    try {
+      const result = await api('/api/files/text', {
+        method: 'PUT',
+        body: JSON.stringify({ path: tab.path, content: data.content, encoding: data.encoding })
+      });
+      data.loadedPath = result.path;
+      data.encoding = result.encoding;
+      data.dirty = false;
+      data.error = '';
+      if (tab.path !== result.path) {
+        await api(`/api/panes/${paneId}/notepad/tabs/${tabId}`, {
+          method: 'PATCH', body: JSON.stringify({ path: result.path })
+        });
+        tab.path = result.path;
+      }
+      updateNotepadPane(paneId);
+      if (!silent) showToast('File saved.', 'success');
+    } catch (error) {
+      if (!silent) showToast(error.message);
+    }
+  }
+
+  function scheduleNotepadAutosave(paneId, tabId) {
+    window.clearTimeout(state.notepadAutosaveTimers.get(tabId));
+    state.notepadAutosaveTimers.set(tabId, window.setTimeout(() => {
+      state.notepadAutosaveTimers.delete(tabId);
+      saveNotepadTab(paneId, tabId, true);
+    }, 1500));
+  }
+
+  async function notepadCopySelection(editor) {
+    const text = editor.value.slice(editor.selectionStart, editor.selectionEnd);
+    if (!text) return '';
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (error) {
+      showToast('Clipboard access is unavailable.');
+    }
+    return text;
+  }
+
+  async function notepadCut(editor) {
+    const text = await notepadCopySelection(editor);
+    if (!text) return;
+    editor.setRangeText('', editor.selectionStart, editor.selectionEnd, 'end');
+    editor.dispatchEvent(new Event('input'));
+    editor.focus();
+  }
+
+  async function notepadPaste(editor) {
+    try {
+      const text = await navigator.clipboard.readText();
+      editor.setRangeText(text, editor.selectionStart, editor.selectionEnd, 'end');
+      editor.dispatchEvent(new Event('input'));
+      editor.focus();
+    } catch (error) {
+      showToast('Clipboard access is unavailable.');
+    }
+  }
+
+  function notepadFindNext(editor, query, backward) {
+    if (!query) return false;
+    const text = editor.value;
+    let index;
+    if (backward) {
+      index = text.lastIndexOf(query, Math.max(0, editor.selectionStart - 1));
+      if (index === -1) index = text.lastIndexOf(query);
+    } else {
+      index = text.indexOf(query, editor.selectionEnd);
+      if (index === -1) index = text.indexOf(query);
+    }
+    if (index === -1) return false;
+    editor.focus();
+    editor.setSelectionRange(index, index + query.length);
+    return true;
+  }
+
+  function showNotepadFindBar(paneElement, withReplace) {
+    const bar = paneElement.querySelector('[data-notepad-find-bar]');
+    const replaceInput = paneElement.querySelector('[data-notepad-replace-input]');
+    const replaceOne = paneElement.querySelector('[data-notepad-replace-one]');
+    const replaceAll = paneElement.querySelector('[data-notepad-replace-all]');
+    if (!bar) return;
+    bar.hidden = false;
+    replaceInput.hidden = !withReplace;
+    replaceOne.hidden = !withReplace;
+    replaceAll.hidden = !withReplace;
+    paneElement.querySelector('[data-notepad-find-input]')?.focus();
+  }
+
+  function hideNotepadFindBar(paneElement) {
+    const bar = paneElement.querySelector('[data-notepad-find-bar]');
+    if (bar) bar.hidden = true;
+    paneElement.querySelector('.notepad-editor')?.focus();
+  }
+
+  function wireNotepadFindBar(paneElement, editor) {
+    const findInput = paneElement.querySelector('[data-notepad-find-input]');
+    const replaceInput = paneElement.querySelector('[data-notepad-replace-input]');
+    const findNextButton = paneElement.querySelector('[data-notepad-find-next]');
+    const findPrevButton = paneElement.querySelector('[data-notepad-find-prev]');
+    const replaceOneButton = paneElement.querySelector('[data-notepad-replace-one]');
+    const replaceAllButton = paneElement.querySelector('[data-notepad-replace-all]');
+    const findCloseButton = paneElement.querySelector('[data-notepad-find-close]');
+    if (findNextButton) findNextButton.onclick = () => notepadFindNext(editor, findInput.value, false);
+    if (findPrevButton) findPrevButton.onclick = () => notepadFindNext(editor, findInput.value, true);
+    if (findInput) {
+      findInput.onkeydown = (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          notepadFindNext(editor, findInput.value, event.shiftKey);
+        } else if (event.key === 'Escape') {
+          hideNotepadFindBar(paneElement);
+        }
+      };
+    }
+    if (replaceInput) {
+      replaceInput.onkeydown = (event) => {
+        if (event.key === 'Escape') hideNotepadFindBar(paneElement);
+      };
+    }
+    if (replaceOneButton) {
+      replaceOneButton.onclick = () => {
+        const query = findInput.value;
+        if (query && editor.value.slice(editor.selectionStart, editor.selectionEnd) === query) {
+          editor.setRangeText(replaceInput.value, editor.selectionStart, editor.selectionEnd, 'end');
+          editor.dispatchEvent(new Event('input'));
+        }
+        notepadFindNext(editor, query, false);
+      };
+    }
+    if (replaceAllButton) {
+      replaceAllButton.onclick = () => {
+        const query = findInput.value;
+        if (!query) return;
+        editor.value = editor.value.split(query).join(replaceInput.value);
+        editor.dispatchEvent(new Event('input'));
+      };
+    }
+    if (findCloseButton) findCloseButton.onclick = () => hideNotepadFindBar(paneElement);
+  }
+
+  function wireNotepadPane(root) {
+    wirePagedToolbars(root);
+    const paneElement = root?.querySelector?.('.notepad-pane') || (root?.matches?.('.notepad-pane') ? root : null);
+    if (!paneElement) return;
+    const paneId = paneElement.dataset.notepadPane;
+    const tabId = paneElement.dataset.notepadActiveTab;
+    const editor = paneElement.querySelector('.notepad-editor');
+    const gutter = paneElement.querySelector('.notepad-gutter');
+    const status = paneElement.querySelector('[data-notepad-status]');
+    const data = notepadTabData(tabId);
+
+    const newButton = paneElement.querySelector('[data-notepad-new]');
+    const saveButton = paneElement.querySelector('[data-notepad-save]');
+    const fontSelect = paneElement.querySelector('[data-notepad-font]');
+    const cutButton = paneElement.querySelector('[data-notepad-cut]');
+    const copyButton = paneElement.querySelector('[data-notepad-copy]');
+    const pasteButton = paneElement.querySelector('[data-notepad-paste]');
+    const findButton = paneElement.querySelector('[data-notepad-find]');
+    const replaceButton = paneElement.querySelector('[data-notepad-replace]');
+    const wrapButton = paneElement.querySelector('[data-notepad-wrap]');
+    const indentButton = paneElement.querySelector('[data-notepad-indent]');
+    const autosaveButton = paneElement.querySelector('[data-notepad-autosave]');
+
+    if (newButton) newButton.onclick = () => addNotepadTab(paneId, '');
+    if (saveButton) saveButton.onclick = () => saveNotepadTab(paneId, tabId);
+    if (fontSelect) {
+      fontSelect.onchange = (event) => {
+        data.fontFamily = event.target.value;
+        editor.style.fontFamily = data.fontFamily;
+        gutter.style.fontFamily = data.fontFamily;
+      };
+    }
+    if (cutButton) cutButton.onclick = () => notepadCut(editor);
+    if (copyButton) copyButton.onclick = () => notepadCopySelection(editor);
+    if (pasteButton) pasteButton.onclick = () => notepadPaste(editor);
+    if (findButton) findButton.onclick = () => showNotepadFindBar(paneElement, false);
+    if (replaceButton) replaceButton.onclick = () => showNotepadFindBar(paneElement, true);
+    if (wrapButton) {
+      wrapButton.onclick = () => {
+        data.wrap = !data.wrap;
+        updateNotepadPane(paneId);
+      };
+    }
+    if (indentButton) {
+      indentButton.onclick = () => {
+        data.indentGuides = !data.indentGuides;
+        updateNotepadPane(paneId);
+      };
+    }
+    if (autosaveButton) {
+      autosaveButton.onclick = () => {
+        data.autosave = !data.autosave;
+        updateNotepadPane(paneId);
+      };
+    }
+
+    if (editor) {
+      editor.oninput = () => {
+        data.content = editor.value;
+        data.dirty = true;
+        gutter.textContent = lineNumbers(editor.value);
+        status.textContent = data.encoding.toUpperCase();
+        const label = document.querySelector(`[data-notepad-tab="${tabId}"] .notepad-tab-label`);
+        if (label && !label.querySelector('.notepad-tab-modified')) {
+          label.insertAdjacentHTML('afterbegin', '<span class="notepad-tab-modified">*</span>');
+        }
+        if (data.autosave) scheduleNotepadAutosave(paneId, tabId);
+      };
+      editor.onscroll = () => {
+        gutter.scrollTop = editor.scrollTop;
+      };
+      editor.onkeydown = (event) => {
+        if (event.ctrlKey && event.key.toLowerCase() === 's') {
+          event.preventDefault();
+          saveNotepadTab(paneId, tabId);
+        } else if (event.ctrlKey && event.key.toLowerCase() === 'n') {
+          event.preventDefault();
+          addNotepadTab(paneId, '');
+        } else if (event.ctrlKey && event.key.toLowerCase() === 'f') {
+          event.preventDefault();
+          showNotepadFindBar(paneElement, false);
+        } else if (event.ctrlKey && event.key.toLowerCase() === 'h') {
+          event.preventDefault();
+          showNotepadFindBar(paneElement, true);
+        } else if (event.key === 'Tab') {
+          event.preventDefault();
+          const start = editor.selectionStart;
+          editor.setRangeText('  ', start, editor.selectionEnd, 'end');
+          editor.dispatchEvent(new Event('input'));
+        }
+      };
+    }
+
+    wireNotepadFindBar(paneElement, editor);
+    wireNotepadTabs(paneElement, paneId);
+  }
+
+  async function openNotepadForFile(path) {
+    const session = activeSession();
+    const tab = activeTab(session);
+    const existing = tab?.panes.find((candidate) => candidate.type === 'notepad');
+    if (existing) {
+      await addNotepadTab(existing.id, path);
+      await setActivePane(existing.id, false);
+      return;
+    }
+    await openNotepadPane(path);
+  }
+
+  async function loadDrives() {
+    try {
+      state.fileError = '';
+      const result = await api('/api/files/drives');
+      state.fileDrives = result.drives || [];
+      state.fileEntries = [];
+      state.fileParent = '';
+    } catch (error) {
+      state.fileError = error.message;
+    }
+  }
+
+  async function loadFiles(path) {
+    try {
+      state.fileError = '';
+      const result = await api(`/api/files?path=${encodeURIComponent(path)}`);
+      state.filePath = result.path;
+      state.fileEntries = result.entries || [];
+      state.fileParent = result.parent || '';
+    } catch (error) {
+      state.fileError = error.message;
+    }
+    renderFilePanel();
+  }
+
+  async function loadFilesPane(pane) {
+    if (!pane) {
+      return;
+    }
+    const paneData = filesPaneData(pane.id);
+    paneData.error = '';
+    try {
+      if (pane.path) {
+        const [result, bookmarkResult] = await Promise.all([
+          api(`/api/files?path=${encodeURIComponent(pane.path)}`),
+          api('/api/files/bookmarks')
+        ]);
+        pane.path = result.path;
+        paneData.entries = result.entries || [];
+        paneData.parent = result.parent || '';
+        paneData.drives = [];
+        paneData.bookmarks = bookmarkResult.bookmarks || [];
+        rememberFilePath(pane.path);
+      } else {
+        const [result, bookmarkResult] = await Promise.all([
+          api('/api/files/drives'),
+          api('/api/files/bookmarks')
+        ]);
+        paneData.drives = result.drives || [];
+        paneData.entries = [];
+        paneData.parent = '';
+        paneData.bookmarks = bookmarkResult.bookmarks || [];
+      }
+    } catch (error) {
+      paneData.error = error.message;
+    }
+    updateFilesPane(pane.id);
+  }
+
+  async function setFilesPanePath(paneId, path) {
+    const found = findPaneState(paneId);
+    if (!found || found.pane.type !== 'files') {
+      return;
+    }
+    try {
+      const result = await api(`/api/panes/${paneId}/files/path`, {
+        method: 'PATCH',
+        body: JSON.stringify({ path })
+      });
+      found.pane.path = result.path || '';
+      state.selectedFiles[paneId] = [];
+      filesPaneData(paneId).selectionAnchor = -1;
+      await loadFilesPane(found.pane);
+    } catch (error) {
+      filesPaneData(paneId).error = error.message;
+      showToast(error.message);
+      updateFilesPane(paneId);
+    }
+  }
+
+  function updateFilesPane(paneId) {
+    const found = findPaneState(paneId);
+    const container = document.querySelector(`[data-pane="${paneId}"]`);
+    if (!found || !container) {
+      return;
+    }
+    const existing = container.querySelector('.files-pane');
+    if (existing) {
+      existing.outerHTML = renderFilesPane(found.pane);
+      wireFilesPane(container);
+    }
+  }
+
+  function setFileColumnWidth(paneElement, paneData, column, value) {
+    const minimums = { name: 90, modified: 90, size: 54 };
+    const widths = { name: 150, modified: 130, size: 72, ...paneData.columnWidths };
+    widths[column] = Math.max(minimums[column], Math.min(640, Math.round(value)));
+    paneData.columnWidths = widths;
+    paneElement.style.setProperty('--file-column-template', `${widths.name}px ${widths.modified}px ${widths.size}px`);
+    paneElement.style.setProperty('--file-table-width', `${widths.name + widths.modified + widths.size}px`);
+    return widths[column];
+  }
+
+  function wireFilesPane(root) {
+    wirePagedToolbars(root);
+    const paneElement = root.querySelector?.('.files-pane') || (root.matches?.('.files-pane') ? root : null);
+    if (!paneElement) {
+      return;
+    }
+    const paneId = paneElement.dataset.filesPane;
+    const found = findPaneState(paneId);
+    if (!found) {
+      return;
+    }
+    const paneData = filesPaneData(paneId);
+    const pathControl = paneElement.querySelector('[data-file-path-control]');
+    const pathMenu = paneElement.querySelector('[data-file-path-menu]');
+    const pathInput = paneElement.querySelector('.file-path-input');
+    const pathToggle = paneElement.querySelector('[data-file-path-toggle]');
+    const setPathMenuOpen = (open) => {
+      if (!pathMenu || !pathToggle || !pathInput) {
+        return;
+      }
+      pathMenu.hidden = !open;
+      pathToggle.setAttribute('aria-expanded', String(open));
+      pathInput.setAttribute('aria-expanded', String(open));
+    };
+    pathToggle?.addEventListener('click', () => setPathMenuOpen(pathMenu.hidden));
+    pathInput?.addEventListener('focus', () => setPathMenuOpen(true));
+    pathInput?.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setPathMenuOpen(true);
+        pathMenu.querySelector('[data-file-path-choice]')?.focus();
+      } else if (event.key === 'Escape') {
+        setPathMenuOpen(false);
+      }
+    });
+    pathControl?.addEventListener('focusout', (event) => {
+      if (!pathControl.contains(event.relatedTarget)) {
+        setPathMenuOpen(false);
+      }
+    });
+    paneElement.querySelectorAll('[data-file-path-choice]').forEach((button) => {
+      button.onclick = () => setFilesPanePath(paneId, button.dataset.filePathChoice);
+    });
+    paneElement.querySelectorAll('[data-path-bookmark]').forEach((button) => {
+      button.onclick = () => togglePathBookmark(button.dataset.pathBookmark, paneId);
+    });
+    paneElement.querySelector('[data-file-path-form]')?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      setFilesPanePath(paneId, new FormData(event.currentTarget).get('path'));
+    });
+    paneElement.querySelector('[data-file-refresh]')?.addEventListener('click', () => loadFilesPane(found.pane));
+    paneElement.querySelector('[data-file-up]')?.addEventListener('click', () => {
+      if (paneData.parent) {
+        setFilesPanePath(paneId, paneData.parent);
+      } else {
+        setFilesPanePath(paneId, '');
+      }
+    });
+    paneElement.querySelector('[data-file-new-file]')?.addEventListener('click', () => createFile(paneId));
+    paneElement.querySelector('[data-file-new-folder]')?.addEventListener('click', () => createFolder(paneId));
+    paneElement.querySelector('[data-file-upload]')?.addEventListener('change', (event) => uploadFiles(event, paneId));
+    paneElement.querySelector('[data-folder-upload]')?.addEventListener('change', (event) => uploadFiles(event, paneId));
+    paneElement.querySelectorAll('[data-file-sort]').forEach((button) => {
+      button.onclick = () => {
+        const key = button.dataset.fileSort;
+        if (paneData.sortKey === key) {
+          paneData.sortDirection = paneData.sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+          paneData.sortKey = key;
+          paneData.sortDirection = 'asc';
+        }
+        paneData.selectionAnchor = -1;
+        updateFilesPane(paneId);
+      };
+    });
+    paneElement.querySelectorAll('[data-file-column-resize]').forEach((handle) => {
+      const column = handle.dataset.fileColumnResize;
+      handle.onpointerdown = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const startX = event.clientX;
+        const startWidth = paneData.columnWidths?.[column] || { name: 150, modified: 130, size: 72 }[column];
+        handle.setPointerCapture(event.pointerId);
+        handle.onpointermove = (moveEvent) => {
+          if (!handle.hasPointerCapture(moveEvent.pointerId)) return;
+          const width = setFileColumnWidth(paneElement, paneData, column, startWidth + moveEvent.clientX - startX);
+          handle.setAttribute('aria-valuenow', String(width));
+        };
+        handle.onpointerup = (upEvent) => {
+          if (handle.hasPointerCapture(upEvent.pointerId)) handle.releasePointerCapture(upEvent.pointerId);
+          handle.onpointermove = null;
+          handle.onpointerup = null;
+        };
+      };
+      handle.onkeydown = (event) => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        event.preventDefault();
+        const current = paneData.columnWidths?.[column] || { name: 150, modified: 130, size: 72 }[column];
+        const width = setFileColumnWidth(paneElement, paneData, column, current + (event.key === 'ArrowRight' ? 10 : -10));
+        handle.setAttribute('aria-valuenow', String(width));
+      };
+    });
+    let dragDepth = 0;
+    paneElement.addEventListener('dragenter', (event) => {
+      if (!found.pane.path || !Array.from(event.dataTransfer?.types || []).includes('Files')) return;
+      event.preventDefault();
+      dragDepth += 1;
+      paneElement.classList.add('drop-target');
+    });
+    paneElement.addEventListener('dragover', (event) => {
+      if (!found.pane.path || !Array.from(event.dataTransfer?.types || []).includes('Files')) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+    });
+    paneElement.addEventListener('dragleave', () => {
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) paneElement.classList.remove('drop-target');
+    });
+    paneElement.addEventListener('drop', async (event) => {
+      if (!found.pane.path) return;
+      event.preventDefault();
+      dragDepth = 0;
+      paneElement.classList.remove('drop-target');
+      await uploadDroppedFiles(event.dataTransfer, paneId);
+    });
+    paneElement.querySelector('[data-file-download-selected]')?.addEventListener('click', () => downloadFiles(selectedFileList(paneId), paneId));
+    paneElement.querySelector('[data-file-copy-selected]')?.addEventListener('click', () => copyFilePaths(selectedFileList(paneId)));
+    paneElement.querySelector('[data-file-select-all]')?.addEventListener('click', () => {
+      state.selectedFiles[paneId] = allVisibleFilesSelected(paneId) ? [] : visibleFilePaths(paneId);
+      syncFileSelectionUi(paneElement, paneId);
+    });
+    paneElement.querySelector('[data-file-show-hidden]')?.addEventListener('click', async () => {
+      const showHidden = !paneData.showHidden;
+      await setShowHiddenFiles(showHidden);
+      if (!showHidden) {
+        const visible = new Set(visibleFilePaths(paneId));
+        state.selectedFiles[paneId] = selectedFileList(paneId).filter((path) => visible.has(path));
+      }
+      paneData.selectionAnchor = -1;
+    });
+    paneElement.querySelector('[data-file-rename-selected]')?.addEventListener('click', () => {
+      const selected = selectedFileList(paneId);
+      if (selected.length === 1) {
+        renameFile(selected[0], paneId);
+      }
+    });
+    paneElement.querySelector('[data-file-delete-selected]')?.addEventListener('click', () => {
+      const selected = selectedFileList(paneId);
+      if (selected.length) {
+        deleteFiles(selected, paneId);
+      }
+    });
+    paneElement.querySelectorAll('[data-file-row]').forEach((row) => {
+      row.onmousedown = (event) => {
+        if (event.button === 1) {
+          event.preventDefault();
+          copyFilePath(row.dataset.fileRow);
+          return;
+        }
+        if (event.shiftKey) {
+          event.preventDefault();
+        }
+      };
+      row.onclick = (event) => {
+        selectFileRow(paneElement, paneId, row, event);
+      };
+      row.ondblclick = (event) => {
+        event.preventDefault();
+        openFileRow(row, paneId);
+      };
+      row.onkeydown = (event) => {
+        if (event.key === ' ') {
+          event.preventDefault();
+          selectFileRow(paneElement, paneId, row, event);
+        } else if (event.key === 'Enter') {
+          event.preventDefault();
+          openFileRow(row, paneId);
+        }
+      };
+      row.onauxclick = (event) => {
+        if (event.button !== 1) {
+          return;
+        }
+        event.preventDefault();
+      };
+    });
+    paneElement.querySelectorAll('.file-row-button[data-file-open]').forEach((button) => {
+      button.onclick = () => setFilesPanePath(paneId, button.dataset.fileOpen);
+    });
+    paneElement.querySelectorAll('[data-file-parent]').forEach((button) => {
+      button.ondblclick = (event) => {
+        event.preventDefault();
+        setFilesPanePath(paneId, button.dataset.fileParent);
+      };
+      button.onkeydown = (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          setFilesPanePath(paneId, button.dataset.fileParent);
+        }
+      };
+    });
+    paneElement.querySelectorAll('[data-file-rename]').forEach((button) => {
+      button.onclick = () => renameFile(button.dataset.fileRename, paneId);
+    });
+    paneElement.querySelectorAll('[data-file-delete]').forEach((button) => {
+      button.onclick = () => deleteFile(button.dataset.fileDelete, paneId);
+    });
+    paneElement.onkeydown = (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a' && !event.target.closest('input')) {
+        event.preventDefault();
+        state.selectedFiles[paneId] = visibleFilePaths(paneId);
+        syncFileSelectionUi(paneElement, paneId);
+      }
+    };
+  }
+
+  function selectedFileList(paneId) {
+    return Array.isArray(state.selectedFiles[paneId]) ? state.selectedFiles[paneId] : [];
+  }
+
+  function setFileSelected(paneId, path, selected) {
+    const current = selectedFileList(paneId).filter((item) => item !== path);
+    if (selected) {
+      current.push(path);
+    }
+    state.selectedFiles[paneId] = current;
+  }
+
+  function visibleFilePaths(paneId) {
+    return sortedFileEntries(paneId).map((entry) => entry.path);
+  }
+
+  function allVisibleFilesSelected(paneId) {
+    const visible = visibleFilePaths(paneId);
+    const selected = new Set(selectedFileList(paneId));
+    return visible.length > 0 && visible.every((path) => selected.has(path));
+  }
+
+  function selectFileRange(paneId, paths, fromIndex, toIndex, additive) {
+    const start = Math.min(fromIndex, toIndex);
+    const end = Math.max(fromIndex, toIndex);
+    const range = paths.slice(start, end + 1);
+    state.selectedFiles[paneId] = additive
+      ? Array.from(new Set([...selectedFileList(paneId), ...range]))
+      : range;
+  }
+
+  function selectFileRow(container, paneId, row, event) {
+    if (!row) {
+      return;
+    }
+    if (state.activePaneId !== paneId) {
+      setActivePane(paneId, false);
+    }
+    const paneData = filesPaneData(paneId);
+    const paths = Array.from(container.querySelectorAll('[data-file-row]')).map((item) => item.dataset.fileRow);
+    const index = Number(row.dataset.fileIndex);
+    const additive = event.ctrlKey || event.metaKey;
+    if (event.shiftKey && paneData.selectionAnchor >= 0) {
+      selectFileRange(paneId, paths, paneData.selectionAnchor, index, additive);
+    } else if (additive) {
+      setFileSelected(paneId, row.dataset.fileRow, !selectedFileList(paneId).includes(row.dataset.fileRow));
+      paneData.selectionAnchor = index;
+    } else {
+      state.selectedFiles[paneId] = [row.dataset.fileRow];
+      paneData.selectionAnchor = index;
+    }
+    syncFileSelectionUi(container, paneId);
+  }
+
+  function copyFilePaths(paths) {
+    const text = paths.join('\n');
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    const copied = document.execCommand('copy');
+    textarea.remove();
+    const succeeded = () => showToast(paths.length === 1 ? 'Path copied.' : `${paths.length} paths copied.`, 'success');
+    if (copied) {
+      succeeded();
+      return;
+    }
+    if (!navigator.clipboard?.writeText) {
+      showToast('Could not copy path.');
+      return;
+    }
+    navigator.clipboard.writeText(text).then(succeeded, () => showToast('Could not copy path.'));
+  }
+
+  function copyFilePath(path) {
+    copyFilePaths([path]);
+  }
+
+  async function setShowHiddenFiles(showHidden) {
+    try {
+      state.config = await api('/api/settings', {
+        method: 'POST',
+        body: JSON.stringify({ file_manager: { show_hidden: showHidden } })
+      });
+      Object.values(state.filePaneData).forEach((paneData) => {
+        paneData.showHidden = showHidden;
+      });
+      document.querySelectorAll('[data-files-pane]').forEach((paneElement) => updateFilesPane(paneElement.dataset.filesPane));
+    } catch (error) {
+      showToast(error.message);
+    }
+  }
+
+  async function openFileRow(row, paneId) {
+    const opener = row.querySelector('[data-file-open]');
+    if (opener.dataset.fileType === 'file') {
+      const path = opener.dataset.fileOpen;
+      try {
+        await api(`/api/files/text?path=${encodeURIComponent(path)}`);
+        await openNotepadForFile(path);
+      } catch (error) {
+        if (error.status === 415) {
+          await downloadFiles([path], paneId);
+        } else {
+          showToast(error.message);
+        }
+      }
+    } else {
+      setFilesPanePath(paneId, opener.dataset.fileOpen);
+    }
+  }
+
+  function syncFileSelectionUi(container, paneId) {
+    const selected = selectedFileList(paneId);
+    container.querySelectorAll('[data-file-row]').forEach((row) => {
+      const selectedRow = selected.includes(row.dataset.fileRow);
+      row.classList.toggle('selected', selectedRow);
+      row.setAttribute('aria-selected', String(selectedRow));
+    });
+    const renameButton = container.querySelector('[data-file-rename-selected]');
+    const downloadButton = container.querySelector('[data-file-download-selected]');
+    const copyButton = container.querySelector('[data-file-copy-selected]');
+    const deleteButton = container.querySelector('[data-file-delete-selected]');
+    if (renameButton) {
+      renameButton.disabled = selected.length !== 1;
+    }
+    if (deleteButton) {
+      deleteButton.disabled = selected.length === 0;
+    }
+    if (downloadButton) {
+      downloadButton.disabled = selected.length === 0;
+    }
+    if (copyButton) {
+      copyButton.disabled = selected.length === 0;
+    }
+    const selectAllButton = container.querySelector('[data-file-select-all]');
+    if (selectAllButton) {
+      const allSelected = allVisibleFilesSelected(paneId);
+      selectAllButton.classList.toggle('active', allSelected);
+      selectAllButton.setAttribute('aria-label', allSelected ? 'Deselect all' : 'Select all');
+      selectAllButton.setAttribute('aria-pressed', String(allSelected));
+      selectAllButton.title = allSelected ? 'Deselect all' : 'Select all';
+      selectAllButton.innerHTML = fileActionIcon(allSelected ? 'deselect-all' : 'select-all');
+    }
+    const itemCount = container.querySelector('.file-item-count');
+    if (itemCount) {
+      const total = visibleFilePaths(paneId).length;
+      itemCount.textContent = selected.length ? `${selected.length}/${total} items` : `${total} items`;
+    }
+  }
+
+  function clearFileSelections() {
+    Object.keys(state.selectedFiles).forEach((paneId) => {
+      state.selectedFiles[paneId] = [];
+      filesPaneData(paneId).selectionAnchor = -1;
+    });
+    document.querySelectorAll('[data-files-pane]').forEach((paneElement) => syncFileSelectionUi(paneElement, paneElement.dataset.filesPane));
+  }
+
+  function renderFilePanel() {
+    document.querySelector('.file-panel')?.remove();
+    if (!state.filePanelOpen) {
+      return;
+    }
+    const panel = document.createElement('aside');
+    panel.className = 'file-panel';
+    const showingDrives = !state.filePath;
+    panel.innerHTML = `
+      <header class="file-header">
+        <div class="brand">Files</div>
+        <button class="icon-button" data-file-close title="Close">×</button>
+      </header>
+      <div class="file-path">${escapeHtml(state.filePath || 'This PC')}</div>
+      <div class="file-actions">
+        ${state.filePath ? '<button class="secondary" data-file-up>Up</button><button class="secondary" data-file-new-folder>New folder</button><label class="secondary file-upload">Upload<input type="file" multiple data-file-upload></label>' : '<button class="secondary" data-file-refresh>Refresh</button>'}
+      </div>
+      <div class="file-error">${escapeHtml(state.fileError)}</div>
+      <div class="file-list">
+        ${showingDrives ? state.fileDrives.map((drive) => `
+          <button class="file-row" data-file-open="${escapeAttr(drive.path)}">
+            <span class="file-icon">▣</span><span>${escapeHtml(drive.name)}</span>
+          </button>
+        `).join('') : state.fileEntries.map((entry) => `
+          <div class="file-row" data-file-row="${escapeAttr(entry.path)}">
+            <button data-file-open="${escapeAttr(entry.path)}" ${entry.type === 'file' ? 'data-file-download' : ''}>
+              <span class="file-icon">${entry.type === 'directory' ? '▣' : '□'}</span>
+              <span>${escapeHtml(entry.name)}</span>
+            </button>
+            <small>${entry.type === 'file' ? formatBytes(entry.size) : 'Folder'}</small>
+            <button class="icon-button" data-file-rename="${escapeAttr(entry.path)}" title="Rename">✎</button>
+            <button class="icon-button" data-file-delete="${escapeAttr(entry.path)}" title="Delete">×</button>
+          </div>
+        `).join('')}
+      </div>
+    `;
+    document.body.appendChild(panel);
+    panel.querySelector('[data-file-close]').onclick = () => {
+      state.filePanelOpen = false;
+      renderFilePanel();
+    };
+    panel.querySelector('[data-file-refresh]')?.addEventListener('click', loadDrives);
+    panel.querySelector('[data-file-up]')?.addEventListener('click', () => {
+      if (state.fileParent) {
+        loadFiles(state.fileParent);
+      } else {
+        state.filePath = '';
+        loadDrives().then(renderFilePanel);
+      }
+    });
+    panel.querySelector('[data-file-new-folder]')?.addEventListener('click', createFolder);
+    panel.querySelector('[data-file-upload]')?.addEventListener('change', uploadFiles);
+    panel.querySelectorAll('[data-file-open]').forEach((button) => {
+      button.onclick = () => {
+        if (button.hasAttribute('data-file-download')) {
+          downloadFile(button.dataset.fileOpen);
+        } else {
+          loadFiles(button.dataset.fileOpen);
+        }
+      };
+    });
+    panel.querySelectorAll('[data-file-rename]').forEach((button) => {
+      button.onclick = () => renameFile(button.dataset.fileRename);
+    });
+    panel.querySelectorAll('[data-file-delete]').forEach((button) => {
+      button.onclick = () => deleteFile(button.dataset.fileDelete);
+    });
+  }
+
+  async function createFolder(paneId = '') {
+    const found = paneId ? findPaneState(paneId) : null;
+    const name = window.prompt('Folder name');
+    if (!name) {
+      return;
+    }
+    try {
+      await api('/api/files/folder', {
+        method: 'POST',
+        body: JSON.stringify({ path: found?.pane.path || state.filePath, name })
+      });
+      if (found) {
+        await loadFilesPane(found.pane);
+      } else {
+        await loadFiles(state.filePath);
+      }
+    } catch (error) {
+      if (found) {
+        filesPaneData(paneId).error = error.message;
+      } else {
+        state.fileError = error.message;
+      }
+      showToast(error.message);
+      found ? updateFilesPane(paneId) : renderFilePanel();
+    }
+  }
+
+  async function createFile(paneId) {
+    const found = findPaneState(paneId);
+    const name = window.prompt('File name');
+    if (!found?.pane.path || !name) {
+      return;
+    }
+    try {
+      await api('/api/files/file', {
+        method: 'POST',
+        body: JSON.stringify({ path: found.pane.path, name })
+      });
+      await loadFilesPane(found.pane);
+    } catch (error) {
+      filesPaneData(paneId).error = error.message;
+      showToast(error.message);
+      updateFilesPane(paneId);
+    }
+  }
+
+  async function renameFile(path, paneId = '') {
+    const found = paneId ? findPaneState(paneId) : null;
+    const name = window.prompt('New name');
+    if (!name) {
+      return;
+    }
+    try {
+      await api('/api/files/rename', {
+        method: 'PATCH',
+        body: JSON.stringify({ path, name })
+      });
+      if (found) {
+        await loadFilesPane(found.pane);
+      } else {
+        await loadFiles(state.filePath);
+      }
+    } catch (error) {
+      if (found) {
+        filesPaneData(paneId).error = error.message;
+      } else {
+        state.fileError = error.message;
+      }
+      showToast(error.message);
+      found ? updateFilesPane(paneId) : renderFilePanel();
+    }
+  }
+
+  async function deleteFile(path, paneId = '') {
+    const found = paneId ? findPaneState(paneId) : null;
+    if (!window.confirm('Delete this item permanently?')) {
+      return;
+    }
+    try {
+      await api('/api/files', {
+        method: 'DELETE',
+        body: JSON.stringify({ path })
+      });
+      if (found) {
+        await loadFilesPane(found.pane);
+      } else {
+        await loadFiles(state.filePath);
+      }
+    } catch (error) {
+      if (found) {
+        filesPaneData(paneId).error = error.message;
+      } else {
+        state.fileError = error.message;
+      }
+      showToast(error.message);
+      found ? updateFilesPane(paneId) : renderFilePanel();
+    }
+  }
+
+  async function deleteFiles(paths, paneId) {
+    const found = findPaneState(paneId);
+    if (!found || !paths.length) {
+      return;
+    }
+    if (!window.confirm(`Delete ${paths.length} selected item(s) permanently?`)) {
+      return;
+    }
+    try {
+      for (const path of paths) {
+        await api('/api/files', {
+          method: 'DELETE',
+          body: JSON.stringify({ path })
+        });
+      }
+      state.selectedFiles[paneId] = [];
+      await loadFilesPane(found.pane);
+    } catch (error) {
+      filesPaneData(paneId).error = error.message;
+      showToast(error.message);
+      updateFilesPane(paneId);
+    }
+  }
+
+  async function downloadFile(path, paneId = '') {
+    try {
+      const headers = {};
+      if (state.token) {
+        headers.Authorization = `Bearer ${state.token}`;
+      }
+      const response = await fetch(`/api/files/download?path=${encodeURIComponent(path)}`, { headers });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({ error: 'Download failed.' }));
+        throw new Error(result.error || 'Download failed.');
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+      const plainName = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+      link.download = encodedName ? decodeURIComponent(encodedName) : (plainName || path.split(/[\\/]/).pop() || 'download');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      if (paneId) {
+        filesPaneData(paneId).error = error.message;
+      } else {
+        state.fileError = error.message;
+      }
+      showToast(error.message);
+      if (paneId) {
+        updateFilesPane(paneId);
+      }
+    }
+  }
+
+  async function downloadFiles(paths, paneId) {
+    for (const path of paths) {
+      await downloadFile(path, paneId);
+    }
+  }
+
+  async function uploadFiles(event, paneId = '') {
+    const files = Array.from(event.target.files || []).map((file) => ({ file, name: file.webkitRelativePath || file.name }));
+    await uploadFileItems(files, paneId);
+    event.target.value = '';
+  }
+
+  async function uploadDroppedFiles(dataTransfer, paneId) {
+    const items = Array.from(dataTransfer?.items || []);
+    const entries = items.map((item) => item.webkitGetAsEntry?.()).filter(Boolean);
+    const files = entries.length
+      ? (await Promise.all(entries.map((entry) => droppedEntryFiles(entry)))).flat()
+      : Array.from(dataTransfer?.files || []).map((file) => ({ file, name: file.name }));
+    await uploadFileItems(files, paneId);
+  }
+
+  async function droppedEntryFiles(entry, prefix = '') {
+    if (entry.isFile) {
+      const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+      return [{ file, name: `${prefix}${file.name}` }];
+    }
+    if (!entry.isDirectory) {
+      return [];
+    }
+    const reader = entry.createReader();
+    const children = [];
+    while (true) {
+      const batch = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
+      if (!batch.length) break;
+      children.push(...batch);
+    }
+    return (await Promise.all(children.map((child) => droppedEntryFiles(child, `${prefix}${entry.name}/`)))).flat();
+  }
+
+  async function uploadFileItems(files, paneId = '') {
+    const found = paneId ? findPaneState(paneId) : null;
+    if (!files.length) {
+      return;
+    }
+    const form = new FormData();
+    files.forEach((item) => form.append('files', item.file, item.name));
+    try {
+      await uploadWithProgress(`/api/files/upload?path=${encodeURIComponent(found?.pane.path || state.filePath)}`, form, paneId);
+      if (found) {
+        await loadFilesPane(found.pane);
+      } else {
+        await loadFiles(state.filePath);
+      }
+      showToast('Upload complete.', 'success');
+    } catch (error) {
+      if (found) {
+        filesPaneData(paneId).error = error.message;
+      } else {
+        state.fileError = error.message;
+      }
+      showToast(error.message);
+      found ? updateFilesPane(paneId) : renderFilePanel();
+    } finally {
+      setFileStatus('', paneId);
+    }
+  }
+
+  function setFileStatus(message, paneId = '') {
+    if (paneId) {
+      const pane = document.querySelector(`[data-pane="${paneId}"]`);
+      const target = pane?.querySelector(`[data-pane-upload-status="${paneId}"]`);
+      if (target) {
+        target.textContent = message;
+        target.closest('.pane-title')?.classList.toggle('uploading', Boolean(message));
+        syncPaneTitleWidth(pane);
+      }
+      return;
+    }
+    const target = document.querySelector('.file-panel .file-error');
+    if (target) {
+      target.textContent = message;
+    }
+  }
+
+  function uploadWithProgress(url, form, paneId = '') {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url);
+      if (state.token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${state.token}`);
+      }
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable) {
+          setFileStatus('0%', paneId);
+          return;
+        }
+        const percent = Math.max(0, Math.min(100, Math.round((event.loaded / event.total) * 100)));
+        setFileStatus(`${percent}%`, paneId);
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve();
+          return;
+        }
+        let message = xhr.responseText || 'Upload failed.';
+        try {
+          message = JSON.parse(message).error || message;
+        } catch (error) {
+          // Keep the raw response text.
+        }
+        if (xhr.status === 401) {
+          clearToken();
+          renderLogin();
+        }
+        reject(new Error(message));
+      };
+      xhr.onerror = () => reject(new Error('Upload failed.'));
+      xhr.send(form);
+    });
+  }
+
+  async function togglePathBookmark(path, paneId) {
+    if (!path) {
+      return;
+    }
+    const paneData = filesPaneData(paneId);
+    const bookmarked = paneData.bookmarks.some((bookmark) => bookmark.path.toLowerCase() === path.toLowerCase());
+    try {
+      const result = await api('/api/files/bookmarks', {
+        method: bookmarked ? 'DELETE' : 'POST',
+        body: JSON.stringify({ name: path, path })
+      });
+      paneData.bookmarks = result.bookmarks || [];
+      updateFilesPane(paneId);
+    } catch (error) {
+      state.fileError = error.message;
+      showToast(error.message);
+      updateFilesPane(paneId);
+    }
+  }
+
+  function formatBytes(value) {
+    const size = Number(value) || 0;
+    if (size < 1024) {
+      return `${size} B`;
+    }
+    if (size < 1024 * 1024) {
+      return `${Math.round(size / 1024)} KB`;
+    }
+    return `${Math.round(size / 1024 / 1024)} MB`;
+  }
+
+  function toggleLayoutPanel() {
+    state.layoutPanelOpen = !state.layoutPanelOpen;
+    renderLayoutPanel();
+  }
+
+  function renderLayoutPanel() {
+    document.querySelector('.layout-panel')?.remove();
+    if (!state.layoutPanelOpen) {
+      return;
+    }
+    const session = activeSession();
+    const tab = activeTab(session);
+    if (!tab) {
+      return;
+    }
+    const panel = document.createElement('section');
+    panel.className = `layout-panel ${state.displayMode === 'mobile' ? 'mobile-sheet' : ''}`;
+    panel.innerHTML = `
+      <header class="layout-header">
+        <div class="brand">Layout</div>
+        <button class="icon-button" data-layout-close title="Close">×</button>
+      </header>
+      <div class="mode-switch">
+        ${['auto', 'mobile', 'desktop'].map((mode) => `
+          <button class="secondary ${state.displayMode === mode ? 'active' : ''}" data-display-mode="${mode}">${mode[0].toUpperCase()}${mode.slice(1)}</button>
+        `).join('')}
+        ${['readable', 'dense'].map((density) => `
+          <button class="secondary ${state.mobileTerminalDensity === density ? 'active' : ''}" data-terminal-density="${density}">${density === 'dense' ? 'Dense' : 'Readable'}</button>
+        `).join('')}
+      </div>
+      <div class="layout-controls">
+        <button class="secondary" data-layout-move="up" title="Move up">↑</button>
+        <button class="secondary" data-layout-move="left" title="Move left">←</button>
+        <button class="secondary" data-layout-move="right" title="Move right">→</button>
+        <button class="secondary" data-layout-move="down" title="Move down">↓</button>
+        <button class="secondary" data-layout-size="wide" title="Wider">W+</button>
+        <button class="secondary" data-layout-size="narrow" title="Narrower">W-</button>
+        <button class="secondary" data-layout-size="tall" title="Taller">H+</button>
+        <button class="secondary" data-layout-size="short" title="Shorter">H-</button>
+      </div>
+      <div class="mini-grid" style="${paneGridStyle()}">
+        ${tab.panes.map((pane) => `<button class="mini-pane ${pane.id === state.activePaneId ? 'active' : ''}" data-layout-pane="${pane.id}" style="${paneItemStyle(pane)}">${({ files: 'Files', browser: 'Web', notepad: 'Notes' })[pane.type] || 'PS'}</button>`).join('')}
+      </div>
+      <div class="layout-list">
+        ${tab.panes.map((pane) => `
+          <button class="session-item ${pane.id === state.activePaneId ? 'active' : ''}" data-layout-pane="${pane.id}">
+            <span>${escapeHtml(pane.title)}</span>
+          </button>
+        `).join('')}
+      </div>
+    `;
+    document.body.appendChild(panel);
+    panel.querySelector('[data-layout-close]').onclick = () => {
+      state.layoutPanelOpen = false;
+      renderLayoutPanel();
+    };
+    panel.querySelectorAll('[data-display-mode]').forEach((button) => {
+      button.onclick = () => {
+        state.displayMode = button.dataset.displayMode;
+        localStorage.setItem('wps7.displayMode', state.displayMode);
+        document.querySelector('.app')?.classList.remove('mode-auto', 'mode-mobile', 'mode-desktop');
+        document.querySelector('.app')?.classList.add(`mode-${state.displayMode}`);
+        updateVisualViewport();
+        applyConfigLive();
+        renderLayoutPanel();
+      };
+    });
+    panel.querySelectorAll('[data-terminal-density]').forEach((button) => {
+      button.onclick = () => {
+        state.mobileTerminalDensity = button.dataset.terminalDensity;
+        localStorage.setItem('wps7.mobileTerminalDensity', state.mobileTerminalDensity);
+        document.querySelector('.app')?.classList.remove('density-readable', 'density-dense');
+        document.querySelector('.app')?.classList.add(`density-${state.mobileTerminalDensity}`);
+        applyConfigLive();
+        renderLayoutPanel();
+      };
+    });
+    panel.querySelectorAll('[data-layout-pane]').forEach((button) => {
+      button.onclick = () => setActivePane(button.dataset.layoutPane).then(renderLayoutPanel);
+    });
+    panel.querySelectorAll('[data-layout-move]').forEach((button) => {
+      button.onclick = () => adjustActivePaneLayout(button.dataset.layoutMove);
+    });
+    panel.querySelectorAll('[data-layout-size]').forEach((button) => {
+      button.onclick = () => adjustActivePaneLayout(button.dataset.layoutSize);
+    });
+  }
+
+  async function adjustActivePaneLayout(action) {
+    const found = findPaneState(state.activePaneId);
+    if (!found) {
+      return;
+    }
+    const maxColumns = Number(state.config.ui?.max_pane_columns) || 5;
+    const maxRows = Number(state.config.ui?.max_pane_rows) || 3;
+    const layout = normalizePaneLayout(found.pane.layout, maxColumns, maxRows);
+    const next = { ...layout };
+    if (action === 'left') next.x -= 1;
+    if (action === 'right') next.x += 1;
+    if (action === 'up') next.y -= 1;
+    if (action === 'down') next.y += 1;
+    if (action === 'wide') next.cols += 1;
+    if (action === 'narrow') next.cols -= 1;
+    if (action === 'tall') next.rows += 1;
+    if (action === 'short') next.rows -= 1;
+    const normalized = normalizePaneLayout(next, maxColumns, maxRows);
+    if (!isClientLayoutFree(found.tab, found.pane.id, normalized, maxColumns, maxRows)) {
+      showToast('Pane layout overlaps another pane.');
+      return;
+    }
+    const saved = await savePaneLayoutLocal(found.pane.id, normalized);
+    if (saved) {
+      applyPaneLayoutStyle(document.querySelector(`[data-pane="${found.pane.id}"]`), normalized);
+      state.terminals.get(found.pane.id)?.sendResize();
+      renderLayoutPanel();
+    }
+  }
+
+  function wirePaneControls(root) {
+    findAll(root, '[data-close-pane]').forEach((button) => {
+      button.onclick = async (event) => {
+        event.stopPropagation();
+        await closePane(button.dataset.closePane);
+      };
+      button.ondblclick = (event) => event.stopPropagation();
+    });
+    findAll(root, '[data-pane]').forEach((pane) => {
+      syncPaneTitleWidth(pane);
+      pane.onclick = (event) => {
+        if (event.target.closest('.terminal') && pane.dataset.pane === state.activePaneId) {
+          return;
+        }
+        setActivePane(pane.dataset.pane, pane.dataset.paneType !== 'files');
+      };
+      pane.addEventListener('wheel', (event) => {
+        if (event.ctrlKey && event.deltaY !== 0) {
+          event.preventDefault();
+          changePaneFontSize(pane.dataset.pane, event.deltaY < 0 ? 1 : -1);
+        }
+      }, { passive: false });
+    });
+    findAll(root, '[data-pane-title]').forEach((title) => {
+      title.onpointerdown = startPaneMove;
+      title.ontouchstart = startPaneSwipe;
+      title.ondblclick = (event) => {
+        const label = title.querySelector('[data-rename-pane]');
+        if (!label) return;
+        cancelClick();
+        event.stopPropagation();
+        renamePane(title.dataset.paneTitle, label.textContent);
+      };
+    });
+    findAll(root, '[data-rename-pane]').forEach((label) => {
+      label.ondblclick = (event) => {
+        event.stopPropagation();
+        renamePane(label.dataset.renamePane, label.textContent);
+      };
+    });
+    findAll(root, '[data-pane-resize]').forEach((handle) => {
+      handle.onpointerdown = startPaneResize;
+    });
+  }
+
+  function startPaneSwipe(event) {
+    if (!event.touches || event.touches.length !== 1 || event.target.closest('button, [data-browser-tab], [data-notepad-tab]')) {
+      return;
+    }
+    const touch = event.touches[0];
+    state.swipeStart = { x: touch.clientX, y: touch.clientY, paneId: event.currentTarget.dataset.paneTitle };
+    event.currentTarget.ontouchend = finishPaneSwipe;
+  }
+
+  function finishPaneSwipe(event) {
+    const start = state.swipeStart;
+    state.swipeStart = null;
+    if (!start || !event.changedTouches || !event.changedTouches.length) {
+      return;
+    }
+    const touch = event.changedTouches[0];
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.5) {
+      return;
+    }
+    switchPaneByOffset(dx < 0 ? 1 : -1);
+  }
+
+  async function switchPaneByOffset(offset) {
+    const session = activeSession();
+    const tab = activeTab(session);
+    if (!tab || tab.panes.length < 2) {
+      return;
+    }
+    const index = tab.panes.findIndex((pane) => pane.id === state.activePaneId);
+    const nextIndex = (index + offset + tab.panes.length) % tab.panes.length;
+    await setActivePane(tab.panes[nextIndex].id);
+  }
+
+  function wirePaneLinks(root) {
+    findAll(root, '[data-pane-link]').forEach((button) => {
+      button.onclick = (event) => {
+        scheduleClick(event, async () => {
+          const found = findPaneState(button.dataset.paneLink);
+          if (found && found.session.id === state.activeSessionId) {
+            await setActivePane(button.dataset.paneLink);
+            return;
+          }
+          state.activeSessionId = button.dataset.session;
+          state.activePaneId = button.dataset.paneLink;
+          await api(`/api/panes/${state.activePaneId}/activate`, { method: 'POST' });
+          await loadState();
+        });
+      };
+    });
+  }
+
+  function findAll(root, selector) {
+    const items = [];
+    if (root.matches?.(selector)) {
+      items.push(root);
+    }
+    items.push(...root.querySelectorAll(selector));
+    return items;
+  }
+
+  function scheduleClick(event, handler) {
+    if (event.detail > 1) {
+      cancelClick();
+      return;
+    }
+    cancelClick();
+    state.clickTimer = window.setTimeout(() => {
+      state.clickTimer = null;
+      handler();
+    }, isMobileLayout() ? 420 : 220);
+  }
+
+  function installSessionTabTouchRename(button) {
+    button.addEventListener('pointerup', (event) => {
+      if (event.pointerType !== 'touch') {
+        return;
+      }
+      const now = Date.now();
+      const previous = state.lastSessionTap;
+      state.lastSessionTap = { sessionId: button.dataset.tabSession, at: now };
+      if (!previous || previous.sessionId !== button.dataset.tabSession || now - previous.at > 420) {
+        return;
+      }
+      state.suppressSessionClickUntil = now + 500;
+      state.lastSessionTap = null;
+      cancelClick();
+      event.preventDefault();
+      const label = button.querySelector('[data-rename-session]');
+      if (label) {
+        renameSession(button.dataset.tabSession, label.textContent);
+      }
+    });
+  }
+
+  function cancelClick() {
+    if (state.clickTimer) {
+      window.clearTimeout(state.clickTimer);
+      state.clickTimer = null;
+    }
+  }
+
+  async function closeSession(sessionId) {
+    try {
+      await api(`/api/sessions/${sessionId}`, { method: 'DELETE' });
+      state.activeSessionId = '';
+      state.activePaneId = '';
+      await loadState();
+    } catch (error) {
+      showToast(error.message);
+    }
+  }
+
+  async function closePane(paneId) {
+    if (!paneId) {
+      return;
+    }
+    const found = findPaneState(paneId);
+    if (!found) {
+      return;
+    }
+
+    let result;
+    try {
+      result = await api(`/api/panes/${paneId}`, { method: 'DELETE' });
+      if (!result.ok) {
+        return;
+      }
+    } catch (error) {
+      showToast(error.message);
+      return;
+    }
+
+    const index = found.tab.panes.findIndex((pane) => pane.id === paneId);
+    found.tab.panes.splice(index, 1);
+    const nextPane = found.tab.panes[Math.max(0, index - 1)] || found.tab.panes[0];
+    found.tab.activePaneId = nextPane?.id || '';
+    found.session.activePaneId = nextPane?.id || '';
+    state.activePaneId = nextPane?.id || '';
+
+    disposeTerminal(paneId);
+    state.browserConnections.get(paneId)?.dispose();
+    state.browserConnections.delete(paneId);
+    delete state.filePaneData[paneId];
+    (found.pane.notepadTabs || []).forEach((tab) => {
+      delete state.notepadTabData[tab.id];
+      window.clearTimeout(state.notepadAutosaveTimers.get(tab.id));
+      state.notepadAutosaveTimers.delete(tab.id);
+    });
+    document.querySelector(`[data-pane="${paneId}"]`)?.remove();
+    document.querySelector(`[data-pane-link="${paneId}"]`)?.remove();
+    updateActivePaneUi();
+    state.terminals.get(state.activePaneId)?.term.focus();
+  }
+
+  function startSidebarResize(event) {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = state.sidebarWidth || Number(state.config.ui?.sidebar_width) || 286;
+    const onMove = (moveEvent) => {
+      const width = Math.max(180, Math.min(520, startWidth + moveEvent.clientX - startX));
+      state.sidebarWidth = width;
+      localStorage.setItem('wps7.sidebarWidth', String(width));
+      document.querySelector('.app')?.style.setProperty('--sidebar-width', `${width}px`);
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
+  function editInline(label, value, save, renderLabel) {
+    const input = document.createElement('input');
+    input.className = 'inline-rename';
+    input.value = value.trim();
+    label.replaceWith(input);
+    input.focus();
+    input.select();
+
+    let committed = false;
+    const commit = async () => {
+      if (committed) {
+        return;
+      }
+      committed = true;
+      const nextValue = input.value.trim();
+      try {
+        if (nextValue && nextValue !== value.trim()) {
+          await save(nextValue);
+        }
+        input.replaceWith(renderLabel(nextValue || value.trim()));
+      } catch (error) {
+        showToast(error.message);
+        input.replaceWith(renderLabel(value.trim()));
+      }
+    };
+
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        commit();
+      }
+      if (event.key === 'Escape') {
+        committed = true;
+        loadState();
+      }
+    });
+    input.addEventListener('blur', commit);
+  }
+
+  function renameSession(sessionId, value) {
+    const label = document.querySelector(`[data-rename-session="${sessionId}"]`);
+    editInline(label, value, async (name) => {
+      await api(`/api/sessions/${sessionId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name })
+      });
+      const session = state.sessions.find((candidate) => candidate.id === sessionId);
+      if (session) {
+        session.name = name;
+      }
+      updateSidebarLabels();
+    }, (name) => {
+      const nextLabel = document.createElement('span');
+      nextLabel.dataset.renameSession = sessionId;
+      nextLabel.textContent = name;
+      nextLabel.ondblclick = (event) => {
+        cancelClick();
+        event.stopPropagation();
+        renameSession(sessionId, nextLabel.textContent);
+      };
+      return nextLabel;
+    });
+  }
+
+  function renamePane(paneId, value) {
+    const label = document.querySelector(`[data-rename-pane="${paneId}"]`);
+    editInline(label, value, async (title) => {
+      await api(`/api/panes/${paneId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ title })
+      });
+      const found = findPaneState(paneId);
+      if (found) {
+        found.pane.title = title;
+      }
+      updateSidebarLabels();
+    }, (title) => {
+      const nextLabel = document.createElement('span');
+      nextLabel.dataset.renamePane = paneId;
+      nextLabel.textContent = title;
+      nextLabel.ondblclick = (event) => {
+        event.stopPropagation();
+        renamePane(paneId, nextLabel.textContent);
+      };
+      return nextLabel;
+    });
+  }
+
+  function findPaneState(paneId) {
+    for (const session of state.sessions) {
+      for (const tab of session.tabs) {
+        const pane = tab.panes.find((candidate) => candidate.id === paneId);
+        if (pane) {
+          return { session, tab, pane };
+        }
+      }
+    }
+    return null;
+  }
+
+  function updateSidebarLabels() {
+    app.querySelectorAll('[data-pane-link]').forEach((button) => {
+      const found = findPaneState(button.dataset.paneLink);
+      if (!found) {
+        return;
+      }
+      button.querySelector('span').textContent = `${found.session.name} / ${found.pane.title}`;
+    });
+  }
+
+  async function setActivePane(paneId, reloadFiles = true) {
+    if (state.activePaneId === paneId) {
+      return;
+    }
+
+    clearFileSelections();
+    state.activePaneId = paneId;
+    updateActivePaneUi();
+    try {
+      await api(`/api/panes/${paneId}/activate`, { method: 'POST' });
+    } catch (error) {
+      showToast(error.message);
+      return;
+    }
+    const terminal = state.terminals.get(paneId);
+    if (terminal) {
+      terminal.sendResize();
+      terminal.term.focus();
+    } else {
+      const found = findPaneState(paneId);
+      if (found?.pane.type === 'files' && reloadFiles) {
+        await loadFilesPane(found.pane);
+      }
+    }
+  }
+
+  function updateActivePaneUi() {
+    app.querySelectorAll('[data-pane]').forEach((pane) => {
+      pane.classList.toggle('active', pane.dataset.pane === state.activePaneId);
+    });
+    app.querySelectorAll('[data-pane-link]').forEach((button) => {
+      button.classList.toggle('active', button.dataset.paneLink === state.activePaneId);
+    });
+  }
+
+  function setSidebarOpen(open) {
+    state.sidebarOpen = Boolean(open);
+    localStorage.setItem('wps7.sidebarOpen', String(state.sidebarOpen));
+    app.querySelector('.app')?.classList.toggle('sidebar-closed', !state.sidebarOpen);
+    app.querySelectorAll('[data-action="toggle"]').forEach((button) => {
+      button.setAttribute('aria-expanded', String(state.sidebarOpen));
+      button.title = state.sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar';
+    });
+  }
+
+  function setSidebarPinned(pinned) {
+    state.sidebarPinned = Boolean(pinned);
+    localStorage.setItem('wps7.sidebarPinned', String(state.sidebarPinned));
+    const root = app.querySelector('.app');
+    root?.classList.toggle('sidebar-pinned', state.sidebarPinned);
+    const button = app.querySelector('[data-sidebar-pin]');
+    if (button) {
+      const label = state.sidebarPinned ? 'Unpin sidebar' : 'Pin sidebar';
+      button.setAttribute('aria-label', label);
+      button.setAttribute('aria-pressed', String(state.sidebarPinned));
+      button.title = label;
+      button.querySelector('.rail-icon').innerHTML = fileActionIcon(state.sidebarPinned ? 'pin-off' : 'pin');
+    }
+    setSidebarOpen(true);
+  }
+
+  function sendMobileTerminalKey(button) {
+    const pane = button.closest('[data-pane]');
+    const terminal = state.terminals.get(pane?.dataset.pane);
+    if (!terminal) {
+      return;
+    }
+    const keybar = button.closest('.mobile-keybar');
+    const control = keybar.querySelector('[data-terminal-action="modifier"][data-terminal-value="Control"]');
+    const action = button.dataset.terminalAction;
+    const value = button.dataset.terminalValue || '';
+    if (button === control) {
+      const active = control.getAttribute('aria-pressed') !== 'true';
+      control.setAttribute('aria-pressed', String(active));
+      terminal.term.focus();
+      return;
+    }
+    const controlActive = control?.getAttribute('aria-pressed') === 'true';
+    control?.setAttribute('aria-pressed', 'false');
+    const input = action === 'text'
+      ? value
+      : terminalShortcutSequence(controlActive ? `Ctrl+${value}` : value);
+    terminal.term.input(input, true);
+    terminal.term.focus();
+  }
+
+  function terminalShortcutSequence(shortcut) {
+    const parts = String(shortcut || '').split('+').map((part) => part.trim()).filter(Boolean);
+    const key = parts.pop() || '';
+    const modifiers = new Set(parts.map((part) => part.toLowerCase()));
+    const named = {
+      Escape: '\x1b',
+      Tab: '\t',
+      Enter: '\r',
+      Backspace: '\x7f',
+      ArrowLeft: '\x1b[D',
+      ArrowDown: '\x1b[B',
+      ArrowUp: '\x1b[A',
+      ArrowRight: '\x1b[C'
+    };
+    const arrows = { ArrowLeft: 'D', ArrowDown: 'B', ArrowUp: 'A', ArrowRight: 'C' };
+    if (arrows[key] && modifiers.size) {
+      const modifier = 1 + (modifiers.has('shift') ? 1 : 0) + (modifiers.has('alt') ? 2 : 0) + (modifiers.has('ctrl') || modifiers.has('control') ? 4 : 0);
+      return `\x1b[1;${modifier}${arrows[key]}`;
+    }
+    if ((modifiers.has('ctrl') || modifiers.has('control')) && key.length === 1) {
+      const code = key.toUpperCase().charCodeAt(0);
+      return code >= 64 && code <= 95 ? String.fromCharCode(code & 31) : key;
+    }
+    let value = named[key] || (modifiers.has('shift') ? key.toUpperCase() : key);
+    if (modifiers.has('alt')) {
+      value = `\x1b${value}`;
+    }
+    return value;
+  }
+
+  function applyMobileControlModifier(element, data) {
+    const control = element.closest('[data-pane]')?.querySelector('[data-terminal-action="modifier"][data-terminal-value="Control"]');
+    if (!control || control.getAttribute('aria-pressed') !== 'true' || !data) {
+      return data;
+    }
+    control.setAttribute('aria-pressed', 'false');
+    if (data.length !== 1) {
+      return data;
+    }
+    if (data === '?') {
+      return '\x7f';
+    }
+    const code = data.toUpperCase().charCodeAt(0);
+    return code >= 64 && code <= 95 ? String.fromCharCode(code & 31) : data;
+  }
+
+  function closeFloatingSidebarFromOutside(event) {
+    if (!app.querySelector('.app') || !state.sidebarOpen || (state.sidebarPinned && !isMobileLayout())) {
+      return;
+    }
+    if (event.target.closest?.('.sidebar, [data-action="toggle"]')) {
+      return;
+    }
+    setSidebarOpen(false);
+  }
+
+  function closeMobileSidebarAfterAction(event) {
+    if (!isMobileLayout() || !event.target.closest('button') || event.target.closest('[data-action="toggle"]')) {
+      return;
+    }
+    setSidebarOpen(false);
+  }
+
+  async function setThemeLive(theme, persist = false) {
+    applyTheme(theme);
+    for (const item of state.terminals.values()) {
+      item.term.options.theme = terminalTheme();
+    }
+    app.querySelectorAll('[data-theme-toggle]').forEach((button) => {
+      const nextTheme = themeMode() === 'dark' ? 'light' : 'dark';
+      button.setAttribute('aria-label', `Switch to ${nextTheme} mode`);
+      button.title = 'Switch theme';
+      const icon = button.querySelector('.rail-icon');
+      const label = button.querySelector('.rail-label');
+      if (icon) icon.textContent = themeMode() === 'dark' ? '☀' : '☾';
+      if (label) label.textContent = themeMode() === 'dark' ? 'Light mode' : 'Dark mode';
+    });
+    if (persist && state.token) {
+      try {
+        const config = await api('/api/settings', {
+          method: 'POST',
+          body: JSON.stringify({ custom_theme: { mode: themeMode() } })
+        });
+        state.config.custom_theme = config.custom_theme;
+      } catch (error) {
+        showToast(error.message);
+      }
+    }
+  }
+
+  function wirePaneGrid(root) {
+    const grid = root.querySelector?.('.pane-grid') || (root.matches?.('.pane-grid') ? root : null);
+    if (!grid) {
+      return;
+    }
+    grid.ondblclick = async (event) => {
+      if (event.target.closest('[data-pane]')) {
+        return;
+      }
+      const session = activeSession();
+      const tab = activeTab(session);
+      if (!tab) {
+        return;
+      }
+      const maxColumns = Number(state.config.ui?.max_pane_columns) || 5;
+      const maxRows = Number(state.config.ui?.max_pane_rows) || 3;
+      const rect = grid.getBoundingClientRect();
+      const x = Math.max(0, Math.min(maxColumns - 1, Math.floor(((event.clientX - rect.left) / rect.width) * maxColumns)));
+      const y = Math.max(0, Math.min(maxRows - 1, Math.floor(((event.clientY - rect.top) / rect.height) * maxRows)));
+      const layout = { x, y, cols: 1, rows: 1 };
+      if (isClientLayoutFree(tab, '', layout, maxColumns, maxRows)) {
+        await createPane(layout);
+      } else {
+        showToast('Pane layout overlaps another pane.');
+      }
+    };
+  }
+
+  async function createPane(preferredLayout) {
+    const session = activeSession();
+    const tab = activeTab(session);
+    const basePaneId = state.activePaneId || tab?.activePaneId || tab?.panes[0]?.id;
+    if (!session || !tab || !basePaneId) {
+      return;
+    }
+
+    try {
+      const pane = await api(`/api/panes/${basePaneId}/split`, {
+        method: 'POST',
+        body: JSON.stringify({ direction: 'horizontal' })
+      });
+      if (preferredLayout) {
+        try {
+          const result = await api(`/api/panes/${pane.id}/layout`, {
+            method: 'PATCH',
+            body: JSON.stringify({ layout: preferredLayout })
+          });
+          pane.layout = result.layout || preferredLayout;
+        } catch (error) {
+          showToast(error.message);
+        }
+      }
+      appendPaneToWorkspace(session, tab, pane);
+    } catch (error) {
+      showToast(error.message);
+    }
+  }
+
+  function findAdjacentResizePane(tab, paneId, layout, direction, maxColumns, maxRows, pointerColumn, pointerRow) {
+    const panes = tab.panes.filter((pane) => pane.id !== paneId).map((pane) => ({
+      pane,
+      layout: normalizePaneLayout(pane.layout, maxColumns, maxRows)
+    }));
+    const verticalOverlap = (candidate) => candidate.layout.y < layout.y + layout.rows &&
+      candidate.layout.y + candidate.layout.rows > layout.y;
+    const horizontalOverlap = (candidate) => candidate.layout.x < layout.x + layout.cols &&
+      candidate.layout.x + candidate.layout.cols > layout.x;
+    const atPointerRow = (candidate) => pointerRow >= candidate.layout.y &&
+      pointerRow < candidate.layout.y + candidate.layout.rows;
+    const atPointerColumn = (candidate) => pointerColumn >= candidate.layout.x &&
+      pointerColumn < candidate.layout.x + candidate.layout.cols;
+    if (direction.includes('e')) {
+      const match = panes.find((candidate) => candidate.layout.x === layout.x + layout.cols && verticalOverlap(candidate) && atPointerRow(candidate));
+      if (match) return { ...match, edge: 'e' };
+    }
+    if (direction.includes('w')) {
+      const match = panes.find((candidate) => candidate.layout.x + candidate.layout.cols === layout.x && verticalOverlap(candidate) && atPointerRow(candidate));
+      if (match) return { ...match, edge: 'w' };
+    }
+    if (direction.includes('s')) {
+      const match = panes.find((candidate) => candidate.layout.y === layout.y + layout.rows && horizontalOverlap(candidate) && atPointerColumn(candidate));
+      if (match) return { ...match, edge: 's' };
+    }
+    if (direction.includes('n')) {
+      const match = panes.find((candidate) => candidate.layout.y + candidate.layout.rows === layout.y && horizontalOverlap(candidate) && atPointerColumn(candidate));
+      if (match) return { ...match, edge: 'n' };
+    }
+    return null;
+  }
+
+  function layoutInsideGrid(layout, maxColumns, maxRows) {
+    return layout.x >= 0 && layout.y >= 0 && layout.cols >= 1 && layout.rows >= 1 &&
+      layout.x + layout.cols <= maxColumns && layout.y + layout.rows <= maxRows;
+  }
+
+  function resizePairIsFree(tab, paneId, layout, adjacentPaneId, adjacentLayout, maxColumns, maxRows) {
+    if (!layoutInsideGrid(layout, maxColumns, maxRows) || !layoutInsideGrid(adjacentLayout, maxColumns, maxRows) || layoutsOverlap(layout, adjacentLayout)) {
+      return false;
+    }
+    return !tab.panes.some((pane) => {
+      if (pane.id === paneId || pane.id === adjacentPaneId) {
+        return false;
+      }
+      const other = normalizePaneLayout(pane.layout, maxColumns, maxRows);
+      return layoutsOverlap(other, layout) || layoutsOverlap(other, adjacentLayout);
+    });
+  }
+
+  function startPaneResize(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    const handle = event.currentTarget;
+    const paneId = handle.dataset.paneResize;
+    const paneElement = handle.closest('[data-pane]');
+    const found = findPaneState(paneId);
+    const grid = document.querySelector('.pane-grid');
+    if (!paneElement || !found || !grid) {
+      return;
+    }
+
+    const maxColumns = Number(state.config.ui?.max_pane_columns) || 5;
+    const maxRows = Number(state.config.ui?.max_pane_rows) || 3;
+    const direction = handle.dataset.paneResizeDirection || 'se';
+    const gridRect = grid.getBoundingClientRect();
+    const cellWidth = Math.max(1, gridRect.width / maxColumns);
+    const cellHeight = Math.max(1, gridRect.height / maxRows);
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startLayout = normalizePaneLayout(found.pane.layout, maxColumns, maxRows);
+    const pointerColumn = Math.min(startLayout.x + startLayout.cols - 1, Math.max(startLayout.x, Math.floor((startX - gridRect.left) / cellWidth)));
+    const pointerRow = Math.min(startLayout.y + startLayout.rows - 1, Math.max(startLayout.y, Math.floor((startY - gridRect.top) / cellHeight)));
+    const adjacent = findAdjacentResizePane(found.tab, paneId, startLayout, direction, maxColumns, maxRows, pointerColumn, pointerRow);
+    const adjacentElement = adjacent ? document.querySelector(`[data-pane="${adjacent.pane.id}"]`) : null;
+    const startAdjacentLayout = adjacent?.layout || null;
+    let nextLayout = startLayout;
+    let nextAdjacentLayout = startAdjacentLayout;
+
+    handle.setPointerCapture(event.pointerId);
+    const onMove = (moveEvent) => {
+      const dx = Math.round((moveEvent.clientX - startX) / cellWidth);
+      const dy = Math.round((moveEvent.clientY - startY) / cellHeight);
+      const candidate = { ...startLayout };
+      if (direction.includes('e')) candidate.cols += dx;
+      if (direction.includes('w')) {
+        candidate.x += dx;
+        candidate.cols -= dx;
+      }
+      if (direction.includes('s')) candidate.rows += dy;
+      if (direction.includes('n')) {
+        candidate.y += dy;
+        candidate.rows -= dy;
+      }
+      if (adjacent) {
+        const adjacentCandidate = { ...startAdjacentLayout };
+        if (adjacent.edge === 'e') {
+          adjacentCandidate.x += dx;
+          adjacentCandidate.cols -= dx;
+        }
+        if (adjacent.edge === 'w') adjacentCandidate.cols += dx;
+        if (adjacent.edge === 's') {
+          adjacentCandidate.y += dy;
+          adjacentCandidate.rows -= dy;
+        }
+        if (adjacent.edge === 'n') adjacentCandidate.rows += dy;
+        if (resizePairIsFree(found.tab, paneId, candidate, adjacent.pane.id, adjacentCandidate, maxColumns, maxRows)) {
+          nextLayout = candidate;
+          nextAdjacentLayout = adjacentCandidate;
+        }
+      } else {
+        const normalized = normalizePaneLayout(candidate, maxColumns, maxRows);
+        if (isClientLayoutFree(found.tab, paneId, normalized, maxColumns, maxRows)) {
+          nextLayout = normalized;
+        }
+      }
+      applyPaneLayoutStyle(paneElement, nextLayout);
+      if (adjacentElement && nextAdjacentLayout) {
+        applyPaneLayoutStyle(adjacentElement, nextAdjacentLayout);
+      }
+    };
+    const onUp = async () => {
+      handle.removeEventListener('pointermove', onMove);
+      handle.removeEventListener('pointerup', onUp);
+      handle.removeEventListener('pointercancel', onUp);
+      const saved = adjacent
+        ? await savePaneLayoutPair(paneId, nextLayout, adjacent.pane.id, nextAdjacentLayout)
+        : await savePaneLayoutLocal(paneId, nextLayout);
+      if (!saved) {
+        applyPaneLayoutStyle(paneElement, startLayout);
+        if (adjacentElement) applyPaneLayoutStyle(adjacentElement, startAdjacentLayout);
+      }
+      state.terminals.get(paneId)?.sendResize();
+      if (adjacent) state.terminals.get(adjacent.pane.id)?.sendResize();
+    };
+    handle.addEventListener('pointermove', onMove);
+    handle.addEventListener('pointerup', onUp);
+    handle.addEventListener('pointercancel', onUp);
+  }
+
+  function startPaneMove(event) {
+    if (event.button !== 0 || event.target.closest('.pane-close, button, input, [data-browser-tab], [data-notepad-tab]')) {
+      return;
+    }
+    event.preventDefault();
+
+    const title = event.currentTarget;
+    const paneId = title.dataset.paneTitle;
+    const paneElement = title.closest('[data-pane]');
+    const found = findPaneState(paneId);
+    const grid = document.querySelector('.pane-grid');
+    if (!paneElement || !found || !grid) {
+      return;
+    }
+
+    const maxColumns = Number(state.config.ui?.max_pane_columns) || 5;
+    const maxRows = Number(state.config.ui?.max_pane_rows) || 3;
+    const gridRect = grid.getBoundingClientRect();
+    const cellWidth = Math.max(1, gridRect.width / maxColumns);
+    const cellHeight = Math.max(1, gridRect.height / maxRows);
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startLayout = normalizePaneLayout(found.pane.layout, maxColumns, maxRows);
+    let nextLayout = startLayout;
+    let moved = false;
+
+    title.setPointerCapture(event.pointerId);
+    const onMove = (moveEvent) => {
+      if (!moved && Math.abs(moveEvent.clientX - startX) + Math.abs(moveEvent.clientY - startY) < 6) {
+        return;
+      }
+      moved = true;
+      cancelClick();
+      const candidate = normalizePaneLayout({
+        ...startLayout,
+        x: startLayout.x + Math.round((moveEvent.clientX - startX) / cellWidth),
+        y: startLayout.y + Math.round((moveEvent.clientY - startY) / cellHeight)
+      }, maxColumns, maxRows);
+      if (isClientLayoutFree(found.tab, paneId, candidate, maxColumns, maxRows)) {
+        nextLayout = candidate;
+      }
+      applyPaneLayoutStyle(paneElement, nextLayout);
+      state.terminals.get(paneId)?.sendResize();
+    };
+    const onUp = async () => {
+      title.removeEventListener('pointermove', onMove);
+      title.removeEventListener('pointerup', onUp);
+      if (!moved) {
+        return;
+      }
+      const saved = await savePaneLayoutLocal(paneId, nextLayout);
+      if (!saved) {
+        applyPaneLayoutStyle(paneElement, startLayout);
+        state.terminals.get(paneId)?.sendResize();
+        return;
+      }
+      await setActivePane(paneId);
+    };
+    title.addEventListener('pointermove', onMove);
+    title.addEventListener('pointerup', onUp);
+  }
+
+  async function savePaneLayoutLocal(paneId, layout) {
+    try {
+      const result = await api(`/api/panes/${paneId}/layout`, {
+        method: 'PATCH',
+        body: JSON.stringify({ layout })
+      });
+      const found = findPaneState(paneId);
+      if (found) {
+        found.pane.layout = result.layout || layout;
+      }
+      return true;
+    } catch (error) {
+      showToast(error.message);
+      return false;
+    }
+  }
+
+  async function savePaneLayoutPair(paneId, layout, adjacentPaneId, adjacentLayout) {
+    try {
+      const result = await api(`/api/panes/${paneId}/layout`, {
+        method: 'PATCH',
+        body: JSON.stringify({ layout, adjacentPaneId, adjacentLayout })
+      });
+      const found = findPaneState(paneId);
+      const adjacent = findPaneState(adjacentPaneId);
+      if (found) found.pane.layout = result.layout || layout;
+      if (adjacent) adjacent.pane.layout = result.adjacentPane?.layout || adjacentLayout;
+      return true;
+    } catch (error) {
+      showToast(error.message);
+      return false;
+    }
+  }
+
+  function syncPaneTitleWidth(paneElement) {
+    const label = paneElement?.querySelector('[data-rename-pane]');
+    if (!label || paneElement.clientWidth <= 0) {
+      return;
+    }
+    const status = paneElement.querySelector('.pane-upload-status:not(:empty)');
+    const available = Math.max(0, paneElement.clientWidth - 70 - (status ? status.offsetWidth + 8 : 0));
+    label.style.width = `${available}px`;
+    label.style.maxWidth = `${available}px`;
+  }
+
+  function applyPaneLayoutStyle(paneElement, layout) {
+    const maxColumns = Number(state.config.ui?.max_pane_columns) || 5;
+    const maxRows = Number(state.config.ui?.max_pane_rows) || 3;
+    paneElement.style.left = `${(layout.x / maxColumns) * 100}%`;
+    paneElement.style.top = `${(layout.y / maxRows) * 100}%`;
+    paneElement.style.width = `${(layout.cols / maxColumns) * 100}%`;
+    paneElement.style.height = `${(layout.rows / maxRows) * 100}%`;
+    syncPaneTitleWidth(paneElement);
+    paneElement.querySelectorAll('[data-paged-toolbar]').forEach(updatePagedToolbar);
+  }
+
+  function applyPaneLayoutUpdates(tab, paneLayouts) {
+    if (!Array.isArray(paneLayouts)) {
+      return;
+    }
+    const maxColumns = Number(state.config.ui?.max_pane_columns) || 5;
+    const maxRows = Number(state.config.ui?.max_pane_rows) || 3;
+    for (const update of paneLayouts) {
+      const pane = tab.panes.find((candidate) => candidate.id === update.id);
+      if (!pane) continue;
+      const previous = normalizePaneLayout(pane.layout, maxColumns, maxRows);
+      const next = normalizePaneLayout(update.layout, maxColumns, maxRows);
+      pane.layout = next;
+      applyPaneLayoutStyle(document.querySelector(`[data-pane="${pane.id}"]`), next);
+      if (previous.cols !== next.cols || previous.rows !== next.rows) {
+        state.terminals.get(pane.id)?.sendResize();
+      }
+    }
+  }
+
+  function appendPaneToWorkspace(session, tab, response) {
+    const { paneLayouts, ...pane } = response;
+    applyPaneLayoutUpdates(tab, paneLayouts);
+    tab.panes.push(pane);
+    tab.activePaneId = pane.id;
+    session.activeTabId = tab.id;
+    state.activeSessionId = session.id;
+    state.activePaneId = pane.id;
+
+    const grid = app.querySelector('.pane-grid');
+    grid?.insertAdjacentHTML('beforeend', renderPane(pane));
+    const paneElement = grid?.querySelector(`[data-pane="${pane.id}"]`);
+    if (paneElement) {
+      wirePaneControls(paneElement);
+      wireFilesPane(paneElement);
+      wireBrowserPane(paneElement);
+      wireNotepadPane(paneElement);
+      wireMobileKeybarButtons(paneElement);
+    }
+    const sessionList = app.querySelector('.session-list');
+    sessionList?.insertAdjacentHTML('beforeend', renderSidebarPaneItem(session, pane));
+    const paneLink = sessionList?.querySelector(`[data-pane-link="${pane.id}"]`);
+    if (paneLink) wirePaneLinks(paneLink);
+    updateActivePaneUi();
+    mountPaneContent(pane);
+  }
+
+  function paneLayoutStyle(layout, maxColumns, maxRows) {
+    const left = (layout.x / maxColumns) * 100;
+    const top = (layout.y / maxRows) * 100;
+    const width = (layout.cols / maxColumns) * 100;
+    const height = (layout.rows / maxRows) * 100;
+    return `left: ${left}%; top: ${top}%; width: ${width}%; height: ${height}%;`;
+  }
+
+  function normalizePaneLayout(layout, maxColumns, maxRows) {
+    const cols = Math.max(1, Math.min(maxColumns, Number(layout?.cols) || 1));
+    const rows = Math.max(1, Math.min(maxRows, Number(layout?.rows) || 1));
+    return {
+      x: Math.max(0, Math.min(maxColumns - cols, Number(layout?.x) || 0)),
+      y: Math.max(0, Math.min(maxRows - rows, Number(layout?.y) || 0)),
+      cols,
+      rows
+    };
+  }
+
+  function firstAvailableClientLayout(tab, maxColumns, maxRows) {
+    for (let y = 0; y < maxRows; y += 1) {
+      for (let x = 0; x < maxColumns; x += 1) {
+        const layout = { x, y, cols: 1, rows: 1 };
+        if (isClientLayoutFree(tab, '', layout, maxColumns, maxRows)) {
+          return layout;
+        }
+      }
+    }
+    return null;
+  }
+
+  function isClientLayoutFree(tab, paneId, layout, maxColumns, maxRows) {
+    return !tab.panes.some((pane) => {
+      if (pane.id === paneId) {
+        return false;
+      }
+      return layoutsOverlap(normalizePaneLayout(pane.layout, maxColumns, maxRows), layout);
+    });
+  }
+
+  function layoutsOverlap(a, b) {
+    return a.x < b.x + b.cols &&
+      a.x + a.cols > b.x &&
+      a.y < b.y + b.rows &&
+      a.y + a.rows > b.y;
+  }
+
+  function mountTerminal(paneId) {
+    const element = document.getElementById(`terminal-${paneId}`);
+    if (!element || state.terminals.has(paneId)) {
+      return;
+    }
+
+    const term = new Terminal({
+      cursorBlink: state.config.terminal?.cursor_blink !== false,
+      fontFamily: state.config.ui?.terminal_font_family || 'Consolas, "Cascadia Mono", monospace',
+      fontSize: paneFontSize(findPaneState(paneId)?.pane),
+      scrollback: Number(state.config.persistence?.scrollback_lines) || 10000,
+      windowsPty: { backend: 'conpty' },
+      theme: terminalTheme()
+    });
+    const fit = new FitAddon.FitAddon();
+    term.loadAddon(fit);
+    term.open(element);
+    installMobileTerminalTouchScroll(element, term);
+    fitTerminal(term, fit, true);
+    element.addEventListener('click', () => term.focus());
+    term.onTitleChange((title) => updatePaneTitleFromTerminal(paneId, title));
+    term.onBell(() => showTerminalNotification(paneId));
+    term.parser.registerOscHandler(9, (data) => handleTerminalOscNotification(paneId, 9, data));
+    term.parser.registerOscHandler(99, (data) => handleTerminalOscNotification(paneId, 99, data));
+    term.parser.registerOscHandler(777, (data) => handleTerminalOscNotification(paneId, 777, data));
+
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const writer = createTerminalWriter(term, element);
+    let ws = null;
+    let reconnectTimer = 0;
+    let reconnectDelay = 500;
+    let disposed = false;
+    let lastCols = 0;
+    let lastRows = 0;
+    let lastWidth = 0;
+    let lastHeight = 0;
+    let resizeFrame = 0;
+    let resizeTimer = 0;
+    const sendResize = () => {
+      if (!element.getClientRects().length) {
+        return;
+      }
+      const rect = element.getBoundingClientRect();
+      if (Math.round(rect.width) === lastWidth && Math.round(rect.height) === lastHeight) {
+        return;
+      }
+      lastWidth = Math.round(rect.width);
+      lastHeight = Math.round(rect.height);
+      fitTerminal(term, fit, Boolean(state.config.terminal?.auto_scroll_on_resize));
+      if (ws?.readyState === WebSocket.OPEN) {
+        if (term.cols !== lastCols || term.rows !== lastRows) {
+          lastCols = term.cols;
+          lastRows = term.rows;
+          ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+        }
+      }
+    };
+    const scheduleResize = () => {
+      if (resizeFrame) {
+        return;
+      }
+      if (resizeTimer) {
+        window.clearTimeout(resizeTimer);
+      }
+      resizeTimer = window.setTimeout(() => {
+        resizeTimer = 0;
+        scheduleResizeNow();
+      }, Number(state.config.terminal?.resize_debounce_ms) || 100);
+    };
+    const scheduleResizeNow = () => {
+      if (resizeFrame) {
+        return;
+      }
+      resizeFrame = window.requestAnimationFrame(() => {
+        resizeFrame = 0;
+        sendResize();
+      });
+    };
+    const connect = () => {
+      if (disposed) {
+        return;
+      }
+      const socket = new WebSocket(`${protocol}//${location.host}/ws?paneId=${encodeURIComponent(paneId)}&token=${encodeURIComponent(state.token)}`);
+      ws = socket;
+      socket.onopen = () => {
+        reconnectDelay = 500;
+        lastWidth = 0;
+        lastHeight = 0;
+        sendResize();
+      };
+      socket.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+        if (message.type === 'snapshot') {
+          term.reset();
+          writer.write(message.data || '');
+        }
+        if (message.type === 'output') {
+          writer.write(message.data);
+        }
+      };
+      socket.onclose = (event) => {
+        if (disposed || socket !== ws) {
+          return;
+        }
+        if (event.code === 1008) {
+          showToast(event.reason || 'Terminal connection rejected.');
+          if (event.reason === 'Login required') {
+            clearToken();
+            renderLogin();
+          }
+          return;
+        }
+        reconnectTimer = window.setTimeout(connect, reconnectDelay);
+        reconnectDelay = Math.min(reconnectDelay * 2, 10000);
+      };
+    };
+    connect();
+    term.onData((data) => {
+      const input = applyMobileControlModifier(element, data);
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'input', data: input }));
+      }
+    });
+    term.onResize((size) => {
+      if (ws?.readyState === WebSocket.OPEN && (size.cols !== lastCols || size.rows !== lastRows)) {
+        lastCols = size.cols;
+        lastRows = size.rows;
+        ws.send(JSON.stringify({ type: 'resize', cols: size.cols, rows: size.rows }));
+      }
+    });
+    const resizeObserver = new ResizeObserver(scheduleResize);
+    resizeObserver.observe(element);
+    window.addEventListener('resize', scheduleResize);
+    state.terminals.set(paneId, {
+      term,
+      fit,
+      writer,
+      resizeObserver,
+      sendResize: scheduleResize,
+      disposeConnection: () => {
+        disposed = true;
+        window.clearTimeout(reconnectTimer);
+        ws?.close();
+      },
+      cancelResize: () => {
+        if (resizeTimer) {
+          window.clearTimeout(resizeTimer);
+          resizeTimer = 0;
+        }
+        if (resizeFrame) {
+          window.cancelAnimationFrame(resizeFrame);
+          resizeFrame = 0;
+        }
+      }
+    });
+    if (paneId === state.activePaneId) {
+      term.focus();
+    }
+  }
+
+  function terminalCellAtTouch(element, term, touch) {
+    const screen = element.querySelector('.xterm-screen');
+    const rect = screen?.getBoundingClientRect();
+    if (!rect?.width || !rect.height) {
+      return null;
+    }
+    const column = Math.max(0, Math.min(term.cols - 1, Math.floor((touch.clientX - rect.left) / rect.width * term.cols)));
+    const viewportRow = Math.max(0, Math.min(term.rows - 1, Math.floor((touch.clientY - rect.top) / rect.height * term.rows)));
+    return { column, row: term.buffer.active.viewportY + viewportRow };
+  }
+
+  function terminalWordCell(line, column) {
+    return /[\p{L}\p{N}_-]/u.test(line?.getCell(column)?.getChars() || '');
+  }
+
+  function selectTerminalWordAtTouch(element, term, touch) {
+    const cell = terminalCellAtTouch(element, term, touch);
+    const line = cell && term.buffer.active.getLine(cell.row);
+    if (!cell || !line) {
+      return null;
+    }
+    let start = cell.column;
+    let end = cell.column;
+    if (terminalWordCell(line, cell.column)) {
+      while (start > 0 && terminalWordCell(line, start - 1)) {
+        start -= 1;
+      }
+      while (end < term.cols - 1 && terminalWordCell(line, end + 1)) {
+        end += 1;
+      }
+    }
+    term.select(start, cell.row, end - start + 1);
+    return { start: { column: start, row: cell.row }, end: { column: end, row: cell.row } };
+  }
+
+  function extendTerminalTouchSelection(element, term, anchor, touch) {
+    const cell = terminalCellAtTouch(element, term, touch);
+    if (!cell || !anchor) {
+      return;
+    }
+    const beforeAnchor = cell.row < anchor.start.row || (cell.row === anchor.start.row && cell.column < anchor.start.column);
+    const start = beforeAnchor ? cell : anchor.start;
+    const end = beforeAnchor ? anchor.end : cell;
+    const length = (end.row - start.row) * term.cols + end.column - start.column + 1;
+    term.select(start.column, start.row, Math.max(1, length));
+  }
+
+  function installMobileTerminalTouchScroll(element, term) {
+    const scrollSurface = element.querySelector('.xterm-scrollable-element');
+    const longPressDelay = 500;
+    const moveTolerance = 10;
+    let lastY = 0;
+    let startX = 0;
+    let startY = 0;
+    let longPressTimer = 0;
+    let selecting = false;
+    let selectionAnchor = null;
+    const cancelLongPress = () => {
+      window.clearTimeout(longPressTimer);
+      longPressTimer = 0;
+    };
+    element.addEventListener('touchstart', (event) => {
+      cancelLongPress();
+      selecting = false;
+      selectionAnchor = null;
+      if (!isMobileLayout() || event.touches.length !== 1) {
+        lastY = 0;
+        return;
+      }
+      const touch = event.touches[0];
+      lastY = touch.clientY;
+      startX = touch.clientX;
+      startY = touch.clientY;
+      const point = { clientX: touch.clientX, clientY: touch.clientY };
+      longPressTimer = window.setTimeout(() => {
+        selecting = true;
+        lastY = 0;
+        selectionAnchor = selectTerminalWordAtTouch(element, term, point);
+        if (!selectionAnchor) {
+          selecting = false;
+          return;
+        }
+        element.classList.add('touch-selecting');
+        navigator.vibrate?.(12);
+      }, longPressDelay);
+    }, { passive: true, capture: true });
+    element.addEventListener('touchmove', (event) => {
+      if (!isMobileLayout() || event.touches.length !== 1) {
+        return;
+      }
+      const touch = event.touches[0];
+      if (selecting) {
+        event.preventDefault();
+        extendTerminalTouchSelection(element, term, selectionAnchor, touch);
+        return;
+      }
+      if (Math.hypot(touch.clientX - startX, touch.clientY - startY) > moveTolerance) {
+        cancelLongPress();
+      }
+      if (!lastY) {
+        return;
+      }
+      const nextY = touch.clientY;
+      const deltaY = lastY - nextY;
+      lastY = nextY;
+      if (!deltaY) {
+        return;
+      }
+      event.preventDefault();
+      scrollSurface?.dispatchEvent(new WheelEvent('wheel', {
+        bubbles: true,
+        cancelable: true,
+        deltaMode: 0,
+        deltaY
+      }));
+    }, { passive: false, capture: true });
+    element.addEventListener('touchend', (event) => {
+      cancelLongPress();
+      if (selecting) {
+        event.preventDefault();
+      }
+      lastY = 0;
+      selecting = false;
+      selectionAnchor = null;
+      element.classList.remove('touch-selecting');
+    }, { passive: false, capture: true });
+    element.addEventListener('touchcancel', () => {
+      cancelLongPress();
+      lastY = 0;
+      selecting = false;
+      selectionAnchor = null;
+      element.classList.remove('touch-selecting');
+    }, { passive: true, capture: true });
+  }
+
+  function createTerminalWriter(term, element) {
+    const maxQueueLength = 2 * 1024 * 1024;
+    let queue = '';
+    let writing = false;
+    let disposed = false;
+    let cursorTimer = 0;
+
+    const stabilizeTuiCursor = (data) => {
+      const cursorMoves = data.match(/\x1b\[[0-9;?]*[Hf]/g)?.length || 0;
+      const alternateScreen = term.buffer.active.type === 'alternate';
+      if (!alternateScreen && !data.includes('\x1b[?1049h') && cursorMoves < 2) {
+        return;
+      }
+      element?.classList.add('terminal-updating');
+      clearTimeout(cursorTimer);
+      cursorTimer = setTimeout(() => element?.classList.remove('terminal-updating'), 90);
+    };
+
+    const flush = () => {
+      if (disposed || writing || !queue) {
+        return;
+      }
+      const chunk = queue;
+      queue = '';
+      writing = true;
+      term.write(chunk, () => {
+        writing = false;
+        flush();
+      });
+    };
+
+    return {
+      write(data) {
+        if (disposed || !data) {
+          return;
+        }
+        stabilizeTuiCursor(data);
+        queue += data;
+        if (queue.length > maxQueueLength) {
+          queue = queue.slice(-maxQueueLength);
+        }
+        flush();
+      },
+      dispose() {
+        disposed = true;
+        queue = '';
+        clearTimeout(cursorTimer);
+        element?.classList.remove('terminal-updating');
+      }
+    };
+  }
+
+  function fitTerminal(term, fit, scrollToBottom = false) {
+    try {
+      fit.fit();
+      if (scrollToBottom) {
+        term.scrollToBottom();
+      }
+    } catch (error) {
+      // xterm can throw while its DOM is being replaced.
+    }
+  }
+
+  function disposeTerminals() {
+    for (const item of state.terminals.values()) {
+      disposeTerminalItem(item);
+    }
+    state.terminals.clear();
+    for (const timer of state.terminalTitleTimers.values()) {
+      window.clearTimeout(timer);
+    }
+    state.terminalTitleTimers.clear();
+  }
+
+  function disposeTerminal(paneId) {
+    window.clearTimeout(state.terminalTitleTimers.get(paneId));
+    state.terminalTitleTimers.delete(paneId);
+    const item = state.terminals.get(paneId);
+    if (!item) {
+      return;
+    }
+    disposeTerminalItem(item);
+    state.terminals.delete(paneId);
+  }
+
+  function disposeTerminalItem(item) {
+    window.removeEventListener('resize', item.sendResize);
+    item.cancelResize();
+    item.resizeObserver.disconnect();
+    item.disposeConnection();
+    item.writer?.dispose();
+    item.term.dispose();
+  }
+
+  async function loadState() {
+    const loaded = await api('/api/state');
+    state.sessions = loaded.sessions;
+    state.persistedActiveSessionId = loaded.activeSessionId;
+    render();
+  }
+
+  async function load() {
+    installKeyboardShortcuts();
+    try {
+      state.config = await api('/api/config');
+      applyTheme(selectedThemeForMode(state.config.custom_theme?.mode || 'dark'));
+      if (state.config.authRequired && !state.token) {
+        renderLogin();
+        return;
+      }
+      await loadState();
+    } catch (error) {
+      if (error.status === 401) {
+        renderLogin();
+        return;
+      }
+      renderConnectionError(error);
+    }
+  }
+
+  function usageWindowMarkup(window) {
+    const used = Math.max(0, Math.min(100, Number(window.usedPercent) || 0));
+    const reset = window.resetsAt ? new Date(window.resetsAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'Reset time unavailable';
+    return `
+      <div class="usage-window">
+        <div class="usage-window-heading"><span>${escapeHtml(window.label)}</span><strong>${Math.round(used)}%</strong></div>
+        <div class="usage-meter" role="progressbar" aria-label="${escapeAttr(window.label)} used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(used)}"><i style="width:${used}%"></i></div>
+        <small>${escapeHtml(reset)}</small>
+      </div>
+    `;
+  }
+
+  function usageProviderMarkup(provider) {
+    if (provider.error) {
+      return `
+        <article class="usage-card usage-error-card">
+          <header><div><h3>${escapeHtml(provider.label)}</h3><small>Unavailable</small></div><span class="usage-state">!</span></header>
+          <p>${escapeHtml(provider.error)}</p>
+          ${provider.provider === 'minimax' ? '<button class="secondary" type="button" data-usage-settings>Configure</button>' : ''}
+        </article>
+      `;
+    }
+    const windows = provider.provider === 'minimax'
+      ? (provider.services || []).map((service) => `<div class="usage-service"><h4>${escapeHtml(service.label)}</h4>${(service.windows || []).map(usageWindowMarkup).join('')}</div>`).join('')
+      : (provider.windows || []).map(usageWindowMarkup).join('');
+    const detail = provider.provider === 'codex' && provider.plan ? provider.plan : provider.source;
+    const credits = provider.credits?.hasCredits || provider.credits?.unlimited
+      ? `<div class="usage-credits"><span>Credits</span><strong>${provider.credits.unlimited ? 'Unlimited' : provider.credits.balance}</strong></div>`
+      : '';
+    return `
+      <article class="usage-card">
+        <header><div><h3>${escapeHtml(provider.label)}</h3><small>${escapeHtml(detail || 'Connected')}</small></div><span class="usage-state ok">●</span></header>
+        ${windows || '<p>No quota windows returned.</p>'}
+        ${credits}
+      </article>
+    `;
+  }
+
+  async function openUsage() {
+    document.querySelector('.usage-overlay')?.remove();
+    const overlay = document.createElement('div');
+    overlay.className = 'usage-overlay';
+    overlay.innerHTML = `
+      <section class="usage-panel" aria-label="Provider usage">
+        <header class="usage-header"><div><h2>Usage</h2><p>Codex and MiniMax quota windows</p></div><div class="usage-header-actions"><button class="icon-button" type="button" data-usage-refresh aria-label="Refresh usage" title="Refresh usage">${fileActionIcon('refresh')}</button><button class="icon-button" type="button" data-usage-close aria-label="Close usage" title="Close">×</button></div></header>
+        <div class="usage-content" data-usage-content><div class="usage-loading">Reading provider usage…</div></div>
+      </section>
+    `;
+    document.body.appendChild(overlay);
+    const content = overlay.querySelector('[data-usage-content]');
+    const loadUsage = async (refresh = false) => {
+      content.innerHTML = '<div class="usage-loading">Reading provider usage…</div>';
+      try {
+        const result = refresh ? await api('/api/usage?refresh=1') : await api('/api/usage');
+        content.innerHTML = (result.providers || []).map(usageProviderMarkup).join('');
+        content.querySelector('[data-usage-settings]')?.addEventListener('click', () => {
+          overlay.remove();
+          openSettings();
+        });
+      } catch (error) {
+        content.innerHTML = `<div class="usage-loading error">${escapeHtml(error.message)}</div>`;
+      }
+    };
+    overlay.querySelector('[data-usage-close]').onclick = () => overlay.remove();
+    overlay.querySelector('[data-usage-refresh]').onclick = () => loadUsage(true);
+    overlay.onclick = (event) => {
+      if (event.target === overlay) {
+        overlay.remove();
+      }
+    };
+    await loadUsage();
+  }
+
+  function renderMobileKeybarRow(button) {
+    return `
+      <div class="mobile-keybar-setting-row" data-mobile-keybar-row>
+        <label class="mobile-keybar-visible" title="Show on mobile toolbar"><input type="checkbox" data-mobile-keybar-enabled ${button.enabled !== false ? 'checked' : ''}><span>Show</span></label>
+        <label><span>Label</span><input data-mobile-keybar-label maxlength="5" value="${escapeAttr(String(button.label || '').slice(0, 5))}"></label>
+        <label><span>Action</span><select data-mobile-keybar-action>
+          <option value="shortcut" ${button.action === 'shortcut' ? 'selected' : ''}>Shortcut</option>
+          <option value="modifier" ${button.action === 'modifier' ? 'selected' : ''}>Modifier</option>
+          <option value="text" ${button.action === 'text' ? 'selected' : ''}>Type text</option>
+        </select></label>
+        <label class="mobile-keybar-value"><span>Shortcut or text</span><input data-mobile-keybar-value maxlength="256" value="${escapeAttr(button.value)}" placeholder="Ctrl+Shift+C or npm test"></label>
+        <div class="mobile-keybar-order" aria-label="Button order">
+          <button type="button" class="icon-button" data-mobile-keybar-up aria-label="Move button left" title="Move left">←</button>
+          <button type="button" class="icon-button" data-mobile-keybar-down aria-label="Move button right" title="Move right">→</button>
+          <button type="button" class="icon-button" data-mobile-keybar-remove aria-label="Remove button" title="Remove">×</button>
+        </div>
+      </div>`;
+  }
+
+  function renderMobileKeybarEditor(buttons) {
+    const values = Array.isArray(buttons) ? buttons : defaultMobileKeybarButtons;
+    return `<div class="mobile-keybar-editor" data-mobile-keybar-editor>${values.map(renderMobileKeybarRow).join('')}</div>`;
+  }
+
+  function mobileKeybarButtonsFromSettings(form) {
+    return Array.from(form.querySelectorAll('[data-mobile-keybar-row]')).map((row) => ({
+      label: row.querySelector('[data-mobile-keybar-label]').value.trim(),
+      action: row.querySelector('[data-mobile-keybar-action]').value,
+      value: row.querySelector('[data-mobile-keybar-value]').value,
+      enabled: row.querySelector('[data-mobile-keybar-enabled]').checked
+    })).filter((button) => button.label && button.value);
+  }
+
+  function wireMobileKeybarEditor(overlay) {
+    const editor = overlay.querySelector('[data-mobile-keybar-editor]');
+    const move = (button, direction) => {
+      const row = button.closest('[data-mobile-keybar-row]');
+      const sibling = direction < 0 ? row.previousElementSibling : row.nextElementSibling;
+      if (!sibling) {
+        return;
+      }
+      editor.insertBefore(row, direction < 0 ? sibling : sibling.nextElementSibling);
+    };
+    editor.addEventListener('click', (event) => {
+      if (event.target.closest('[data-mobile-keybar-up]')) {
+        move(event.target, -1);
+      } else if (event.target.closest('[data-mobile-keybar-down]')) {
+        move(event.target, 1);
+      } else if (event.target.closest('[data-mobile-keybar-remove]')) {
+        event.target.closest('[data-mobile-keybar-row]').remove();
+      }
+    });
+    overlay.querySelector('[data-mobile-keybar-add]').onclick = () => {
+      editor.insertAdjacentHTML('beforeend', renderMobileKeybarRow({ label: 'Custom', action: 'shortcut', value: 'Ctrl+Shift+C', enabled: true }));
+      editor.lastElementChild.querySelector('[data-mobile-keybar-label]').focus();
+    };
+  }
+
+  async function openSettings() {
+    let settings;
+    try {
+      settings = await api('/api/settings');
+    } catch (error) {
+      showToast(error.message);
+      return;
+    }
+
+    const existing = document.querySelector('.settings-overlay');
+    if (existing) {
+      existing.remove();
+    }
+
+    state.customThemeDraft = { ...customThemeDefaults, ...(settings.custom_theme || {}) };
+    let savedTheme = state.theme;
+    const selectedLight = state.customThemeDraft.selected_light;
+    const selectedDark = state.customThemeDraft.selected_dark;
+    const notificationCapability = browserNotificationCapability();
+    const overlay = document.createElement('div');
+    overlay.className = 'settings-overlay';
+    const fontOptions = [
+      { label: 'Consolas', value: 'Consolas, "Cascadia Mono", monospace' },
+      { label: 'Cascadia Mono', value: '"Cascadia Mono", Consolas, monospace' },
+      { label: 'Cascadia Code', value: '"Cascadia Code", Consolas, monospace' },
+      { label: 'JetBrains Mono', value: '"JetBrains Mono", Consolas, monospace' },
+      { label: 'Fira Code', value: '"Fira Code", Consolas, monospace' },
+      { label: 'Lucida Console', value: '"Lucida Console", monospace' }
+    ];
+    overlay.innerHTML = `
+      <form class="settings-panel">
+        <header class="settings-header">
+          <div class="product-mark"><span class="brand-mark">›_</span><div><div class="settings-title">WPS7 Settings</div><small>Workspace preferences</small></div></div>
+          <button class="icon-button" type="button" data-settings-close aria-label="Close settings" title="Close">×</button>
+        </header>
+        <div class="settings-shell">
+          <nav class="settings-nav" aria-label="Settings categories">
+            <a aria-label="Appearance" href="#settings-appearance">
+              <span class="settings-nav-icon" aria-hidden="true">${fileActionIcon('appearance')}</span><span class="settings-nav-label">Appearance</span>
+            </a>
+            <a aria-label="Terminal" href="#settings-terminal">
+              <span class="settings-nav-icon" aria-hidden="true">${fileActionIcon('terminal')}</span><span class="settings-nav-label">Terminal</span>
+            </a>
+            <a aria-label="Workspace" href="#settings-workspace">
+              <span class="settings-nav-icon" aria-hidden="true">${fileActionIcon('workspace')}</span><span class="settings-nav-label">Workspace</span>
+            </a>
+            <a aria-label="Persistence" href="#settings-persistence">
+              <span class="settings-nav-icon" aria-hidden="true">${fileActionIcon('persistence')}</span><span class="settings-nav-label">Persistence</span>
+            </a>
+            <a aria-label="Shell" href="#settings-shell">
+              <span class="settings-nav-icon" aria-hidden="true">${fileActionIcon('shell')}</span><span class="settings-nav-label">Shell</span>
+            </a>
+            <a aria-label="Files" href="#settings-files">
+              <span class="settings-nav-icon" aria-hidden="true">${fileActionIcon('file')}</span><span class="settings-nav-label">Files</span>
+            </a>
+            <a aria-label="Usage" href="#settings-usage">
+              <span class="settings-nav-icon" aria-hidden="true">${fileActionIcon('usage')}</span><span class="settings-nav-label">Usage</span>
+            </a>
+            <a aria-label="Server" href="#settings-server">
+              <span class="settings-nav-icon" aria-hidden="true">${fileActionIcon('server')}</span><span class="settings-nav-label">Server</span>
+            </a>
+            <a aria-label="Security" href="#settings-security">
+              <span class="settings-nav-icon" aria-hidden="true">${fileActionIcon('security')}</span><span class="settings-nav-label">Security</span>
+            </a>
+          </nav>
+          <div class="settings-body">
+            <section class="settings-section appearance-section" id="settings-appearance">
+              <div class="section-heading"><div><h2>Appearance</h2><p>Changes apply immediately.</p></div><span class="live-badge">● Live settings</span></div>
+              <input type="hidden" name="custom_theme.mode" value="${escapeAttr(state.customThemeDraft.mode)}">
+              <input type="hidden" name="custom_theme.selected_light" value="${escapeAttr(selectedLight)}">
+              <input type="hidden" name="custom_theme.selected_dark" value="${escapeAttr(selectedDark)}">
+              <div class="theme-mode-setting" data-theme-mode="light">
+                <div class="theme-mode-heading"><span>Light mode</span><small>Used whenever WPS7 is in light mode.</small></div>
+                <div class="theme-preset-grid" role="group" aria-label="Light theme">
+                  ${Object.entries(themePresets).filter(([, theme]) => theme.mode === 'light').map(([id, theme]) => `
+                    <button type="button" class="theme-preset ${selectedLight === id ? 'active' : ''}" data-theme-choice="${id}" data-theme-choice-mode="light" aria-pressed="${selectedLight === id}">
+                      <span class="theme-swatches" aria-hidden="true"><i style="--swatch:${theme.ink}"></i><i style="--swatch:${theme.panel}"></i><i style="--swatch:${theme.accent}"></i></span><span>${escapeHtml(theme.label)}</span>
+                    </button>
+                  `).join('')}
+                  <button type="button" class="theme-preset ${selectedLight === 'custom-light' ? 'active' : ''}" data-theme-choice="custom-light" data-theme-choice-mode="light" aria-pressed="${selectedLight === 'custom-light'}"><span class="theme-swatches custom" aria-hidden="true"><i></i><i></i><i></i></span><span>Custom Light</span></button>
+                </div>
+              </div>
+              <div class="custom-theme-editor ${selectedLight === 'custom-light' ? '' : 'hidden'}" data-custom-theme-editor="light">
+                <div class="custom-theme-heading"><div><h3>Custom Light palette</h3><p>Saved on the WPS7 server and shared across devices.</p></div><button class="secondary custom-theme-reset" type="button" data-custom-theme-reset="light" aria-label="Reset custom light palette" title="Reset to default custom light palette">${fileActionIcon('refresh')}<span>Reset</span></button></div>
+                <div class="custom-theme-grid">
+                  <label>App background<input name="custom_theme.light_ink" type="color" value="${escapeAttr(state.customThemeDraft.light_ink)}"></label>
+                  <label>Panel<input name="custom_theme.light_panel" type="color" value="${escapeAttr(state.customThemeDraft.light_panel)}"></label>
+                  <label>Sidebar<input name="custom_theme.light_rail" type="color" value="${escapeAttr(state.customThemeDraft.light_rail)}"></label>
+                  <label>Raised surface<input name="custom_theme.light_surface" type="color" value="${escapeAttr(state.customThemeDraft.light_surface)}"></label>
+                  <label>Border<input name="custom_theme.light_line" type="color" value="${escapeAttr(state.customThemeDraft.light_line)}"></label>
+                  <label>Text<input name="custom_theme.light_text" type="color" value="${escapeAttr(state.customThemeDraft.light_text)}"></label>
+                  <label>Muted text<input name="custom_theme.light_muted" type="color" value="${escapeAttr(state.customThemeDraft.light_muted)}"></label>
+                  <label>Accent<input name="custom_theme.light_accent" type="color" value="${escapeAttr(state.customThemeDraft.light_accent)}"></label>
+                  <label>Warning<input name="custom_theme.light_warn" type="color" value="${escapeAttr(state.customThemeDraft.light_warn)}"></label>
+                  <label>Danger<input name="custom_theme.light_danger" type="color" value="${escapeAttr(state.customThemeDraft.light_danger)}"></label>
+                  <label>Terminal background<input name="custom_theme.light_terminal_bg" type="color" value="${escapeAttr(state.customThemeDraft.light_terminal_bg)}"></label>
+                  <label>Terminal text<input name="custom_theme.light_terminal_fg" type="color" value="${escapeAttr(state.customThemeDraft.light_terminal_fg)}"></label>
+                </div>
+              </div>
+              <div class="theme-mode-setting" data-theme-mode="dark">
+                <div class="theme-mode-heading"><span>Dark mode</span><small>Used whenever WPS7 is in dark mode.</small></div>
+                <div class="theme-preset-grid" role="group" aria-label="Dark theme">
+                  ${Object.entries(themePresets).filter(([, theme]) => theme.mode === 'dark').map(([id, theme]) => `
+                    <button type="button" class="theme-preset ${selectedDark === id ? 'active' : ''}" data-theme-choice="${id}" data-theme-choice-mode="dark" aria-pressed="${selectedDark === id}">
+                      <span class="theme-swatches" aria-hidden="true"><i style="--swatch:${theme.ink}"></i><i style="--swatch:${theme.panel}"></i><i style="--swatch:${theme.accent}"></i></span><span>${escapeHtml(theme.label)}</span>
+                    </button>
+                  `).join('')}
+                  <button type="button" class="theme-preset ${selectedDark === 'custom-dark' ? 'active' : ''}" data-theme-choice="custom-dark" data-theme-choice-mode="dark" aria-pressed="${selectedDark === 'custom-dark'}"><span class="theme-swatches custom" aria-hidden="true"><i></i><i></i><i></i></span><span>Custom Dark</span></button>
+                </div>
+              </div>
+              <div class="custom-theme-editor ${selectedDark === 'custom-dark' ? '' : 'hidden'}" data-custom-theme-editor="dark">
+                <div class="custom-theme-heading"><div><h3>Custom Dark palette</h3><p>Saved on the WPS7 server and shared across devices.</p></div><button class="secondary custom-theme-reset" type="button" data-custom-theme-reset="dark" aria-label="Reset custom dark palette" title="Reset to default custom dark palette">${fileActionIcon('refresh')}<span>Reset</span></button></div>
+                <div class="custom-theme-grid">
+                  <label>App background<input name="custom_theme.ink" type="color" value="${escapeAttr(state.customThemeDraft.ink)}"></label>
+                  <label>Panel<input name="custom_theme.panel" type="color" value="${escapeAttr(state.customThemeDraft.panel)}"></label>
+                  <label>Sidebar<input name="custom_theme.rail" type="color" value="${escapeAttr(state.customThemeDraft.rail)}"></label>
+                  <label>Raised surface<input name="custom_theme.surface" type="color" value="${escapeAttr(state.customThemeDraft.surface)}"></label>
+                  <label>Border<input name="custom_theme.line" type="color" value="${escapeAttr(state.customThemeDraft.line)}"></label>
+                  <label>Text<input name="custom_theme.text" type="color" value="${escapeAttr(state.customThemeDraft.text)}"></label>
+                  <label>Muted text<input name="custom_theme.muted" type="color" value="${escapeAttr(state.customThemeDraft.muted)}"></label>
+                  <label>Accent<input name="custom_theme.accent" type="color" value="${escapeAttr(state.customThemeDraft.accent)}"></label>
+                  <label>Warning<input name="custom_theme.warn" type="color" value="${escapeAttr(state.customThemeDraft.warn)}"></label>
+                  <label>Danger<input name="custom_theme.danger" type="color" value="${escapeAttr(state.customThemeDraft.danger)}"></label>
+                  <label>Terminal background<input name="custom_theme.terminal_bg" type="color" value="${escapeAttr(state.customThemeDraft.terminal_bg)}"></label>
+                  <label>Terminal text<input name="custom_theme.terminal_fg" type="color" value="${escapeAttr(state.customThemeDraft.terminal_fg)}"></label>
+                </div>
+              </div>
+              <div class="settings-grid appearance-font-setting">
+                <label>System font size<input name="ui.system_font_size" type="number" min="10" max="24" value="${escapeAttr(settings.ui.system_font_size ?? 13)}"></label>
+              </div>
+            </section>
+            <section class="settings-section" id="settings-terminal">
+              <div class="section-heading"><div><h2>Terminal</h2><p>Typography, rendering and resize behavior.</p></div></div>
+              <div class="settings-grid">
+                <label>Terminal font<select name="ui.terminal_font_family">
+                  ${fontOptions.map((font) => `<option value="${escapeAttr(font.value)}" ${font.value === settings.ui.terminal_font_family ? 'selected' : ''}>${escapeHtml(font.label)}</option>`).join('')}
+                </select></label>
+                <label>PowerShell font size<input name="ui.terminal_font_size" type="number" min="8" max="32" value="${escapeAttr(settings.ui.terminal_font_size)}"></label>
+                <label>PowerShell mobile font size<input name="ui.mobile_terminal_font_size" type="number" min="8" max="24" value="${escapeAttr(settings.ui.mobile_terminal_font_size ?? 12)}"></label>
+                <label>Terminal backend<select name="terminal.backend">
+                  ${['conpty_screen', 'xterm_pty'].map((backend) => `<option value="${backend}" ${backend === settings.terminal?.backend ? 'selected' : ''}>${backend}</option>`).join('')}
+                </select></label>
+                <label>Reconnect scrollback<input name="terminal.reconnect_scrollback_lines" type="number" min="0" value="${escapeAttr(settings.terminal?.reconnect_scrollback_lines ?? 2000)}"></label>
+                <label>Resize debounce ms<input name="terminal.resize_debounce_ms" type="number" min="0" value="${escapeAttr(settings.terminal?.resize_debounce_ms ?? 100)}"></label>
+                <label class="settings-check"><input name="terminal.auto_scroll_on_resize" type="checkbox" ${settings.terminal?.auto_scroll_on_resize ? 'checked' : ''}> Auto scroll on resize</label>
+                <label class="settings-check"><input name="terminal.cursor_blink" type="checkbox" ${settings.terminal?.cursor_blink !== false ? 'checked' : ''}> Cursor blink</label>
+                <div class="notification-setting settings-wide">
+                  <label class="settings-check"><input name="terminal.browser_notifications" type="checkbox" ${settings.terminal?.browser_notifications ? 'checked' : ''} ${notificationCapability.available ? '' : 'disabled'}> Browser notifications for terminal bells</label>
+                  <small class="notification-capability ${notificationCapability.available ? '' : 'blocked'}" data-browser-notification-status>${escapeHtml(notificationCapability.message)}</small>
+                </div>
+              </div>
+              <div class="mobile-keybar-setting">
+                <div class="mobile-keybar-setting-heading"><div><h3>PowerShell shortcut buttons</h3><p>Choose buttons shown below PowerShell on desktop and mobile, arrange their order, or add a shortcut or text command. Ctrl stays active for the next software-keyboard key.</p></div><button class="secondary" type="button" data-mobile-keybar-add>${fileActionIcon('add')}<span>Add button</span></button></div>
+                ${renderMobileKeybarEditor(settings.terminal?.mobile_keybar_buttons)}
+              </div>
+            </section>
+            <section class="settings-section" id="settings-workspace">
+              <div class="section-heading"><div><h2>Workspace</h2><p>Sidebar size and pane grid limits.</p></div></div>
+              <div class="settings-grid">
+                <label>Max pane columns<input name="ui.max_pane_columns" type="number" min="1" max="12" value="${escapeAttr(settings.ui.max_pane_columns)}"></label>
+                <label>Max pane rows<input name="ui.max_pane_rows" type="number" min="1" max="12" value="${escapeAttr(settings.ui.max_pane_rows)}"></label>
+              </div>
+            </section>
+            <section class="settings-section" id="settings-persistence">
+              <div class="section-heading"><div><h2>Persistence</h2><p>Autosave timing and retained terminal output.</p></div></div>
+              <div class="settings-grid">
+                <label>Autosave minutes<input name="persistence.autosave_minutes" type="number" min="1" value="${escapeAttr(settings.persistence.autosave_minutes)}"></label>
+                <label>Scrollback limit<input name="persistence.scrollback_lines" type="number" min="0" value="${escapeAttr(settings.persistence.scrollback_lines)}"></label>
+              </div>
+            </section>
+            <section class="settings-section" id="settings-shell">
+              <div class="section-heading"><div><h2>Shell</h2><p>PowerShell executables and startup arguments.</p></div></div>
+              <div class="settings-grid">
+                <label>PowerShell preferred<input name="shell.preferred" value="${escapeAttr(settings.shell.preferred)}"></label>
+                <label>PowerShell fallback<input name="shell.fallback" value="${escapeAttr(settings.shell.fallback)}"></label>
+                <label class="settings-wide">Shell args<textarea name="shell.args" rows="3">${escapeHtml((settings.shell.args || []).join('\n'))}</textarea></label>
+              </div>
+            </section>
+            <section class="settings-section" id="settings-files">
+              <div class="section-heading"><div><h2>Files</h2><p>File manager access and upload limits.</p></div></div>
+              <div class="settings-grid">
+                <label>Upload limit bytes<input name="file_manager.max_upload_bytes" type="number" min="0" value="${escapeAttr(settings.file_manager?.max_upload_bytes ?? 0)}"></label>
+                <label>File pane font size<input name="ui.file_pane_font_size" type="number" min="10" max="24" value="${escapeAttr(settings.ui.file_pane_font_size ?? 13)}"></label>
+              </div>
+            </section>
+            <section class="settings-section" id="settings-usage">
+              <div class="section-heading"><div><h2>Usage</h2><p>Provider credentials stay on the WPS7 server.</p></div></div>
+              <div class="settings-grid">
+                <label class="settings-wide">MiniMax Coding Plan API key<input name="usage.minimax_api_key" type="password" autocomplete="off" placeholder="${settings.usage?.minimax_configured ? 'Saved — leave blank to keep' : 'sk-cp-…'}"></label>
+                <label>MiniMax region<select name="usage.minimax_region"><option value="global" ${settings.usage?.minimax_region !== 'china' ? 'selected' : ''}>Global</option><option value="china" ${settings.usage?.minimax_region === 'china' ? 'selected' : ''}>China mainland</option></select></label>
+                <label class="settings-check"><input name="usage.clear_minimax_api_key" type="checkbox"> Clear saved MiniMax key</label>
+              </div>
+            </section>
+            <section class="settings-section restart" id="settings-server">
+              <div class="section-heading"><div><h2>Server</h2><p>LAN access requires a password and restarts WPS7 automatically.</p></div><span class="restart-badge">△ Restart required</span></div>
+              <div class="settings-grid">
+                <label>Access<select name="server.host"><option value="127.0.0.1" ${settings.server.host === '127.0.0.1' ? 'selected' : ''}>Local</option><option value="0.0.0.0" ${settings.server.host === '0.0.0.0' ? 'selected' : ''}>LAN</option></select></label>
+                <label>Port<input name="server.port" type="number" min="1" max="65535" value="${escapeAttr(settings.server.port)}"></label>
+                <label class="settings-check"><input name="server.open_browser" type="checkbox" ${settings.server.open_browser ? 'checked' : ''}> Open browser on start</label>
+              </div>
+            </section>
+            <section class="settings-section" id="settings-security">
+              <div class="section-heading"><div><h2>Security</h2><p>Set a new password for workspace access.</p></div></div>
+              <div class="settings-grid">
+                <label class="settings-wide">New password<input name="auth.password" type="password" autocomplete="new-password" placeholder="12+ chars with upper, lower, number, symbol"></label>
+              </div>
+            </section>
+          </div>
+        </div>
+        <footer class="settings-footer">
+          <span class="settings-status" data-settings-status></span>
+          <button type="button" class="secondary" data-settings-cancel>Cancel</button>
+          <button type="submit" class="secondary" data-settings-apply>Apply</button>
+          <button type="submit" class="primary" data-settings-save>Save</button>
+        </footer>
+      </form>
+    `;
+
+    document.body.appendChild(overlay);
+    const settingsBody = overlay.querySelector('.settings-body');
+    const settingsLinks = [...overlay.querySelectorAll('.settings-nav a')];
+    const settingsSections = settingsLinks.map((link) => overlay.querySelector(link.getAttribute('href'))).filter(Boolean);
+
+    function setActiveSettingsSection(sectionId) {
+      settingsLinks.forEach((link) => {
+        const active = link.getAttribute('href') === `#${sectionId}`;
+        link.classList.toggle('active', active);
+        active ? link.setAttribute('aria-current', 'page') : link.removeAttribute('aria-current');
+      });
+    }
+
+    function syncSettingsNav() {
+      const atBottom = settingsBody.scrollTop + settingsBody.clientHeight >= settingsBody.scrollHeight - 2;
+      let current = atBottom ? settingsSections[settingsSections.length - 1] : settingsSections[0];
+      if (!atBottom) {
+        const bodyTop = settingsBody.getBoundingClientRect().top + 18;
+        for (const section of settingsSections) {
+          if (section.getBoundingClientRect().top <= bodyTop) {
+            current = section;
+          }
+        }
+      }
+      setActiveSettingsSection(current.id);
+    }
+
+    settingsLinks.forEach((link) => {
+      link.onclick = (event) => {
+        event.preventDefault();
+        const section = overlay.querySelector(link.getAttribute('href'));
+        section.scrollIntoView({ block: 'start' });
+        history.replaceState(null, '', link.getAttribute('href'));
+        setActiveSettingsSection(section.id);
+        requestAnimationFrame(() => setActiveSettingsSection(section.id));
+      };
+    });
+    settingsBody.addEventListener('scroll', syncSettingsNav, { passive: true });
+    const settingsResizeObserver = new ResizeObserver(syncSettingsNav);
+    settingsResizeObserver.observe(settingsBody);
+    const closeSettings = (restoreTheme = true) => {
+      settingsResizeObserver.disconnect();
+      overlay.remove();
+      if (restoreTheme) {
+        state.customThemeDraft = null;
+        setThemeLive(savedTheme);
+      }
+    };
+    const initialSection = settingsSections[0];
+    setActiveSettingsSection(initialSection.id);
+    requestAnimationFrame(() => {
+      initialSection.scrollIntoView({ block: 'start' });
+      syncSettingsNav();
+    });
+    overlay.querySelector('[data-settings-close]').onclick = closeSettings;
+    overlay.querySelector('[data-settings-cancel]').onclick = closeSettings;
+    overlay.querySelectorAll('[data-theme-choice]').forEach((button) => {
+      button.onclick = () => {
+        const mode = button.dataset.themeChoiceMode;
+        const selectedInput = overlay.querySelector(`[name="custom_theme.selected_${mode}"]`);
+        selectedInput.value = button.dataset.themeChoice;
+        overlay.querySelector('[name="custom_theme.mode"]').value = mode;
+        state.customThemeDraft[`selected_${mode}`] = button.dataset.themeChoice;
+        state.customThemeDraft.mode = mode;
+        applyTheme(button.dataset.themeChoice);
+        overlay.querySelector(`[data-custom-theme-editor="${mode}"]`).classList.toggle('hidden', button.dataset.themeChoice !== `custom-${mode}`);
+        button.closest('[data-theme-mode]').querySelectorAll('[data-theme-choice]').forEach((choice) => {
+          const active = choice === button;
+          choice.classList.toggle('active', active);
+          choice.setAttribute('aria-pressed', String(active));
+        });
+        for (const item of state.terminals.values()) {
+          item.term.options.theme = terminalTheme();
+        }
+      };
+    });
+    overlay.querySelectorAll('[name^="custom_theme."][type="color"]').forEach((input) => {
+      input.oninput = () => {
+        state.customThemeDraft[input.name.slice('custom_theme.'.length)] = input.value;
+        if (state.theme === 'custom-light' || state.theme === 'custom-dark') {
+          setThemeLive(state.theme);
+        }
+      };
+    });
+    overlay.querySelectorAll('[data-custom-theme-reset]').forEach((button) => {
+      button.onclick = () => resetCustomThemePalette(button.dataset.customThemeReset, overlay);
+    });
+    wireMobileKeybarEditor(overlay);
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) {
+        closeSettings();
+      }
+    });
+    overlay.querySelector('form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const keepSettingsOpen = event.submitter?.hasAttribute('data-settings-apply') === true;
+      const status = overlay.querySelector('[data-settings-status]');
+      status.textContent = 'Saving...';
+      try {
+        const notificationInput = event.currentTarget.elements['terminal.browser_notifications'];
+        if (notificationInput?.checked && !notificationInput?.disabled) {
+          const permission = await requestBrowserNotificationPermission();
+          if (permission !== 'granted') {
+            notificationInput.checked = false;
+            showToast('Browser notification permission was not granted.');
+          }
+        }
+        const payload = settingsPayload(new FormData(event.currentTarget), event.currentTarget);
+        const switchingToLan = payload.server.host === '0.0.0.0' && state.config.server.host !== '0.0.0.0';
+        const hasPassword = settings.auth?.password_set || Boolean(payload.auth?.password);
+        if (payload.server.host === '0.0.0.0' && !hasPassword) {
+          status.textContent = 'Set a password before enabling LAN access.';
+          const passwordInput = event.currentTarget.elements['auth.password'];
+          passwordInput.scrollIntoView({ block: 'center' });
+          passwordInput.focus();
+          showToast(status.textContent);
+          return;
+        }
+        payload.restart_after_save = switchingToLan;
+        state.config = await api('/api/settings', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        savedTheme = selectedThemeForMode(state.config.custom_theme?.mode || themeMode());
+        state.customThemeDraft = { ...customThemeDefaults, ...(state.config.custom_theme || {}) };
+        applyTheme(savedTheme);
+        applyConfigLive();
+        if (state.config.restarting) {
+          if (payload.auth?.password) {
+            clearToken();
+          }
+          status.textContent = 'Saved. Restarting WPS7…';
+          showToast(status.textContent, 'success');
+          const nextUrl = `${location.protocol}//${location.hostname}:${payload.server.port}/`;
+          window.setTimeout(() => location.assign(nextUrl), 1800);
+          return;
+        }
+        if (payload.auth?.password) {
+          clearToken();
+          closeSettings(false);
+          renderLogin();
+          showToast('Password changed. Sign in again.', 'success');
+          return;
+        }
+        status.textContent = state.config.restartRequired ? 'Saved. Restart wps7.exe for host/port changes.' : 'Saved.';
+        showToast(status.textContent, 'success');
+        if (!keepSettingsOpen) {
+          state.customThemeDraft = null;
+          closeSettings(false);
+        }
+      } catch (error) {
+        status.textContent = error.message || 'Save failed.';
+        showToast(status.textContent);
+      }
+    });
+  }
+
+  function settingsPayload(form, formElement) {
+    const notificationInput = formElement.elements['terminal.browser_notifications'];
+    const payload = {
+      server: {
+        host: form.get('server.host'),
+        port: numberOrUndefined(form.get('server.port')),
+        open_browser: form.get('server.open_browser') === 'on'
+      },
+      shell: {
+        preferred: form.get('shell.preferred'),
+        fallback: form.get('shell.fallback'),
+        args: lines(form.get('shell.args'))
+      },
+      persistence: {
+        autosave_minutes: numberOrUndefined(form.get('persistence.autosave_minutes')),
+        scrollback_lines: numberOrUndefined(form.get('persistence.scrollback_lines'))
+      },
+      terminal: {
+        backend: form.get('terminal.backend'),
+        reconnect_scrollback_lines: numberOrUndefined(form.get('terminal.reconnect_scrollback_lines')),
+        resize_debounce_ms: numberOrUndefined(form.get('terminal.resize_debounce_ms')),
+        auto_scroll_on_resize: form.get('terminal.auto_scroll_on_resize') === 'on',
+        cursor_blink: form.get('terminal.cursor_blink') === 'on',
+        browser_notifications: notificationInput?.disabled
+          ? Boolean(state.config.terminal?.browser_notifications)
+          : form.get('terminal.browser_notifications') === 'on',
+        mobile_keybar_buttons: mobileKeybarButtonsFromSettings(formElement)
+      },
+      ui: {
+        sidebar_width: numberOrUndefined(form.get('ui.sidebar_width')),
+        max_pane_columns: numberOrUndefined(form.get('ui.max_pane_columns')),
+        max_pane_rows: numberOrUndefined(form.get('ui.max_pane_rows')),
+        terminal_font_family: form.get('ui.terminal_font_family'),
+        terminal_font_size: numberOrUndefined(form.get('ui.terminal_font_size')),
+        mobile_terminal_font_size: numberOrUndefined(form.get('ui.mobile_terminal_font_size')),
+        file_pane_font_size: numberOrUndefined(form.get('ui.file_pane_font_size')),
+        system_font_size: numberOrUndefined(form.get('ui.system_font_size'))
+      },
+      file_manager: {
+        enabled: state.config.file_manager?.enabled !== false,
+        root_mode: 'drives',
+        max_upload_bytes: numberOrUndefined(form.get('file_manager.max_upload_bytes')) || 0
+      },
+      usage: {
+        minimax_region: form.get('usage.minimax_region')
+      },
+      custom_theme: customThemeFromForm(form)
+    };
+    const minimaxApiKey = String(form.get('usage.minimax_api_key') || '').trim();
+    if (form.get('usage.clear_minimax_api_key') === 'on') {
+      payload.usage.minimax_api_key = '';
+    } else if (minimaxApiKey) {
+      payload.usage.minimax_api_key = minimaxApiKey;
+    }
+    const password = String(form.get('auth.password') || '');
+    if (password) {
+      payload.auth = { password };
+    }
+    return payload;
+  }
+
+  function customThemeFromForm(form) {
+    return {
+      mode: form.get('custom_theme.mode'),
+      selected_light: form.get('custom_theme.selected_light'),
+      selected_dark: form.get('custom_theme.selected_dark'),
+      ink: form.get('custom_theme.ink'),
+      panel: form.get('custom_theme.panel'),
+      rail: form.get('custom_theme.rail'),
+      surface: form.get('custom_theme.surface'),
+      line: form.get('custom_theme.line'),
+      text: form.get('custom_theme.text'),
+      muted: form.get('custom_theme.muted'),
+      accent: form.get('custom_theme.accent'),
+      warn: form.get('custom_theme.warn'),
+      danger: form.get('custom_theme.danger'),
+      terminal_bg: form.get('custom_theme.terminal_bg'),
+      terminal_fg: form.get('custom_theme.terminal_fg'),
+      light_ink: form.get('custom_theme.light_ink'),
+      light_panel: form.get('custom_theme.light_panel'),
+      light_rail: form.get('custom_theme.light_rail'),
+      light_surface: form.get('custom_theme.light_surface'),
+      light_line: form.get('custom_theme.light_line'),
+      light_text: form.get('custom_theme.light_text'),
+      light_muted: form.get('custom_theme.light_muted'),
+      light_accent: form.get('custom_theme.light_accent'),
+      light_warn: form.get('custom_theme.light_warn'),
+      light_danger: form.get('custom_theme.light_danger'),
+      light_terminal_bg: form.get('custom_theme.light_terminal_bg'),
+      light_terminal_fg: form.get('custom_theme.light_terminal_fg')
+    };
+  }
+
+  function resetCustomThemePalette(mode, overlay) {
+    const prefix = mode === 'light' ? 'light_' : '';
+    for (const key of customThemePaletteKeys) {
+      const field = `${prefix}${key}`;
+      state.customThemeDraft[field] = customThemeDefaults[field];
+      const input = overlay.querySelector(`[name="custom_theme.${field}"]`);
+      input.value = customThemeDefaults[field];
+    }
+    if (state.theme === `custom-${mode}`) {
+      setThemeLive(state.theme);
+    }
+  }
+
+  function lines(value) {
+    return String(value || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  }
+
+  function numberOrUndefined(value) {
+    if (value === null || String(value).trim() === '') {
+      return undefined;
+    }
+    const number = Number(value);
+    return Number.isFinite(number) ? number : undefined;
+  }
+
+  function applyConfigLive() {
+    applyUiTypography();
+    app.querySelectorAll('.mobile-keybar').forEach((keybar) => {
+      keybar.outerHTML = renderMobileKeybar();
+    });
+    wireMobileKeybarButtons(app);
+    const sidebarWidth = state.sidebarWidth || Number(state.config.ui?.sidebar_width) || 286;
+    document.querySelector('.app')?.style.setProperty('--sidebar-width', `${sidebarWidth}px`);
+    const session = activeSession();
+    const tab = activeTab(session);
+    const grid = document.querySelector('.pane-grid');
+    if (grid && tab) {
+      grid.setAttribute('style', paneGridStyle(tab.panes.length));
+      const maxColumns = Number(state.config.ui?.max_pane_columns) || 5;
+      const maxRows = Number(state.config.ui?.max_pane_rows) || 3;
+      for (const pane of tab.panes) {
+        pane.layout = normalizePaneLayout(pane.layout, maxColumns, maxRows);
+        applyPaneLayoutStyle(document.querySelector(`[data-pane="${pane.id}"]`), pane.layout);
+      }
+    }
+    for (const [paneId, item] of state.terminals.entries()) {
+      item.term.options.fontFamily = state.config.ui?.terminal_font_family || item.term.options.fontFamily;
+      item.term.options.fontSize = paneFontSize(findPaneState(paneId)?.pane);
+      item.term.options.theme = terminalTheme();
+      item.sendResize();
+    }
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;');
+  }
+
+  function escapeAttr(value) {
+    return escapeHtml(value ?? '');
+  }
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+  }
+
+  load();
+})();

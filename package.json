@@ -1,0 +1,41 @@
+{
+  "name": "wps7",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Portable Windows web tmux-continuum style terminal workspace.",
+  "main": "src/main.js",
+  "bin": "src/main.js",
+  "scripts": {
+    "start": "node src/main.js",
+    "test": "node --test",
+    "package:win": "pkg . --targets node18-win-x64 --output dist/wps7.exe && powershell -NoProfile -ExecutionPolicy Bypass -Command \"Copy-Item start-wps7.vbs dist\\start-wps7.vbs -Force; Copy-Item scripts dist\\scripts -Recurse -Force; Copy-Item assets dist\\assets -Recurse -Force; if (Test-Path tools) { Copy-Item tools dist\\tools -Recurse -Force }\"",
+    "nssm:install": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\install-nssm.ps1",
+    "startup:install": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\install-wps7-startup.ps1",
+    "startup:uninstall": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\uninstall-wps7-startup.ps1"
+  },
+  "pkg": {
+    "assets": [
+      "assets/**/*",
+      "tools/**/*",
+      "scripts/**/*",
+      "public/**/*",
+      "node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/conpty/**/*",
+      "node_modules/systray2/traybin/**/*"
+    ]
+  },
+  "dependencies": {
+    "@homebridge/node-pty-prebuilt-multiarch": "^0.13.1",
+    "@iarna/toml": "^2.2.5",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-serialize": "^0.14.0",
+    "@xterm/headless": "^6.0.0",
+    "@xterm/xterm": "^6.0.0",
+    "busboy": "^1.6.0",
+    "express": "^4.19.2",
+    "systray2": "^2.1.4",
+    "ws": "^8.17.1"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  }
+}

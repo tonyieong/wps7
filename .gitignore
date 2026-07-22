@@ -1,0 +1,8 @@
+node_modules/
+dist/
+data/
+tmp-file-pane-test/
+qa-backup-*/
+config.toml
+*.log
+
