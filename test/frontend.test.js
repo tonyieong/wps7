@@ -764,6 +764,74 @@ test('terminal chrome follows the active preset background', () => {
   assert.match(styles, /\.terminal \.xterm,[\s\S]*?background:\s*var\(--terminal-bg\) !important/);
 });
 
+test('files pane clears stale entries and shows a friendly empty error state', () => {
+  const loadSource = appSource.slice(appSource.indexOf('async function loadFilesPane'), appSource.indexOf('async function setFilesPanePath'));
+  assert.match(loadSource, /paneData\.entries = \[\];\s*paneData\.drives = \[\];\s*updateFilesPane\(pane\.id\);/);
+  assert.match(loadSource, /catch \(error\) \{[\s\S]*?paneData\.entries = \[\];[\s\S]*?paneData\.error = friendlyFileError\(error\.message\)/);
+  assert.match(appSource, /function friendlyFileError\(message\)/);
+  assert.match(appSource, /ENOENT\|no such file/);
+  assert.match(appSource, /class="file-empty-state" role="note"/);
+  assert.match(appSource, /paneData\.error \|\| \(paneData\.filter \? 'No files match your search\.' : 'This folder is empty\.'\)/);
+  assert.match(styles, /\.file-empty-state\s*\{[^}]*flex-direction:\s*column/s);
+});
+
+test('upload controls are keyboard reachable buttons', () => {
+  assert.match(appSource, /data-file-upload-trigger role="button" tabindex="\$\{pane\.path \? '0' : '-1'\}" aria-disabled="\$\{pane\.path \? 'false' : 'true'\}"/);
+  assert.match(appSource, /data-file-upload-trigger\]'\)\.forEach\(\(trigger\) => \{[\s\S]*?event\.key !== 'Enter' && event\.key !== ' '[\s\S]*?querySelector\('input\[type="file"\]'\)\?\.click\(\)/);
+});
+
+test('file create, rename and delete use an app modal with live validation instead of native dialogs', () => {
+  assert.match(appSource, /function openAppModal\(\{ title/);
+  assert.match(appSource, /function validateFileName\(name\)/);
+  assert.match(appSource, /function confirmDialog\(title, message/);
+  assert.doesNotMatch(appSource, /window\.prompt\('Folder name'\)|window\.prompt\('File name'\)|window\.prompt\('New name'\)/);
+  assert.doesNotMatch(appSource, /window\.confirm\('Delete this item permanently\?'\)/);
+  assert.match(appSource, /class="app-modal" role="dialog" aria-modal="true"/);
+  assert.match(styles, /\.app-modal-overlay\s*\{[^}]*position:\s*fixed[^}]*place-items:\s*center/s);
+  assert.match(styles, /\.app-modal-danger\s*\{[^}]*border:\s*1px solid var\(--danger\)/s);
+});
+
+test('bulk download zips server-side and bulk delete uses a single reporting endpoint', () => {
+  assert.match(mainSource, /app\.post\('\/api\/files\/download-archive'/);
+  assert.match(mainSource, /app\.post\('\/api\/files\/delete-bulk'/);
+  assert.match(appSource, /async function downloadFiles\(paths, paneId\)[\s\S]*?paths\.length === 1[\s\S]*?'\/api\/files\/download-archive'/);
+  assert.match(appSource, /'\/api\/files\/delete-bulk'[\s\S]*?results[\s\S]*?filter\(\(item\) => !item\.ok\)/);
+});
+
+test('narrow desktop mode surfaces a recovery banner that switches to mobile', () => {
+  assert.match(appSource, /data-desktop-mode-banner role="status" hidden/);
+  assert.match(appSource, /data-switch-mobile>Switch to Mobile/);
+  assert.match(appSource, /function updateDesktopModeBanner\(\)/);
+  assert.match(appSource, /function setDisplayMode\(mode\)/);
+  assert.match(appSource, /state\.displayMode === 'desktop' && narrowViewport\(\) && !state\.dismissedDesktopBanner/);
+  assert.match(styles, /\.desktop-mode-banner\s*\{[^}]*background:\s*var\(--accent-soft\)/s);
+});
+
+test('files pane exposes a context menu with cut, paste and keyboard shortcuts wired to the move API', () => {
+  assert.match(appSource, /function openFileContextMenu\(paneId, anchorPath/);
+  assert.match(appSource, /function cutFiles\(paths, paneId\)/);
+  assert.match(appSource, /async function pasteFiles\(paneId\)/);
+  assert.match(appSource, /'\/api\/files\/move'[\s\S]*?destination/);
+  assert.match(appSource, /row\.oncontextmenu = \(event\) =>[\s\S]*?openFileContextMenu\(paneId, row\.dataset\.fileRow/);
+  assert.match(appSource, /event\.key === 'F2'[\s\S]*?renameFile\(selected\[0\], paneId\)/);
+  assert.match(appSource, /event\.key === 'Delete'[\s\S]*?deleteFiles\(selected, paneId\)/);
+  assert.match(appSource, /key === 'x'[\s\S]*?cutFiles\(selected, paneId\)/);
+  assert.match(appSource, /key === 'v'[\s\S]*?pasteFiles\(paneId\)/);
+  assert.match(styles, /\.file-context-menu\s*\{[^}]*position:\s*fixed/s);
+});
+
+test('files pane can filter entries by name', () => {
+  assert.match(appSource, /data-file-filter-toggle/);
+  assert.match(appSource, /data-file-filter\b/);
+  assert.match(appSource, /\.filter\(\(entry\) => !filterText \|\| entry\.name\.toLowerCase\(\)\.includes\(filterText\)\)/);
+  assert.match(styles, /\.file-filter-input\s*\{/);
+});
+
+test('mobile file controls grow to touch size and narrow panes collapse to one column', () => {
+  assert.match(styles, /\.app\.mode-mobile \.files-pane \.file-command-button,[\s\S]*?height:\s*40px/s);
+  assert.match(styles, /@container \(max-width: 360px\)[\s\S]*?\.compact-file-row \.file-modified\s*\{[^}]*grid-row:\s*2/s);
+});
+
 test('reviewed compactness improvements use friendly font labels and stable controls', () => {
   assert.match(appSource, /\{ label: 'Consolas', value: 'Consolas,/);
   assert.match(appSource, /\$\{escapeHtml\(font\.label\)\}/);

@@ -2998,6 +2998,78 @@ textarea:focus-visible {
   position: relative;
   grid-template-rows: auto auto minmax(0, 1fr);
   font-size: 12px;
+  container-type: inline-size;
+}
+
+@container (max-width: 360px) {
+  .files-pane .file-column-header {
+    display: none;
+  }
+  .files-pane .compact-file-row,
+  .files-pane .file-parent-row {
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    row-gap: 1px;
+    padding: 3px 0;
+  }
+  .files-pane .compact-file-row .file-name,
+  .files-pane .file-parent-row .file-name {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  .files-pane .compact-file-row .file-modified {
+    grid-column: 1;
+    grid-row: 2;
+    font-size: 10px;
+    opacity: .75;
+  }
+  .files-pane .compact-file-row .file-size {
+    grid-column: 2;
+    grid-row: 2;
+    text-align: right;
+    font-size: 10px;
+    opacity: .75;
+  }
+}
+
+.app.mode-mobile .files-pane .file-location-row,
+.app.mobile-device .files-pane .file-location-row,
+.app.mode-mobile .files-pane .file-command-bar,
+.app.mobile-device .files-pane .file-command-bar,
+.app.mode-mobile .files-pane .file-filter-row,
+.app.mobile-device .files-pane .file-filter-row {
+  height: 44px;
+}
+
+.app.mode-mobile .files-pane .file-command-button,
+.app.mobile-device .files-pane .file-command-button {
+  min-width: 40px;
+  height: 40px;
+}
+
+.app.mode-mobile .files-pane .paged-toolbar-button,
+.app.mobile-device .files-pane .paged-toolbar-button {
+  min-width: 34px;
+  height: 40px;
+}
+
+.app.mode-mobile .files-pane .file-path-input,
+.app.mobile-device .files-pane .file-path-input {
+  height: 40px;
+}
+
+.app.mode-mobile .files-pane .compact-file-row,
+.app.mobile-device .files-pane .compact-file-row,
+.app.mode-mobile .files-pane .file-parent-row,
+.app.mobile-device .files-pane .file-parent-row {
+  min-height: 40px;
+}
+
+.app.mode-mobile .file-context-item,
+.app.mobile-device .file-context-item {
+  height: 40px;
 }
 
 .files-pane .file-toolbar {
@@ -3018,6 +3090,45 @@ textarea:focus-visible {
 .file-command-bar {
   flex-wrap: nowrap;
   overflow: hidden;
+}
+
+.file-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: var(--pane-toolbar-height);
+  padding: 0 5px;
+  border-top: 1px solid var(--line);
+}
+
+.file-filter-row[hidden] {
+  display: none;
+}
+
+.file-filter-row .file-action-icon {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.file-filter-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: 11px;
+}
+
+.file-filter-input:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.file-filter-row .file-command-button {
+  flex: 0 0 auto;
 }
 
 .paged-toolbar-button {
@@ -3375,6 +3486,105 @@ textarea:focus-visible {
 
 .app-modal-danger:disabled {
   opacity: .5;
+  cursor: default;
+}
+
+.desktop-mode-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.desktop-mode-banner[hidden] {
+  display: none;
+}
+
+.desktop-mode-banner-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.desktop-mode-banner .primary {
+  height: 28px;
+  flex: 0 0 auto;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.desktop-mode-banner-dismiss {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.desktop-mode-banner-dismiss:hover,
+.desktop-mode-banner-dismiss:focus-visible {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+  outline: none;
+}
+
+.compact-file-row.cut-pending {
+  opacity: .55;
+}
+
+.file-context-menu {
+  position: fixed;
+  z-index: 95;
+  min-width: 168px;
+  padding: 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  box-shadow: 0 14px 34px var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.file-context-item {
+  display: flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font: 13px/1 "Segoe UI", system-ui, sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+
+.file-context-item:hover,
+.file-context-item:focus-visible {
+  background: var(--accent-soft);
+  color: var(--accent);
+  outline: none;
+}
+
+.file-context-item.danger:hover,
+.file-context-item.danger:focus-visible {
+  background: color-mix(in srgb, var(--danger) 20%, transparent);
+  color: var(--text);
+}
+
+.file-context-item:disabled {
+  opacity: .4;
   cursor: default;
 }
 

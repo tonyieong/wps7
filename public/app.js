@@ -63,6 +63,8 @@
     notepadTabData: {},
     layoutPanelOpen: false,
     displayMode: localStorage.getItem('wps7.displayMode') || 'auto',
+    dismissedDesktopBanner: false,
+    fileClipboard: null,
     mobileTerminalDensity: localStorage.getItem('wps7.mobileTerminalDensity') || 'readable',
     swipeStart: null,
     toastTimer: 0,
@@ -519,6 +521,7 @@
     const height = Math.round(viewport?.height || window.innerHeight);
     document.documentElement.style.setProperty('--app-height', `${height}px`);
     app.querySelector('.app')?.classList.toggle('mobile-device', isMobileLayout());
+    updateDesktopModeBanner();
     if (!state.config || !isMobileLayout()) {
       return;
     }
@@ -617,6 +620,8 @@
         error: '',
         showHidden: Boolean(state.config.file_manager?.show_hidden),
         selectionAnchor: -1,
+        filter: '',
+        filterOpen: false,
         sortKey: 'name',
         sortDirection: 'asc',
         columnWidths: { name: 150, modified: 130, size: 72 },
@@ -723,8 +728,10 @@
   function sortedFileEntries(paneId) {
     const paneData = filesPaneData(paneId);
     const direction = paneData.sortDirection === 'desc' ? -1 : 1;
+    const filterText = (paneData.filter || '').toLowerCase();
     return paneData.entries
       .filter((entry) => paneData.showHidden || !entry.hidden)
+      .filter((entry) => !filterText || entry.name.toLowerCase().includes(filterText))
       .sort((a, b) => {
         if (a.type !== b.type) {
           return a.type === 'directory' ? -1 : 1;
@@ -783,8 +790,14 @@
             <button class="file-command-button" type="button" data-toolbar-item data-file-rename-selected aria-label="Rename selected" title="Rename selected" ${selectedPaths.length === 1 ? '' : 'disabled'}>${fileActionIcon('rename')}</button>
             <button class="file-command-button" type="button" data-toolbar-item data-file-delete-selected aria-label="Delete selected" title="Delete selected" ${selectedPaths.length ? '' : 'disabled'}>${fileActionIcon('delete')}</button>
             <button class="file-command-button ${allSelected ? 'active' : ''}" type="button" data-toolbar-item data-file-select-all aria-label="${allSelected ? 'Deselect all' : 'Select all'}" aria-pressed="${allSelected}" title="${allSelected ? 'Deselect all' : 'Select all'}">${fileActionIcon(allSelected ? 'deselect-all' : 'select-all')}</button>
+            <button class="file-command-button ${paneData.filterOpen ? 'active' : ''}" type="button" data-toolbar-item data-file-filter-toggle aria-label="Search this folder" aria-pressed="${paneData.filterOpen}" title="Search this folder" ${pane.path ? '' : 'disabled'}>${fileActionIcon('search')}</button>
             <button class="file-command-button ${paneData.showHidden ? 'active' : ''}" type="button" data-toolbar-item data-file-show-hidden aria-label="Show hidden files" aria-pressed="${paneData.showHidden}" title="Show hidden files">${fileActionIcon('hidden')}</button>
             ${renderToolbarPageButton('next')}
+          </div>
+          <div class="file-filter-row" data-file-filter-row ${paneData.filterOpen && pane.path ? '' : 'hidden'}>
+            ${fileActionIcon('search')}
+            <input class="file-filter-input" type="search" data-file-filter placeholder="Filter by name" aria-label="Filter files by name" value="${escapeAttr(paneData.filter)}" autocomplete="off">
+            <button class="file-command-button" type="button" data-file-filter-clear aria-label="Clear filter" title="Clear filter">×</button>
           </div>
         </form>
         <div class="file-error">${escapeHtml(paneData.error)}</div>
@@ -805,7 +818,7 @@
               <small class="file-item-count">${selectedPaths.length ? `${selectedPaths.length}/${entries.length} items` : `${entries.length} items`}</small>
             </button>
           ${entries.map((entry, index) => `
-            <div class="file-row compact-file-row ${selectedPaths.includes(entry.path) ? 'selected' : ''} ${entry.hidden ? 'hidden-entry' : ''}" role="option" aria-selected="${selectedPaths.includes(entry.path)}" data-file-row="${escapeAttr(entry.path)}" data-file-index="${index}" tabindex="0">
+            <div class="file-row compact-file-row ${selectedPaths.includes(entry.path) ? 'selected' : ''} ${entry.hidden ? 'hidden-entry' : ''} ${state.fileClipboard?.paths?.includes(entry.path) ? 'cut-pending' : ''}" role="option" aria-selected="${selectedPaths.includes(entry.path)}" data-file-row="${escapeAttr(entry.path)}" data-file-index="${index}" tabindex="0">
               <div class="file-name" data-file-open="${escapeAttr(entry.path)}" data-file-type="${entry.type}">
                 ${entry.type === 'directory' ? fileActionIcon('folder') : fileActionIcon('file')}<span>${escapeHtml(entry.name)}</span>
               </div>
@@ -815,8 +828,8 @@
           `).join('')}
           ${entries.length ? '' : `
             <div class="file-empty-state" role="note">
-              ${fileActionIcon(paneData.error ? 'hidden' : 'folder')}
-              <p>${escapeHtml(paneData.error || 'This folder is empty.')}</p>
+              ${fileActionIcon(paneData.error ? 'hidden' : (paneData.filter ? 'search' : 'folder'))}
+              <p>${escapeHtml(paneData.error || (paneData.filter ? 'No files match your search.' : 'This folder is empty.'))}</p>
             </div>`}`}
         </div>
         <div class="file-drop-overlay" aria-hidden="true">Drop files or folders to upload</div>
@@ -1088,6 +1101,11 @@
             <button class="tab tab-add" data-action="new-session" title="New workspace" aria-label="New workspace">${fileActionIcon('add')}</button>
             ${state.config.shell.usingFallback ? '<span class="shell-warning">PowerShell 7 not found</span>' : ''}
           </header>
+          <div class="desktop-mode-banner" data-desktop-mode-banner role="status" hidden>
+            <span class="desktop-mode-banner-text">Panes are cramped on this narrow screen.</span>
+            <button type="button" class="primary" data-switch-mobile>Switch to Mobile</button>
+            <button type="button" class="desktop-mode-banner-dismiss" data-dismiss-banner aria-label="Keep desktop layout" title="Keep desktop layout">×</button>
+          </div>
           <div class="pane-grid" style="${paneGridStyle(tab.panes.length)}">
             ${tab.panes.map((pane) => renderPane(pane)).join('')}
           </div>
@@ -1096,9 +1114,34 @@
     `;
 
     wireControls();
+    updateDesktopModeBanner();
     for (const pane of tab.panes) {
       mountPaneContent(pane);
     }
+  }
+
+  function narrowViewport() {
+    return window.matchMedia('(max-width: 760px)').matches;
+  }
+
+  function updateDesktopModeBanner() {
+    const banner = app.querySelector('[data-desktop-mode-banner]');
+    if (!banner) {
+      return;
+    }
+    banner.hidden = !(state.displayMode === 'desktop' && narrowViewport() && !state.dismissedDesktopBanner);
+  }
+
+  function setDisplayMode(mode) {
+    state.displayMode = mode;
+    localStorage.setItem('wps7.displayMode', mode);
+    state.dismissedDesktopBanner = false;
+    const appElement = document.querySelector('.app');
+    appElement?.classList.remove('mode-auto', 'mode-mobile', 'mode-desktop');
+    appElement?.classList.add(`mode-${mode}`);
+    updateVisualViewport();
+    applyConfigLive();
+    updateDesktopModeBanner();
   }
 
   function wireControls() {
@@ -1119,6 +1162,11 @@
     app.querySelectorAll('[data-action="settings"]').forEach((button) => button.onclick = openSettings);
     app.querySelectorAll('[data-action="help"]').forEach((button) => button.onclick = openHelp);
     app.querySelector('[data-action="resize-sidebar"]').onpointerdown = startSidebarResize;
+    app.querySelector('[data-switch-mobile]')?.addEventListener('click', () => setDisplayMode('mobile'));
+    app.querySelector('[data-dismiss-banner]')?.addEventListener('click', () => {
+      state.dismissedDesktopBanner = true;
+      updateDesktopModeBanner();
+    });
     app.querySelector('[data-theme-toggle]').onclick = () => setThemeLive(pairedThemeId(), true);
     app.querySelector('.sidebar').addEventListener('click', closeMobileSidebarAfterAction);
     wireMobileKeybarButtons(app);
@@ -2908,6 +2956,46 @@
       }
       paneData.selectionAnchor = -1;
     });
+    paneElement.querySelector('[data-file-filter-toggle]')?.addEventListener('click', () => {
+      paneData.filterOpen = !paneData.filterOpen;
+      if (!paneData.filterOpen) {
+        paneData.filter = '';
+      }
+      paneData.selectionAnchor = -1;
+      updateFilesPane(paneId);
+      if (paneData.filterOpen) {
+        document.querySelector(`[data-files-pane="${paneId}"] [data-file-filter]`)?.focus();
+      }
+    });
+    const filterInput = paneElement.querySelector('[data-file-filter]');
+    if (filterInput) {
+      filterInput.addEventListener('input', () => {
+        paneData.filter = filterInput.value;
+        paneData.selectionAnchor = -1;
+        const visible = new Set(visibleFilePaths(paneId));
+        state.selectedFiles[paneId] = selectedFileList(paneId).filter((path) => visible.has(path));
+        updateFilesPane(paneId);
+        const nextInput = document.querySelector(`[data-files-pane="${paneId}"] [data-file-filter]`);
+        if (nextInput) {
+          nextInput.focus();
+          const caret = nextInput.value.length;
+          nextInput.setSelectionRange(caret, caret);
+        }
+      });
+      filterInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          paneData.filterOpen = false;
+          paneData.filter = '';
+          updateFilesPane(paneId);
+        }
+      });
+    }
+    paneElement.querySelector('[data-file-filter-clear]')?.addEventListener('click', () => {
+      paneData.filter = '';
+      updateFilesPane(paneId);
+      document.querySelector(`[data-files-pane="${paneId}"] [data-file-filter]`)?.focus();
+    });
     paneElement.querySelector('[data-file-rename-selected]')?.addEventListener('click', () => {
       const selected = selectedFileList(paneId);
       if (selected.length === 1) {
@@ -2953,6 +3041,17 @@
         }
         event.preventDefault();
       };
+      row.oncontextmenu = (event) => {
+        event.preventDefault();
+        openFileContextMenu(paneId, row.dataset.fileRow, event.clientX, event.clientY);
+      };
+    });
+    paneElement.querySelector('.file-list')?.addEventListener('contextmenu', (event) => {
+      if (event.target.closest('[data-file-row]') || !found.pane.path) {
+        return;
+      }
+      event.preventDefault();
+      openFileContextMenu(paneId, '', event.clientX, event.clientY);
     });
     paneElement.querySelectorAll('.file-row-button[data-file-open]').forEach((button) => {
       button.onclick = () => setFilesPanePath(paneId, button.dataset.fileOpen);
@@ -2976,10 +3075,35 @@
       button.onclick = () => deleteFile(button.dataset.fileDelete, paneId);
     });
     paneElement.onkeydown = (event) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a' && !event.target.closest('input')) {
+      if (event.target.closest('input')) {
+        return;
+      }
+      const key = event.key.toLowerCase();
+      const selected = selectedFileList(paneId);
+      if ((event.ctrlKey || event.metaKey) && key === 'a') {
         event.preventDefault();
         state.selectedFiles[paneId] = visibleFilePaths(paneId);
         syncFileSelectionUi(paneElement, paneId);
+      } else if ((event.ctrlKey || event.metaKey) && key === 'x') {
+        if (selected.length) {
+          event.preventDefault();
+          cutFiles(selected, paneId);
+        }
+      } else if ((event.ctrlKey || event.metaKey) && key === 'v') {
+        if (state.fileClipboard?.paths?.length) {
+          event.preventDefault();
+          pasteFiles(paneId);
+        }
+      } else if (event.key === 'F2') {
+        if (selected.length === 1) {
+          event.preventDefault();
+          renameFile(selected[0], paneId);
+        }
+      } else if (event.key === 'Delete') {
+        if (selected.length) {
+          event.preventDefault();
+          deleteFiles(selected, paneId);
+        }
       }
     };
   }
@@ -3475,6 +3599,121 @@
     }
   }
 
+  function cutFiles(paths, paneId) {
+    if (!paths.length) {
+      return;
+    }
+    state.fileClipboard = { paths: [...paths], mode: 'cut' };
+    showToast(paths.length === 1 ? 'Item ready to move.' : `${paths.length} items ready to move.`, 'success');
+    updateFilesPane(paneId);
+  }
+
+  async function pasteFiles(paneId) {
+    const found = findPaneState(paneId);
+    const clipboard = state.fileClipboard;
+    if (!found?.pane.path || !clipboard?.paths?.length) {
+      return;
+    }
+    const destination = found.pane.path;
+    let failures = 0;
+    for (const path of clipboard.paths) {
+      try {
+        await api('/api/files/move', {
+          method: 'PATCH',
+          body: JSON.stringify({ path, destination })
+        });
+      } catch (error) {
+        failures += 1;
+      }
+    }
+    state.fileClipboard = null;
+    state.selectedFiles[paneId] = [];
+    await loadFilesPane(found.pane);
+    if (failures) {
+      filesPaneData(paneId).error = `${failures} item(s) could not be moved.`;
+      updateFilesPane(paneId);
+      showToast(`${failures} item(s) could not be moved.`);
+    } else {
+      showToast('Moved.', 'success');
+    }
+  }
+
+  function closeFileContextMenu() {
+    document.querySelector('.file-context-menu')?.remove();
+    document.removeEventListener('pointerdown', handleContextMenuOutside, true);
+    document.removeEventListener('keydown', handleContextMenuKey, true);
+  }
+
+  function handleContextMenuOutside(event) {
+    if (!event.target.closest('.file-context-menu')) {
+      closeFileContextMenu();
+    }
+  }
+
+  function handleContextMenuKey(event) {
+    if (event.key === 'Escape') {
+      closeFileContextMenu();
+    }
+  }
+
+  function openFileContextMenu(paneId, anchorPath, clientX, clientY) {
+    closeFileContextMenu();
+    const paneElement = document.querySelector(`[data-files-pane="${paneId}"]`);
+    if (!paneElement) {
+      return;
+    }
+    if (anchorPath && !selectedFileList(paneId).includes(anchorPath)) {
+      state.selectedFiles[paneId] = [anchorPath];
+      syncFileSelectionUi(paneElement, paneId);
+    }
+    const selected = selectedFileList(paneId);
+    const clipboardReady = Boolean(state.fileClipboard?.paths?.length);
+    const items = [];
+    if (anchorPath && selected.length === 1) {
+      items.push({ label: 'Open', action: () => openFileRow(paneElement.querySelector(`[data-file-open="${cssEscape(anchorPath)}"]`)?.closest('[data-file-row]') || paneElement.querySelector(`[data-file-row="${cssEscape(anchorPath)}"]`), paneId) });
+    }
+    if (selected.length) {
+      items.push({ label: selected.length > 1 ? `Download (${selected.length})` : 'Download', action: () => downloadFiles(selected, paneId) });
+      items.push({ label: 'Cut', action: () => cutFiles(selected, paneId) });
+      items.push({ label: selected.length > 1 ? 'Copy paths' : 'Copy path', action: () => copyFilePaths(selected) });
+    }
+    items.push({ label: 'Paste', disabled: !clipboardReady, action: () => pasteFiles(paneId) });
+    if (selected.length === 1) {
+      items.push({ label: 'Rename', action: () => renameFile(selected[0], paneId) });
+    }
+    if (selected.length) {
+      items.push({ label: 'Delete', danger: true, action: () => deleteFiles(selected, paneId) });
+    }
+    if (!items.length) {
+      return;
+    }
+    const menu = document.createElement('div');
+    menu.className = 'file-context-menu';
+    menu.setAttribute('role', 'menu');
+    menu.innerHTML = items.map((item, index) => `
+      <button type="button" role="menuitem" class="file-context-item ${item.danger ? 'danger' : ''}" data-context-index="${index}" ${item.disabled ? 'disabled' : ''}>${escapeHtml(item.label)}</button>
+    `).join('');
+    document.body.appendChild(menu);
+    const width = menu.offsetWidth;
+    const height = menu.offsetHeight;
+    menu.style.left = `${Math.min(clientX, window.innerWidth - width - 6)}px`;
+    menu.style.top = `${Math.min(clientY, window.innerHeight - height - 6)}px`;
+    menu.querySelectorAll('[data-context-index]').forEach((button) => {
+      button.onclick = () => {
+        const item = items[Number(button.dataset.contextIndex)];
+        closeFileContextMenu();
+        item.action();
+      };
+    });
+    menu.querySelector('button:not([disabled])')?.focus();
+    document.addEventListener('pointerdown', handleContextMenuOutside, true);
+    document.addEventListener('keydown', handleContextMenuKey, true);
+  }
+
+  function cssEscape(value) {
+    return String(value).replace(/["\\]/g, '\\$&');
+  }
+
   async function downloadFile(path, paneId = '') {
     try {
       const headers = {};
@@ -3738,12 +3977,7 @@
     };
     panel.querySelectorAll('[data-display-mode]').forEach((button) => {
       button.onclick = () => {
-        state.displayMode = button.dataset.displayMode;
-        localStorage.setItem('wps7.displayMode', state.displayMode);
-        document.querySelector('.app')?.classList.remove('mode-auto', 'mode-mobile', 'mode-desktop');
-        document.querySelector('.app')?.classList.add(`mode-${state.displayMode}`);
-        updateVisualViewport();
-        applyConfigLive();
+        setDisplayMode(button.dataset.displayMode);
         renderLayoutPanel();
       };
     });
