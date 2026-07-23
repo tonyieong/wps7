@@ -6,6 +6,8 @@ const { normalizeCwd } = require('./shell');
 const DEFAULT_GRID_COLUMNS = 4;
 const DEFAULT_GRID_ROWS = 3;
 const PANE_TYPES = new Set(['terminal', 'files', 'browser', 'notepad']);
+const NOTEPAD_ENCODINGS = new Set(['utf8', 'utf8-bom', 'utf16le', 'utf16be', 'latin1']);
+const MAX_NOTEPAD_CONTENT_LENGTH = 10 * 1024 * 1024;
 
 function paneType(value) {
   return PANE_TYPES.has(value) ? value : 'terminal';
@@ -46,10 +48,17 @@ function browserTabsForPane(pane) {
 }
 
 function notepadTab(value = {}) {
+  const pathValue = String(value.path || '');
   return {
     id: value.id || crypto.randomUUID(),
     title: String(value.title || 'Untitled').slice(0, 160),
-    path: String(value.path || '')
+    path: pathValue,
+    content: pathValue ? '' : String(value.content || '').slice(0, MAX_NOTEPAD_CONTENT_LENGTH),
+    encoding: NOTEPAD_ENCODINGS.has(value.encoding) ? value.encoding : 'utf8',
+    wrap: Boolean(value.wrap),
+    indentGuides: Boolean(value.indentGuides),
+    autosave: Boolean(value.autosave),
+    fontFamily: String(value.fontFamily || '').slice(0, 200)
   };
 }
 
@@ -477,6 +486,19 @@ class StateStore {
     if (!tab) return false;
     if (Object.prototype.hasOwnProperty.call(updates, 'path')) tab.path = String(updates.path || '');
     if (Object.prototype.hasOwnProperty.call(updates, 'title')) tab.title = String(updates.title || 'Untitled').slice(0, 160);
+    if (Object.prototype.hasOwnProperty.call(updates, 'content') && !tab.path) {
+      tab.content = String(updates.content || '').slice(0, MAX_NOTEPAD_CONTENT_LENGTH);
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, 'encoding') && NOTEPAD_ENCODINGS.has(updates.encoding)) {
+      tab.encoding = updates.encoding;
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, 'wrap')) tab.wrap = Boolean(updates.wrap);
+    if (Object.prototype.hasOwnProperty.call(updates, 'indentGuides')) tab.indentGuides = Boolean(updates.indentGuides);
+    if (Object.prototype.hasOwnProperty.call(updates, 'autosave')) tab.autosave = Boolean(updates.autosave);
+    if (Object.prototype.hasOwnProperty.call(updates, 'fontFamily')) {
+      tab.fontFamily = String(updates.fontFamily || '').slice(0, 200);
+    }
+    if (tab.path) tab.content = '';
     if (found.pane.activeNotepadTabId === tab.id) found.pane.path = tab.path;
     this.save();
     return true;

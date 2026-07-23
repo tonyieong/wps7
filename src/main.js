@@ -943,6 +943,32 @@ function main() {
     if (req.body.title !== undefined) {
       updates.title = req.body.title;
     }
+    if (req.body.content !== undefined) {
+      if (typeof req.body.content !== 'string' || Buffer.byteLength(req.body.content, 'utf8') > 10 * 1024 * 1024) {
+        res.status(413).json({ error: 'Notepad draft exceeds the 10 MB limit.' });
+        return;
+      }
+      updates.content = req.body.content;
+    }
+    if (req.body.encoding !== undefined) {
+      if (!['utf8', 'utf8-bom', 'utf16le', 'utf16be', 'latin1'].includes(req.body.encoding)) {
+        res.status(400).json({ error: 'Unsupported text encoding.' });
+        return;
+      }
+      updates.encoding = req.body.encoding;
+    }
+    for (const key of ['wrap', 'indentGuides', 'autosave']) {
+      if (req.body[key] !== undefined) {
+        if (typeof req.body[key] !== 'boolean') {
+          res.status(400).json({ error: `${key} must be a boolean.` });
+          return;
+        }
+        updates[key] = req.body[key];
+      }
+    }
+    if (req.body.fontFamily !== undefined) {
+      updates.fontFamily = String(req.body.fontFamily || '').slice(0, 200);
+    }
     if (!store.updateNotepadTab(req.params.paneId, req.params.tabId, updates)) {
       res.status(404).json({ error: 'Notepad tab not found.' });
       return;

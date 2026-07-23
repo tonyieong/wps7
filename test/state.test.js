@@ -326,6 +326,40 @@ test('notepad panes persist multiple tabs and their active tab', () => {
   assert.equal(restoredNotepad.notepadTabs[0].path, 'C:\\notes.txt');
 });
 
+test('notepad autosave drafts and editor preferences persist without a file path', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100, 4, 4);
+  store.load();
+  const firstPane = store.state.sessions[0].tabs[0].panes[0];
+  const notepad = store.createNotepadPane(firstPane.id);
+  const tabId = notepad.activeNotepadTabId;
+
+  assert.equal(store.updateNotepadTab(notepad.id, tabId, {
+    content: 'server draft',
+    encoding: 'utf8',
+    wrap: true,
+    indentGuides: true,
+    autosave: true,
+    fontFamily: '"Cascadia Mono", Consolas, monospace'
+  }), true);
+
+  const restored = new StateStore(root, 100, 4, 4);
+  restored.load();
+  const restoredTab = restored.findPane(notepad.id).pane.notepadTabs[0];
+  assert.equal(restoredTab.path, '');
+  assert.equal(restoredTab.content, 'server draft');
+  assert.equal(restoredTab.encoding, 'utf8');
+  assert.equal(restoredTab.wrap, true);
+  assert.equal(restoredTab.indentGuides, true);
+  assert.equal(restoredTab.autosave, true);
+  assert.equal(restoredTab.fontFamily, '"Cascadia Mono", Consolas, monospace');
+
+  assert.equal(restored.closeNotepadTab(notepad.id, tabId), true);
+  const clearedTab = restored.findPane(notepad.id).pane.notepadTabs[0];
+  assert.equal(clearedTab.content, '');
+  assert.equal(clearedTab.autosave, false);
+});
+
 test('legacy terminal pane mode is discarded', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
   const dataDir = path.join(root, 'data');

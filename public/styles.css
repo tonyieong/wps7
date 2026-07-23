@@ -4486,7 +4486,7 @@ a:focus-visible {
 }
 
 .notepad-pane {
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   --notepad-divider: color-mix(in srgb, var(--text) 16%, var(--terminal-bg));
 }
 
@@ -4602,7 +4602,7 @@ a:focus-visible {
 .notepad-toolbar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   height: var(--pane-toolbar-height);
   gap: 3px;
   min-width: 0;
@@ -4611,21 +4611,84 @@ a:focus-visible {
   background: var(--panel);
 }
 
-.notepad-font-select {
+.notepad-popover-control {
+  position: relative;
+  display: grid;
+  place-items: center;
   flex: 0 0 auto;
-  max-width: 110px;
-  height: 24px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--surface-raised);
-  color: var(--text);
+}
+
+.notepad-popover-control > .file-command-button[aria-expanded="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.notepad-popover {
+  position: absolute;
+  z-index: 30;
+  top: 32px;
+  left: 0;
+  padding: 3px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background: var(--panel);
+  box-shadow: 0 8px 24px var(--shadow);
+}
+
+.notepad-popover[hidden] {
+  display: none;
+}
+
+.notepad-popover button {
+  min-height: 26px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  font: 10px/1 "Cascadia Mono", Consolas, monospace;
+  cursor: pointer;
+}
+
+.notepad-popover button:hover,
+.notepad-popover button:focus-visible,
+.notepad-popover button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  outline: none;
+}
+
+.notepad-font-popover {
+  display: grid;
+  width: 154px;
+}
+
+.notepad-font-popover button {
+  text-align: left;
+}
+
+.notepad-font-size-toggle {
   font: 10px/1 "Cascadia Mono", Consolas, monospace;
 }
 
-.file-command-button:has(.notepad-font-size-value) {
-  width: auto;
-  gap: 3px;
-  padding: 0 6px;
+.notepad-font-size-popover {
+  display: grid;
+  grid-template-columns: 26px 42px 26px 26px;
+  align-items: center;
+  gap: 2px;
+}
+
+.notepad-font-size-popover button {
+  width: 26px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.notepad-font-size-popover output {
+  color: var(--text);
+  font: 10px/1 "Cascadia Mono", Consolas, monospace;
+  text-align: center;
 }
 
 .notepad-font-size-value {
@@ -4642,26 +4705,36 @@ a:focus-visible {
   white-space: nowrap;
 }
 
-.notepad-find-bar {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 6px;
-  border-bottom: 1px solid var(--notepad-divider);
-  background: var(--panel);
+.notepad-find-popover,
+.notepad-replace-popover {
+  right: 0;
+  left: auto;
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 76px 76px;
+  gap: 3px;
+  width: min(370px, calc(100vw - 16px));
 }
 
-.notepad-find-input,
-.notepad-find-replace-input {
-  flex: 1;
+.notepad-replace-popover {
+  width: min(420px, calc(100vw - 16px));
+}
+
+.notepad-find-popover input,
+.notepad-replace-popover input {
   min-width: 0;
-  height: 24px;
+  width: 100%;
+  height: 26px;
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: 3px;
   background: var(--surface-raised);
   color: var(--text);
   padding: 0 6px;
-  font: 12px "Cascadia Mono", Consolas, monospace;
+  font: 11px "Cascadia Mono", Consolas, monospace;
+}
+
+.notepad-find-popover button,
+.notepad-replace-popover button {
+  width: 76px;
 }
 
 .notepad-editor-shell {
@@ -4672,8 +4745,18 @@ a:focus-visible {
   overflow: hidden;
 }
 
+.notepad-editor-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--terminal-bg);
+}
+
 .notepad-gutter,
-.notepad-editor {
+.notepad-editor,
+.notepad-indent-guides,
+.notepad-wrap-measure {
   height: 100%;
   margin: 0;
   border: 0;
@@ -4684,8 +4767,14 @@ a:focus-visible {
   background: var(--terminal-bg);
   font-size: var(--pane-font-size, 13px);
   line-height: 1.5;
-  tab-size: 2;
+  tab-size: 4;
   white-space: pre;
+}
+
+.notepad-editor {
+  position: relative;
+  z-index: 2;
+  background: var(--terminal-bg);
 }
 
 .notepad-editor-shell.wrap-on .notepad-editor {
@@ -4694,7 +4783,48 @@ a:focus-visible {
 }
 
 .notepad-editor-shell.indent-guides-on .notepad-editor {
-  background-image: repeating-linear-gradient(to right, transparent, transparent calc(2ch - 1px), var(--line) calc(2ch - 1px), var(--line) 2ch);
+  background: transparent;
+}
+
+.notepad-indent-guides,
+.notepad-wrap-measure {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.notepad-wrap-measure {
+  z-index: -1;
+  height: auto;
+  visibility: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.notepad-wrap-measure > span,
+.notepad-gutter-line,
+.notepad-indent-guide-line {
+  display: block;
+  min-height: 1.5em;
+}
+
+.notepad-indent-guide-line {
+  position: relative;
+  width: calc(var(--notepad-guide-columns) * 1ch);
+}
+
+.notepad-indent-guide-line::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1.5em;
+  background-image: repeating-linear-gradient(to right, transparent 0 calc(4ch - 1px), var(--line) calc(4ch - 1px) 4ch);
+}
+
+.notepad-editor-shell:not(.indent-guides-on) .notepad-indent-guides {
+  display: none;
 }
 
 .notepad-gutter {

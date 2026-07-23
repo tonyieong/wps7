@@ -469,7 +469,7 @@
     if (!found || !paneElement) {
       return;
     }
-    const previousSize = paneFontSize(found.pane);
+    const previousSize = Math.round(paneFontSize(found.pane));
     const nextSize = Math.max(8, Math.min(32, previousSize + delta));
     if (nextSize === previousSize) {
       return;
@@ -483,6 +483,17 @@
     }
     const notepadFontSizeValue = paneElement.querySelector('[data-notepad-font-size-value]');
     if (notepadFontSizeValue) notepadFontSizeValue.textContent = nextSize;
+    const notepadFontSizeOutput = paneElement.querySelector('[data-notepad-font-size-output]');
+    if (notepadFontSizeOutput) notepadFontSizeOutput.textContent = nextSize;
+    const notepadEditor = paneElement.querySelector('.notepad-editor');
+    if (notepadEditor) {
+      syncNotepadRows(
+        paneElement,
+        notepadEditor,
+        paneElement.querySelector('.notepad-gutter'),
+        paneElement.querySelector('.notepad-indent-guides')
+      );
+    }
     window.clearTimeout(state.paneFontSizeTimers.get(paneId));
     state.paneFontSizeTimers.set(paneId, window.setTimeout(async () => {
       state.paneFontSizeTimers.delete(paneId);
@@ -943,11 +954,25 @@
     { label: 'Lucida Console', value: '"Lucida Console", monospace' }
   ];
 
+  function findNotepadTab(tabId) {
+    for (const session of state.sessions) {
+      for (const tab of session.tabs || []) {
+        for (const pane of tab.panes || []) {
+          const notepadTab = pane.notepadTabs?.find((candidate) => candidate.id === tabId);
+          if (notepadTab) return notepadTab;
+        }
+      }
+    }
+    return null;
+  }
+
   function notepadTabData(tabId) {
     if (!state.notepadTabData[tabId]) {
+      const tab = findNotepadTab(tabId);
       state.notepadTabData[tabId] = {
-        content: '', encoding: 'utf8', dirty: false, loadedPath: '', error: '',
-        wrap: false, indentGuides: false, autosave: false, fontFamily: ''
+        content: tab?.content || '', encoding: tab?.encoding || 'utf8', dirty: false, loadedPath: '', error: '',
+        wrap: Boolean(tab?.wrap), indentGuides: Boolean(tab?.indentGuides),
+        autosave: Boolean(tab?.autosave), fontFamily: tab?.fontFamily || ''
       };
     }
     return state.notepadTabData[tabId];
@@ -965,6 +990,14 @@
   function lineNumbers(content) {
     const count = lineCount(content);
     return Array.from({ length: count }, (_, index) => index + 1).join('\n');
+  }
+
+  function renderNotepadIndentGuides(content) {
+    return String(content || '').split(/\r\n|\r|\n/).map((line) => {
+      const spaces = line.match(/^( +)(?=\S)/)?.[1].length || 0;
+      const columns = Math.floor(spaces / 4) * 4;
+      return `<span class="notepad-indent-guide-line" style="--notepad-guide-columns:${columns}"></span>`;
+    }).join('');
   }
 
   function renderNotepadTabs(pane) {
@@ -994,33 +1027,56 @@
           ${renderToolbarPageButton('previous')}
           <button class="file-command-button" type="button" data-toolbar-item data-notepad-new aria-label="New file" title="New file (Ctrl+N)">${fileActionIcon('add')}</button>
           <button class="file-command-button" type="button" data-toolbar-item data-notepad-save aria-label="Save" title="Save (Ctrl+S)">${fileActionIcon('save')}</button>
-          <select class="notepad-font-select" data-toolbar-item data-notepad-font aria-label="Font" title="Font">
-            ${notepadFontOptions.map((option) => `<option value="${escapeAttr(option.value)}" ${option.value === fontFamily ? 'selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
-          </select>
-          <button class="file-command-button" type="button" data-toolbar-item data-notepad-font-size aria-label="Font size" title="Font size (Ctrl+scroll or Ctrl+/-)">${fileActionIcon('font')}<span class="notepad-font-size-value" data-notepad-font-size-value>${paneFontSize(pane)}</span></button>
+          <div class="notepad-popover-control" data-toolbar-item>
+            <button class="file-command-button" type="button" data-notepad-font-toggle aria-label="Font" aria-expanded="false" title="Font">${fileActionIcon('font')}</button>
+            <div class="notepad-popover notepad-font-popover" data-notepad-font-popover role="dialog" aria-label="Choose font" hidden>
+              ${notepadFontOptions.map((option) => `<button type="button" data-notepad-font="${escapeAttr(option.value)}" aria-pressed="${option.value === fontFamily}">${escapeHtml(option.label)}</button>`).join('')}
+            </div>
+          </div>
+          <div class="notepad-popover-control" data-toolbar-item>
+            <button class="file-command-button notepad-font-size-toggle" type="button" data-notepad-font-size-toggle aria-label="Font size" aria-expanded="false" title="Font size (Ctrl+scroll or Ctrl+/-)"><span class="notepad-font-size-value" data-notepad-font-size-value>${paneFontSize(pane)}</span></button>
+            <div class="notepad-popover notepad-font-size-popover" data-notepad-font-size-popover role="dialog" aria-label="Font size" hidden>
+              <button type="button" data-notepad-font-size-out aria-label="Decrease font size">−</button>
+              <output data-notepad-font-size-output>${paneFontSize(pane)}</output>
+              <button type="button" data-notepad-font-size-in aria-label="Increase font size">+</button>
+              <button type="button" data-notepad-font-size-reset aria-label="Reset font size" title="Reset font size">${fileActionIcon('reset')}</button>
+            </div>
+          </div>
           <button class="file-command-button" type="button" data-toolbar-item data-notepad-cut aria-label="Cut" title="Cut (Ctrl+X)">${fileActionIcon('cut')}</button>
           <button class="file-command-button" type="button" data-toolbar-item data-notepad-copy aria-label="Copy" title="Copy (Ctrl+C)">${fileActionIcon('copy')}</button>
           <button class="file-command-button" type="button" data-toolbar-item data-notepad-paste aria-label="Paste" title="Paste (Ctrl+V)">${fileActionIcon('paste')}</button>
-          <button class="file-command-button" type="button" data-toolbar-item data-notepad-find aria-label="Find" title="Find (Ctrl+F)">${fileActionIcon('search')}</button>
-          <button class="file-command-button" type="button" data-toolbar-item data-notepad-replace aria-label="Replace" title="Replace (Ctrl+H)">${fileActionIcon('replace')}</button>
+          <div class="notepad-popover-control notepad-find-control" data-toolbar-item>
+            <button class="file-command-button" type="button" data-notepad-find aria-label="Find" aria-expanded="false" title="Find (Ctrl+F)">${fileActionIcon('search')}</button>
+            <div class="notepad-popover notepad-find-popover" data-notepad-find-popover role="dialog" aria-label="Find" hidden>
+              <input type="text" data-notepad-find-input placeholder="Find" aria-label="Find">
+              <button type="button" data-notepad-find-prev>Previous</button>
+              <button type="button" data-notepad-find-next>Next</button>
+            </div>
+          </div>
+          <div class="notepad-popover-control notepad-replace-control" data-toolbar-item>
+            <button class="file-command-button" type="button" data-notepad-replace aria-label="Replace" aria-expanded="false" title="Replace (Ctrl+H)">${fileActionIcon('replace')}</button>
+            <div class="notepad-popover notepad-replace-popover" data-notepad-replace-popover role="dialog" aria-label="Replace" hidden>
+              <input type="text" data-notepad-replace-find-input placeholder="Find" aria-label="Find">
+              <button type="button" data-notepad-replace-prev>Previous</button>
+              <button type="button" data-notepad-replace-next>Next</button>
+              <input type="text" data-notepad-replace-input placeholder="Replace" aria-label="Replace">
+              <button type="button" data-notepad-replace-one>Replace</button>
+              <button type="button" data-notepad-replace-all>Replace all</button>
+            </div>
+          </div>
           <button class="file-command-button ${data.wrap ? 'active' : ''}" type="button" data-toolbar-item data-notepad-wrap aria-label="Word wrap" aria-pressed="${data.wrap}" title="Word wrap">${fileActionIcon('wrap')}</button>
           <button class="file-command-button ${data.indentGuides ? 'active' : ''}" type="button" data-toolbar-item data-notepad-indent aria-label="Indent guides" aria-pressed="${data.indentGuides}" title="Indent guides">${fileActionIcon('indent')}</button>
           <button class="file-command-button ${data.autosave ? 'active' : ''}" type="button" data-toolbar-item data-notepad-autosave aria-label="Auto save" aria-pressed="${data.autosave}" title="Auto save">${fileActionIcon('autosave')}</button>
           <span class="notepad-status" data-notepad-status>${escapeHtml(data.error || data.encoding.toUpperCase())}</span>
           ${renderToolbarPageButton('next')}
         </div>
-        <div class="notepad-find-bar" data-notepad-find-bar hidden>
-          <input type="text" class="notepad-find-input" data-notepad-find-input placeholder="Find" aria-label="Find">
-          <input type="text" class="notepad-find-replace-input" data-notepad-replace-input placeholder="Replace" aria-label="Replace" hidden>
-          <button type="button" class="icon-button" data-notepad-find-prev title="Previous">↑</button>
-          <button type="button" class="icon-button" data-notepad-find-next title="Next">↓</button>
-          <button type="button" class="secondary" data-notepad-replace-one hidden>Replace</button>
-          <button type="button" class="secondary" data-notepad-replace-all hidden>Replace all</button>
-          <button type="button" class="icon-button" data-notepad-find-close title="Close">×</button>
-        </div>
         <div class="notepad-editor-shell ${data.wrap ? 'wrap-on' : ''} ${data.indentGuides ? 'indent-guides-on' : ''}">
           <pre class="notepad-gutter" aria-hidden="true" style="font-family: ${escapeAttr(fontFamily)};">${lineNumbers(data.content)}</pre>
-          <textarea class="notepad-editor" aria-label="Text editor" spellcheck="false" wrap="${data.wrap ? 'soft' : 'off'}" style="font-family: ${escapeAttr(fontFamily)};">${escapeHtml(data.content)}</textarea>
+          <div class="notepad-editor-stage">
+            <div class="notepad-indent-guides" aria-hidden="true" style="font-family: ${escapeAttr(fontFamily)};">${renderNotepadIndentGuides(data.content)}</div>
+            <div class="notepad-wrap-measure" aria-hidden="true"></div>
+            <textarea class="notepad-editor" aria-label="Text editor" spellcheck="false" wrap="${data.wrap ? 'soft' : 'off'}" style="font-family: ${escapeAttr(fontFamily)};">${escapeHtml(data.content)}</textarea>
+          </div>
         </div>
       </div>`;
   }
@@ -2279,6 +2335,7 @@
     const container = document.querySelector(`[data-pane="${paneId}"]`);
     const existing = container?.querySelector('.notepad-pane');
     if (!found || !existing) return;
+    existing._notepadResizeObserver?.disconnect();
     existing.outerHTML = renderNotepadPane(found.pane);
     updateNotepadTabStrip(paneId);
     wireNotepadPane(container);
@@ -2339,6 +2396,8 @@
     const tabs = found.pane.notepadTabs;
     const index = tabs.findIndex((tab) => tab.id === tabId);
     if (index === -1) return;
+    window.clearTimeout(state.notepadAutosaveTimers.get(tabId));
+    state.notepadAutosaveTimers.delete(tabId);
     if (tabs.length === 1) {
       tabs[0] = { id: tabId, title: 'Untitled', path: '' };
       delete state.notepadTabData[tabId];
@@ -2438,13 +2497,25 @@
     const found = findPaneState(paneId);
     const tab = found?.pane.notepadTabs?.find((candidate) => candidate.id === tabId);
     if (!found || !tab) return;
+    const data = notepadTabData(tabId);
+    if (!tab.path && silent) {
+      try {
+        await persistNotepadTabState(paneId, tabId, {
+          content: data.content,
+          encoding: data.encoding
+        });
+        data.dirty = false;
+        updateNotepadTabStrip(paneId);
+      } catch (error) {
+        data.error = error.message;
+      }
+      return;
+    }
     if (!tab.path) {
-      if (silent) return;
       editNotepadTabPath(paneId, tabId);
       showToast('Enter a file path before saving.');
       return;
     }
-    const data = notepadTabData(tabId);
     try {
       const result = await api('/api/files/text', {
         method: 'PUT',
@@ -2465,6 +2536,23 @@
     } catch (error) {
       if (!silent) showToast(error.message);
     }
+  }
+
+  async function persistNotepadTabState(paneId, tabId, updates = {}) {
+    const data = notepadTabData(tabId);
+    const payload = {
+      wrap: data.wrap,
+      indentGuides: data.indentGuides,
+      autosave: data.autosave,
+      fontFamily: data.fontFamily,
+      ...updates
+    };
+    await api(`/api/panes/${paneId}/notepad/tabs/${tabId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload)
+    });
+    const tab = findNotepadTab(tabId);
+    if (tab) Object.assign(tab, payload);
   }
 
   function scheduleNotepadAutosave(paneId, tabId) {
@@ -2522,69 +2610,104 @@
     return true;
   }
 
-  function showNotepadFindBar(paneElement, withReplace) {
-    const bar = paneElement.querySelector('[data-notepad-find-bar]');
-    const replaceInput = paneElement.querySelector('[data-notepad-replace-input]');
-    const replaceOne = paneElement.querySelector('[data-notepad-replace-one]');
-    const replaceAll = paneElement.querySelector('[data-notepad-replace-all]');
-    if (!bar) return;
-    bar.hidden = false;
-    replaceInput.hidden = !withReplace;
-    replaceOne.hidden = !withReplace;
-    replaceAll.hidden = !withReplace;
-    paneElement.querySelector('[data-notepad-find-input]')?.focus();
+  function setNotepadPopoverOpen(paneElement, popover, open) {
+    paneElement.querySelectorAll('.notepad-popover').forEach((candidate) => {
+      const candidateOpen = candidate === popover && open;
+      candidate.hidden = !candidateOpen;
+      candidate.parentElement.querySelector('[aria-expanded]')?.setAttribute('aria-expanded', String(candidateOpen));
+    });
   }
 
-  function hideNotepadFindBar(paneElement) {
-    const bar = paneElement.querySelector('[data-notepad-find-bar]');
-    if (bar) bar.hidden = true;
-    paneElement.querySelector('.notepad-editor')?.focus();
+  function showNotepadFindPopover(paneElement, replace) {
+    const popover = paneElement.querySelector(replace ? '[data-notepad-replace-popover]' : '[data-notepad-find-popover]');
+    if (!popover) return;
+    setNotepadPopoverOpen(paneElement, popover, true);
+    popover.querySelector('input')?.focus();
   }
 
-  function wireNotepadFindBar(paneElement, editor) {
+  function hideNotepadPopovers(paneElement, focusEditor = false) {
+    setNotepadPopoverOpen(paneElement, null, false);
+    if (focusEditor) paneElement.querySelector('.notepad-editor')?.focus();
+  }
+
+  function wireNotepadFindPopovers(paneElement, editor) {
     const findInput = paneElement.querySelector('[data-notepad-find-input]');
+    const replaceFindInput = paneElement.querySelector('[data-notepad-replace-find-input]');
     const replaceInput = paneElement.querySelector('[data-notepad-replace-input]');
-    const findNextButton = paneElement.querySelector('[data-notepad-find-next]');
-    const findPrevButton = paneElement.querySelector('[data-notepad-find-prev]');
-    const replaceOneButton = paneElement.querySelector('[data-notepad-replace-one]');
-    const replaceAllButton = paneElement.querySelector('[data-notepad-replace-all]');
-    const findCloseButton = paneElement.querySelector('[data-notepad-find-close]');
-    if (findNextButton) findNextButton.onclick = () => notepadFindNext(editor, findInput.value, false);
-    if (findPrevButton) findPrevButton.onclick = () => notepadFindNext(editor, findInput.value, true);
-    if (findInput) {
-      findInput.onkeydown = (event) => {
-        if (event.key === 'Enter') {
-          event.preventDefault();
-          notepadFindNext(editor, findInput.value, event.shiftKey);
-        } else if (event.key === 'Escape') {
-          hideNotepadFindBar(paneElement);
-        }
-      };
-    }
+    const onFindKeydown = (input) => (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        notepadFindNext(editor, input.value, event.shiftKey);
+      } else if (event.key === 'Escape') {
+        hideNotepadPopovers(paneElement, true);
+      }
+    };
+    if (findInput) findInput.onkeydown = onFindKeydown(findInput);
+    if (replaceFindInput) replaceFindInput.onkeydown = onFindKeydown(replaceFindInput);
     if (replaceInput) {
       replaceInput.onkeydown = (event) => {
-        if (event.key === 'Escape') hideNotepadFindBar(paneElement);
+        if (event.key === 'Escape') hideNotepadPopovers(paneElement, true);
       };
     }
-    if (replaceOneButton) {
-      replaceOneButton.onclick = () => {
-        const query = findInput.value;
-        if (query && editor.value.slice(editor.selectionStart, editor.selectionEnd) === query) {
-          editor.setRangeText(replaceInput.value, editor.selectionStart, editor.selectionEnd, 'end');
-          editor.dispatchEvent(new Event('input'));
-        }
-        notepadFindNext(editor, query, false);
-      };
-    }
-    if (replaceAllButton) {
-      replaceAllButton.onclick = () => {
-        const query = findInput.value;
-        if (!query) return;
-        editor.value = editor.value.split(query).join(replaceInput.value);
+    paneElement.querySelector('[data-notepad-find-prev]')?.addEventListener('click', () => notepadFindNext(editor, findInput.value, true));
+    paneElement.querySelector('[data-notepad-find-next]')?.addEventListener('click', () => notepadFindNext(editor, findInput.value, false));
+    paneElement.querySelector('[data-notepad-replace-prev]')?.addEventListener('click', () => notepadFindNext(editor, replaceFindInput.value, true));
+    paneElement.querySelector('[data-notepad-replace-next]')?.addEventListener('click', () => notepadFindNext(editor, replaceFindInput.value, false));
+    paneElement.querySelector('[data-notepad-replace-one]')?.addEventListener('click', () => {
+      const query = replaceFindInput.value;
+      if (query && editor.value.slice(editor.selectionStart, editor.selectionEnd) === query) {
+        editor.setRangeText(replaceInput.value, editor.selectionStart, editor.selectionEnd, 'end');
         editor.dispatchEvent(new Event('input'));
-      };
+      }
+      notepadFindNext(editor, query, false);
+    });
+    paneElement.querySelector('[data-notepad-replace-all]')?.addEventListener('click', () => {
+      const query = replaceFindInput.value;
+      if (!query) return;
+      editor.value = editor.value.split(query).join(replaceInput.value);
+      editor.dispatchEvent(new Event('input'));
+    });
+  }
+
+  function syncNotepadRows(paneElement, editor, gutter, guides) {
+    if (!paneElement || !editor || !gutter || !guides) return;
+    const lines = editor.value.split(/\r\n|\r|\n/);
+    const wrapped = paneElement.querySelector('.notepad-editor-shell')?.classList.contains('wrap-on');
+    const computed = getComputedStyle(editor);
+    const lineHeight = Number.parseFloat(computed.lineHeight) || Number.parseFloat(computed.fontSize) * 1.5;
+    const heights = lines.map(() => lineHeight);
+    const measure = paneElement.querySelector('.notepad-wrap-measure');
+    if (wrapped && measure && editor.clientWidth) {
+      measure.style.width = `${editor.clientWidth}px`;
+      measure.style.fontFamily = computed.fontFamily;
+      measure.style.fontSize = computed.fontSize;
+      measure.style.lineHeight = computed.lineHeight;
+      measure.replaceChildren(...lines.map((line) => {
+        const row = document.createElement('span');
+        row.textContent = line || '\u200b';
+        return row;
+      }));
+      Array.from(measure.children).forEach((row, index) => {
+        heights[index] = Math.max(lineHeight, row.getBoundingClientRect().height);
+      });
     }
-    if (findCloseButton) findCloseButton.onclick = () => hideNotepadFindBar(paneElement);
+    gutter.replaceChildren(...lines.map((line, index) => {
+      const row = document.createElement('span');
+      row.className = 'notepad-gutter-line';
+      row.style.height = `${heights[index]}px`;
+      row.textContent = String(index + 1);
+      return row;
+    }));
+    guides.replaceChildren(...lines.map((line, index) => {
+      const row = document.createElement('span');
+      row.className = 'notepad-indent-guide-line';
+      row.style.height = `${heights[index]}px`;
+      const spaces = line.match(/^( +)(?=\S)/)?.[1].length || 0;
+      row.style.setProperty('--notepad-guide-columns', String(Math.floor(spaces / 4) * 4));
+      return row;
+    }));
+    gutter.scrollTop = editor.scrollTop;
+    guides.style.transform = `translate(${-editor.scrollLeft}px, ${-editor.scrollTop}px)`;
   }
 
   function wireNotepadPane(root) {
@@ -2595,50 +2718,91 @@
     const tabId = paneElement.dataset.notepadActiveTab;
     const editor = paneElement.querySelector('.notepad-editor');
     const gutter = paneElement.querySelector('.notepad-gutter');
+    const guides = paneElement.querySelector('.notepad-indent-guides');
     const status = paneElement.querySelector('[data-notepad-status]');
     const data = notepadTabData(tabId);
 
     const newButton = paneElement.querySelector('[data-notepad-new]');
     const saveButton = paneElement.querySelector('[data-notepad-save]');
-    const fontSelect = paneElement.querySelector('[data-notepad-font]');
     const cutButton = paneElement.querySelector('[data-notepad-cut]');
     const copyButton = paneElement.querySelector('[data-notepad-copy]');
     const pasteButton = paneElement.querySelector('[data-notepad-paste]');
-    const findButton = paneElement.querySelector('[data-notepad-find]');
-    const replaceButton = paneElement.querySelector('[data-notepad-replace]');
     const wrapButton = paneElement.querySelector('[data-notepad-wrap]');
     const indentButton = paneElement.querySelector('[data-notepad-indent]');
     const autosaveButton = paneElement.querySelector('[data-notepad-autosave]');
 
     if (newButton) newButton.onclick = () => addNotepadTab(paneId, '');
     if (saveButton) saveButton.onclick = () => saveNotepadTab(paneId, tabId);
-    if (fontSelect) {
-      fontSelect.onchange = (event) => {
-        data.fontFamily = event.target.value;
+    const wirePopover = (toggleSelector, popoverSelector) => {
+      const toggle = paneElement.querySelector(toggleSelector);
+      const popover = paneElement.querySelector(popoverSelector);
+      const control = toggle?.closest('.notepad-popover-control');
+      if (!toggle || !popover || !control) return;
+      toggle.onclick = () => {
+        const open = popover.hidden;
+        setNotepadPopoverOpen(paneElement, popover, open);
+        if (open) popover.querySelector('input')?.focus();
+      };
+      control.onfocusout = (event) => {
+        if (!control.contains(event.relatedTarget)) setNotepadPopoverOpen(paneElement, popover, false);
+      };
+      control.onkeydown = (event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          setNotepadPopoverOpen(paneElement, popover, false);
+          toggle.focus();
+        }
+      };
+    };
+    wirePopover('[data-notepad-font-toggle]', '[data-notepad-font-popover]');
+    wirePopover('[data-notepad-font-size-toggle]', '[data-notepad-font-size-popover]');
+    wirePopover('[data-notepad-find]', '[data-notepad-find-popover]');
+    wirePopover('[data-notepad-replace]', '[data-notepad-replace-popover]');
+    paneElement.querySelectorAll('[data-notepad-font]').forEach((button) => {
+      button.onclick = () => {
+        data.fontFamily = button.dataset.notepadFont;
         editor.style.fontFamily = data.fontFamily;
         gutter.style.fontFamily = data.fontFamily;
+        guides.style.fontFamily = data.fontFamily;
+        paneElement.querySelectorAll('[data-notepad-font]').forEach((option) => {
+          option.setAttribute('aria-pressed', String(option === button));
+        });
+        syncNotepadRows(paneElement, editor, gutter, guides);
+        persistNotepadTabState(paneId, tabId).catch((error) => showToast(error.message));
+        setNotepadPopoverOpen(paneElement, paneElement.querySelector('[data-notepad-font-popover]'), false);
       };
-    }
+    });
+    paneElement.querySelector('[data-notepad-font-size-out]')?.addEventListener('click', () => changePaneFontSize(paneId, -1));
+    paneElement.querySelector('[data-notepad-font-size-in]')?.addEventListener('click', () => changePaneFontSize(paneId, 1));
+    paneElement.querySelector('[data-notepad-font-size-reset]')?.addEventListener('click', () => {
+      changePaneFontSize(
+        paneId,
+        Math.round(terminalFontSize()) - Math.round(paneFontSize(findPaneState(paneId)?.pane))
+      );
+    });
     if (cutButton) cutButton.onclick = () => notepadCut(editor);
     if (copyButton) copyButton.onclick = () => notepadCopySelection(editor);
     if (pasteButton) pasteButton.onclick = () => notepadPaste(editor);
-    if (findButton) findButton.onclick = () => showNotepadFindBar(paneElement, false);
-    if (replaceButton) replaceButton.onclick = () => showNotepadFindBar(paneElement, true);
     if (wrapButton) {
       wrapButton.onclick = () => {
         data.wrap = !data.wrap;
+        persistNotepadTabState(paneId, tabId).catch((error) => showToast(error.message));
         updateNotepadPane(paneId);
       };
     }
     if (indentButton) {
       indentButton.onclick = () => {
         data.indentGuides = !data.indentGuides;
+        persistNotepadTabState(paneId, tabId).catch((error) => showToast(error.message));
         updateNotepadPane(paneId);
       };
     }
     if (autosaveButton) {
       autosaveButton.onclick = () => {
         data.autosave = !data.autosave;
+        const tab = findNotepadTab(tabId);
+        const draft = data.autosave && !tab?.path ? { content: data.content, encoding: data.encoding } : {};
+        persistNotepadTabState(paneId, tabId, draft).catch((error) => showToast(error.message));
         updateNotepadPane(paneId);
       };
     }
@@ -2647,7 +2811,7 @@
       editor.oninput = () => {
         data.content = editor.value;
         data.dirty = true;
-        gutter.textContent = lineNumbers(editor.value);
+        syncNotepadRows(paneElement, editor, gutter, guides);
         status.textContent = data.encoding.toUpperCase();
         const label = document.querySelector(`[data-notepad-tab="${tabId}"] .notepad-tab-label`);
         if (label && !label.querySelector('.notepad-tab-modified')) {
@@ -2657,30 +2821,50 @@
       };
       editor.onscroll = () => {
         gutter.scrollTop = editor.scrollTop;
+        guides.style.transform = `translate(${-editor.scrollLeft}px, ${-editor.scrollTop}px)`;
       };
       editor.onkeydown = (event) => {
-        if (event.ctrlKey && event.key.toLowerCase() === 's') {
+        const key = event.key.toLowerCase();
+        if (event.ctrlKey && !event.altKey && !event.metaKey && (key === '+' || key === '=' || key === '-')) {
+          event.preventDefault();
+          event.stopPropagation();
+          changePaneFontSize(paneId, key === '-' ? -1 : 1);
+          setNotepadPopoverOpen(paneElement, paneElement.querySelector('[data-notepad-font-size-popover]'), true);
+        } else if (event.ctrlKey && !event.altKey && !event.metaKey && key === '0') {
+          event.preventDefault();
+          event.stopPropagation();
+          changePaneFontSize(
+            paneId,
+            Math.round(terminalFontSize()) - Math.round(paneFontSize(findPaneState(paneId)?.pane))
+          );
+          setNotepadPopoverOpen(paneElement, paneElement.querySelector('[data-notepad-font-size-popover]'), true);
+        } else if (event.ctrlKey && key === 's') {
           event.preventDefault();
           saveNotepadTab(paneId, tabId);
-        } else if (event.ctrlKey && event.key.toLowerCase() === 'n') {
+        } else if (event.ctrlKey && key === 'n') {
           event.preventDefault();
           addNotepadTab(paneId, '');
-        } else if (event.ctrlKey && event.key.toLowerCase() === 'f') {
+        } else if (event.ctrlKey && key === 'f') {
           event.preventDefault();
-          showNotepadFindBar(paneElement, false);
-        } else if (event.ctrlKey && event.key.toLowerCase() === 'h') {
+          showNotepadFindPopover(paneElement, false);
+        } else if (event.ctrlKey && key === 'h') {
           event.preventDefault();
-          showNotepadFindBar(paneElement, true);
+          showNotepadFindPopover(paneElement, true);
         } else if (event.key === 'Tab') {
           event.preventDefault();
           const start = editor.selectionStart;
-          editor.setRangeText('  ', start, editor.selectionEnd, 'end');
+          editor.setRangeText('    ', start, editor.selectionEnd, 'end');
           editor.dispatchEvent(new Event('input'));
         }
       };
     }
 
-    wireNotepadFindBar(paneElement, editor);
+    wireNotepadFindPopovers(paneElement, editor);
+    syncNotepadRows(paneElement, editor, gutter, guides);
+    paneElement._notepadResizeObserver = new ResizeObserver(() => {
+      syncNotepadRows(paneElement, editor, gutter, guides);
+    });
+    paneElement._notepadResizeObserver.observe(editor);
     wireNotepadTabs(paneElement, paneId);
   }
 

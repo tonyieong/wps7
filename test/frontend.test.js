@@ -245,7 +245,7 @@ test('workspace exposes multi-tab notepad panes with line numbers and text-file 
   assert.match(appSource, /event\.target\.closest\('\.pane-close, button, input, \[data-browser-tab\], \[data-notepad-tab\]'\)/);
   assert.match(appSource, /class="notepad-gutter"/);
   assert.match(appSource, /class="notepad-editor"/);
-  assert.match(appSource, /event\.ctrlKey && event\.key\.toLowerCase\(\) === 's'/);
+  assert.match(appSource, /event\.ctrlKey && key === 's'/);
   assert.match(appSource, /openNotepadForFile/);
   assert.match(appSource, /function addNotepadTab\(paneId, filePath = ''\)/);
   assert.match(appSource, /function closeNotepadTabClient\(paneId, tabId\)/);
@@ -591,6 +591,34 @@ test('Notepad uses a compact neutral line-number gutter', () => {
   assert.match(styles, /\.notepad-gutter\s*\{[^}]*border-right:\s*1px solid var\(--notepad-divider\) !important/s);
   assert.match(styles, /\.notepad-editor:focus-visible\s*\{[^}]*outline:\s*none/s);
   assert.match(styles, /\.notepad-toolbar\s*\{[^}]*border-bottom:\s*1px solid var\(--notepad-divider\)/s);
+});
+
+test('Notepad uses compact popovers, four-space tabs, and synchronized wrapped rows', () => {
+  assert.match(appSource, /data-notepad-font-toggle[^>]*>\$\{fileActionIcon\('font'\)\}<\/button>/);
+  assert.match(appSource, /data-notepad-font-popover[^>]*role="dialog"/);
+  assert.match(appSource, /data-notepad-font-size-popover[^>]*role="dialog"/);
+  assert.match(appSource, /data-notepad-find-popover[^>]*role="dialog"/);
+  assert.match(appSource, /data-notepad-replace-popover[^>]*role="dialog"/);
+  assert.match(appSource, /data-notepad-find-prev[^>]*>Previous<\/button>/);
+  assert.match(appSource, /data-notepad-find-next[^>]*>Next<\/button>/);
+  assert.match(appSource, /data-notepad-replace-one[^>]*>Replace<\/button>/);
+  assert.match(appSource, /data-notepad-replace-all[^>]*>Replace all<\/button>/);
+  assert.match(appSource, /editor\.setRangeText\(' {4}', start, editor\.selectionEnd, 'end'\)/);
+  assert.match(appSource, /function syncNotepadRows\(paneElement, editor, gutter, guides\)/);
+  assert.match(appSource, /function renderNotepadIndentGuides\(content/);
+  assert.match(styles, /\.notepad-toolbar\s*\{[^}]*justify-content:\s*flex-start/s);
+  assert.match(styles, /\.notepad-popover\s*\{[^}]*position:\s*absolute/s);
+  assert.match(styles, /tab-size:\s*4/);
+  assert.doesNotMatch(styles, /\.notepad-editor-shell\.indent-guides-on \.notepad-editor\s*\{[^}]*repeating-linear-gradient/s);
+});
+
+test('Notepad persists autosave drafts and editor toggles through the server state', () => {
+  assert.match(appSource, /async function persistNotepadTabState\(paneId, tabId/);
+  assert.match(appSource, /if \(!tab\.path && silent\)/);
+  assert.match(appSource, /content:\s*data\.content/);
+  assert.match(mainSource, /req\.body\.content !== undefined/);
+  assert.match(mainSource, /\['wrap', 'indentGuides', 'autosave'\]/);
+  assert.match(mainSource, /req\.body\[key\] !== undefined/);
 });
 
 test('all pane chrome shares a compact 28px toolbar language', () => {
