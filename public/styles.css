@@ -409,6 +409,11 @@ textarea {
   height: 0;
 }
 
+/* Hide the xterm overlay scrollbar so it never covers the rightmost column. */
+.terminal .xterm-scrollable-element > .scrollbar {
+  display: none !important;
+}
+
 .inline-rename {
   width: 100%;
   min-width: 80px;
@@ -2585,6 +2590,43 @@ textarea:focus-visible {
   white-space: nowrap;
 }
 
+.mobile-keybar-setting-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-keybar-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  padding: 5px 7px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 7px;
+  background: var(--terminal-bg);
+}
+
+.mobile-keybar-preview-chip {
+  min-width: 44px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font: 600 11px/1 "Cascadia Mono", Consolas, monospace;
+}
+
+.mobile-keybar-preview-empty {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .mobile-keybar-editor {
   display: grid;
   gap: 5px;
@@ -2592,13 +2634,76 @@ textarea:focus-visible {
 
 .mobile-keybar-setting-row {
   display: grid;
-  grid-template-columns: 54px 90px 112px minmax(150px, 1fr) auto;
+  grid-template-columns: 20px 54px 88px 104px minmax(150px, 1fr) auto;
   align-items: end;
   gap: 6px;
   padding: 6px;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: var(--surface-soft);
+}
+
+.mobile-keybar-setting-row.invalid {
+  border-color: var(--danger);
+}
+
+.mobile-keybar-setting-row.dragging {
+  opacity: .5;
+}
+
+.mobile-keybar-drag {
+  align-self: center;
+  display: grid;
+  place-items: center;
+  height: 30px;
+  color: var(--muted);
+  cursor: grab;
+  user-select: none;
+}
+
+.mobile-keybar-drag:active {
+  cursor: grabbing;
+}
+
+.mobile-keybar-value-field {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mobile-keybar-value-field[hidden] {
+  display: none;
+}
+
+.mobile-keybar-value-field input {
+  flex: 1 1 auto;
+}
+
+.mobile-keybar-record {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+.mobile-keybar-record.recording {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.mobile-keybar-modifier[hidden] {
+  display: none;
+}
+
+.mobile-keybar-hint {
+  grid-column: 1 / -1;
+  min-height: 0;
+  color: var(--danger);
+  font-size: 11px;
+}
+
+.mobile-keybar-hint:empty {
+  display: none;
 }
 
 .mobile-keybar-setting-row label {
@@ -2728,6 +2833,10 @@ textarea:focus-visible {
 
   .mobile-keybar-setting-heading {
     align-items: start;
+  }
+
+  .mobile-keybar-drag {
+    display: none;
   }
 
   .mobile-keybar-setting-row {

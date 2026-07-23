@@ -4792,22 +4792,29 @@
       return;
     }
     const keybar = button.closest('.mobile-keybar');
-    const control = keybar.querySelector('[data-terminal-action="modifier"][data-terminal-value="Control"]');
     const action = button.dataset.terminalAction;
     const value = button.dataset.terminalValue || '';
-    if (button === control) {
-      const active = control.getAttribute('aria-pressed') !== 'true';
-      control.setAttribute('aria-pressed', String(active));
+    if (action === 'modifier') {
+      const active = button.getAttribute('aria-pressed') !== 'true';
+      button.setAttribute('aria-pressed', String(active));
       terminal.term.focus();
       return;
     }
-    const controlActive = control?.getAttribute('aria-pressed') === 'true';
-    control?.setAttribute('aria-pressed', 'false');
+    const modifierButtons = Array.from(keybar.querySelectorAll('[data-terminal-action="modifier"]'));
+    const prefix = modifierButtons
+      .filter((modifier) => modifier.getAttribute('aria-pressed') === 'true')
+      .map((modifier) => modifierShortcutToken(modifier.dataset.terminalValue))
+      .filter(Boolean);
+    modifierButtons.forEach((modifier) => modifier.setAttribute('aria-pressed', 'false'));
     const input = action === 'text'
       ? value
-      : terminalShortcutSequence(controlActive ? `Ctrl+${value}` : value);
+      : terminalShortcutSequence([...prefix, value].join('+'));
     terminal.term.input(input, true);
     terminal.term.focus();
+  }
+
+  function modifierShortcutToken(value) {
+    return { Control: 'Ctrl', Alt: 'Alt', Shift: 'Shift' }[value] || '';
   }
 
   function terminalShortcutSequence(shortcut) {
@@ -5797,41 +5804,253 @@
     await loadUsage();
   }
 
+  const mobileKeybarModifierOptions = ['Control', 'Alt', 'Shift'];
+  const namedShortcutKeys = new Set(['Escape', 'Tab', 'Enter', 'Backspace', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']);
+
+  function isSupportedShortcut(value) {
+    const parts = String(value || '').split('+').map((part) => part.trim()).filter(Boolean);
+    const key = parts.pop() || '';
+    if (!key) {
+      return false;
+    }
+    const modifiers = parts.map((part) => part.toLowerCase());
+    if (modifiers.some((modifier) => !['ctrl', 'control', 'alt', 'shift'].includes(modifier))) {
+      return false;
+    }
+    return namedShortcutKeys.has(key) || key.length === 1;
+  }
+
+  function mobileKeybarRowValidity(action, value) {
+    const trimmed = String(value || '').trim();
+    if (action === 'text') {
+      return { valid: trimmed.length > 0, hint: trimmed ? '' : 'Enter the text to type.' };
+    }
+    if (action === 'modifier') {
+      const valid = mobileKeybarModifierOptions.includes(value);
+      return { valid, hint: valid ? '' : 'Pick a modifier.' };
+    }
+    if (!trimmed) {
+      return { valid: false, hint: 'Enter or record a shortcut.' };
+    }
+    return isSupportedShortcut(trimmed)
+      ? { valid: true, hint: '' }
+      : { valid: false, hint: 'Unsupported key combination.' };
+  }
+
+  function readMobileKeybarRow(row) {
+    const action = row.querySelector('[data-mobile-keybar-action]').value;
+    const value = action === 'modifier'
+      ? row.querySelector('[data-mobile-keybar-modifier]').value
+      : row.querySelector('[data-mobile-keybar-value]').value;
+    return {
+      label: row.querySelector('[data-mobile-keybar-label]').value.trim(),
+      action,
+      value,
+      enabled: row.querySelector('[data-mobile-keybar-enabled]').checked
+    };
+  }
+
   function renderMobileKeybarRow(button) {
+    const action = button.action || 'shortcut';
+    const isModifier = action === 'modifier';
+    const modifierValue = isModifier && mobileKeybarModifierOptions.includes(button.value) ? button.value : 'Control';
     return `
       <div class="mobile-keybar-setting-row" data-mobile-keybar-row>
-        <label class="mobile-keybar-visible" title="Show on mobile toolbar"><input type="checkbox" data-mobile-keybar-enabled ${button.enabled !== false ? 'checked' : ''}><span>Show</span></label>
+        <span class="mobile-keybar-drag" data-mobile-keybar-drag draggable="true" aria-hidden="true" title="Drag to reorder">⠿</span>
+        <label class="mobile-keybar-visible" title="Show on the toolbar"><input type="checkbox" data-mobile-keybar-enabled ${button.enabled !== false ? 'checked' : ''}><span>Show</span></label>
         <label><span>Label</span><input data-mobile-keybar-label maxlength="5" value="${escapeAttr(String(button.label || '').slice(0, 5))}"></label>
         <label><span>Action</span><select data-mobile-keybar-action>
-          <option value="shortcut" ${button.action === 'shortcut' ? 'selected' : ''}>Shortcut</option>
-          <option value="modifier" ${button.action === 'modifier' ? 'selected' : ''}>Modifier</option>
-          <option value="text" ${button.action === 'text' ? 'selected' : ''}>Type text</option>
+          <option value="shortcut" ${action === 'shortcut' ? 'selected' : ''}>Shortcut</option>
+          <option value="modifier" ${action === 'modifier' ? 'selected' : ''}>Modifier</option>
+          <option value="text" ${action === 'text' ? 'selected' : ''}>Type text</option>
         </select></label>
-        <label class="mobile-keybar-value"><span>Shortcut or text</span><input data-mobile-keybar-value maxlength="256" value="${escapeAttr(button.value)}" placeholder="Ctrl+Shift+C or npm test"></label>
+        <label class="mobile-keybar-value"><span>Shortcut or text</span>
+          <div class="mobile-keybar-value-field" ${isModifier ? 'hidden' : ''}>
+            <input data-mobile-keybar-value maxlength="256" value="${escapeAttr(isModifier ? '' : button.value)}" placeholder="${action === 'text' ? 'npm test' : 'Ctrl+C, Escape, ArrowUp'}">
+            <button type="button" class="secondary mobile-keybar-record" data-mobile-keybar-record ${action === 'text' ? 'hidden' : ''} title="Record a key combination">Rec</button>
+          </div>
+          <select class="mobile-keybar-modifier" data-mobile-keybar-modifier ${isModifier ? '' : 'hidden'}>
+            ${mobileKeybarModifierOptions.map((modifier) => `<option value="${modifier}" ${modifier === modifierValue ? 'selected' : ''}>${modifier}</option>`).join('')}
+          </select>
+        </label>
         <div class="mobile-keybar-order" aria-label="Button order">
-          <button type="button" class="icon-button" data-mobile-keybar-up aria-label="Move button left" title="Move left">←</button>
-          <button type="button" class="icon-button" data-mobile-keybar-down aria-label="Move button right" title="Move right">→</button>
+          <button type="button" class="icon-button" data-mobile-keybar-up aria-label="Move button up" title="Move up">↑</button>
+          <button type="button" class="icon-button" data-mobile-keybar-down aria-label="Move button down" title="Move down">↓</button>
+          <button type="button" class="icon-button" data-mobile-keybar-duplicate aria-label="Duplicate button" title="Duplicate">⧉</button>
           <button type="button" class="icon-button" data-mobile-keybar-remove aria-label="Remove button" title="Remove">×</button>
         </div>
+        <div class="mobile-keybar-hint" data-mobile-keybar-hint aria-live="polite"></div>
       </div>`;
+  }
+
+  function renderKeybarPreviewChips(rows) {
+    const visible = rows.filter((button) => button.enabled !== false && button.label && mobileKeybarRowValidity(button.action, button.value).valid);
+    if (!visible.length) {
+      return '<span class="mobile-keybar-preview-empty">No buttons will be shown.</span>';
+    }
+    return visible.map((button) => `<span class="mobile-keybar-preview-chip">${escapeHtml(button.label)}</span>`).join('');
   }
 
   function renderMobileKeybarEditor(buttons) {
     const values = Array.isArray(buttons) ? buttons : defaultMobileKeybarButtons;
-    return `<div class="mobile-keybar-editor" data-mobile-keybar-editor>${values.map(renderMobileKeybarRow).join('')}</div>`;
+    return `
+      <div class="mobile-keybar-preview" data-mobile-keybar-preview aria-label="Toolbar preview"></div>
+      <div class="mobile-keybar-editor" data-mobile-keybar-editor>${values.map(renderMobileKeybarRow).join('')}</div>`;
+  }
+
+  function refreshMobileKeybarPreview(container) {
+    const editor = container.querySelector('[data-mobile-keybar-editor]');
+    const preview = container.querySelector('[data-mobile-keybar-preview]');
+    if (!editor) {
+      return;
+    }
+    const rows = Array.from(editor.querySelectorAll('[data-mobile-keybar-row]'));
+    rows.forEach((row) => {
+      const data = readMobileKeybarRow(row);
+      const hasContent = Boolean(data.label || data.value);
+      let invalid = false;
+      let hint = '';
+      if (hasContent) {
+        if (!data.label) {
+          invalid = true;
+          hint = 'Enter a label.';
+        } else {
+          const validity = mobileKeybarRowValidity(data.action, data.value);
+          invalid = !validity.valid;
+          hint = validity.hint;
+        }
+      }
+      row.classList.toggle('invalid', invalid);
+      const hintEl = row.querySelector('[data-mobile-keybar-hint]');
+      if (hintEl) {
+        hintEl.textContent = invalid ? hint : '';
+      }
+    });
+    if (preview) {
+      preview.innerHTML = renderKeybarPreviewChips(rows.map(readMobileKeybarRow));
+    }
   }
 
   function mobileKeybarButtonsFromSettings(form) {
-    return Array.from(form.querySelectorAll('[data-mobile-keybar-row]')).map((row) => ({
-      label: row.querySelector('[data-mobile-keybar-label]').value.trim(),
-      action: row.querySelector('[data-mobile-keybar-action]').value,
-      value: row.querySelector('[data-mobile-keybar-value]').value,
-      enabled: row.querySelector('[data-mobile-keybar-enabled]').checked
-    })).filter((button) => button.label && button.value);
+    return Array.from(form.querySelectorAll('[data-mobile-keybar-row]'))
+      .map(readMobileKeybarRow)
+      .filter((button) => button.label && mobileKeybarRowValidity(button.action, button.value).valid);
+  }
+
+  function mobileKeybarSkippedCount(form) {
+    return Array.from(form.querySelectorAll('[data-mobile-keybar-row]'))
+      .map(readMobileKeybarRow)
+      .filter((button) => (button.label || button.value) && !(button.label && mobileKeybarRowValidity(button.action, button.value).valid))
+      .length;
+  }
+
+  function normalizeRecordedShortcutKey(key) {
+    if (key === ' ' || key === 'Spacebar') {
+      return ' ';
+    }
+    return key;
+  }
+
+  function syncMobileKeybarRowAction(row) {
+    const action = row.querySelector('[data-mobile-keybar-action]').value;
+    const field = row.querySelector('.mobile-keybar-value-field');
+    const input = row.querySelector('[data-mobile-keybar-value]');
+    const record = row.querySelector('[data-mobile-keybar-record]');
+    const modifier = row.querySelector('[data-mobile-keybar-modifier]');
+    if (field) field.hidden = action === 'modifier';
+    if (modifier) modifier.hidden = action !== 'modifier';
+    if (record) record.hidden = action === 'text';
+    if (input) input.placeholder = action === 'text' ? 'npm test' : 'Ctrl+C, Escape, ArrowUp';
+  }
+
+  function startMobileKeybarRecording(recordButton, row, refresh) {
+    const input = row.querySelector('[data-mobile-keybar-value]');
+    const actionSelect = row.querySelector('[data-mobile-keybar-action]');
+    const hintEl = row.querySelector('[data-mobile-keybar-hint]');
+    const original = input.value;
+    recordButton.classList.add('recording');
+    recordButton.textContent = '…';
+    if (hintEl) hintEl.textContent = 'Press a key combination…';
+    const finish = () => {
+      document.removeEventListener('keydown', onKey, true);
+      document.removeEventListener('pointerdown', onCancel, true);
+      recordButton.classList.remove('recording');
+      recordButton.textContent = 'Rec';
+      refresh();
+    };
+    const onCancel = (event) => {
+      if (event.target !== recordButton) {
+        input.value = original;
+        finish();
+      }
+    };
+    const onKey = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (['Control', 'Alt', 'Shift', 'Meta'].includes(event.key)) {
+        return;
+      }
+      const modifiers = [];
+      if (event.ctrlKey) modifiers.push('Ctrl');
+      if (event.altKey) modifiers.push('Alt');
+      if (event.shiftKey) modifiers.push('Shift');
+      const combo = [...modifiers, normalizeRecordedShortcutKey(event.key)].join('+');
+      if (actionSelect.value !== 'shortcut') {
+        actionSelect.value = 'shortcut';
+        syncMobileKeybarRowAction(row);
+      }
+      input.value = combo;
+      if (hintEl) {
+        hintEl.textContent = isSupportedShortcut(combo) ? '' : 'Unsupported key combination.';
+      }
+      finish();
+    };
+    document.addEventListener('keydown', onKey, true);
+    document.addEventListener('pointerdown', onCancel, true);
+  }
+
+  function wireMobileKeybarDrag(editor, refresh) {
+    let dragged = null;
+    editor.addEventListener('dragstart', (event) => {
+      const handle = event.target.closest('[data-mobile-keybar-drag]');
+      if (!handle) {
+        event.preventDefault();
+        return;
+      }
+      dragged = handle.closest('[data-mobile-keybar-row]');
+      dragged.classList.add('dragging');
+      event.dataTransfer.effectAllowed = 'move';
+    });
+    editor.addEventListener('dragover', (event) => {
+      if (!dragged) {
+        return;
+      }
+      event.preventDefault();
+      const over = event.target.closest('[data-mobile-keybar-row]');
+      if (!over || over === dragged) {
+        return;
+      }
+      const rect = over.getBoundingClientRect();
+      const after = event.clientY > rect.top + rect.height / 2;
+      editor.insertBefore(dragged, after ? over.nextElementSibling : over);
+    });
+    editor.addEventListener('drop', (event) => event.preventDefault());
+    editor.addEventListener('dragend', () => {
+      if (dragged) {
+        dragged.classList.remove('dragging');
+        dragged = null;
+        refresh();
+      }
+    });
   }
 
   function wireMobileKeybarEditor(overlay) {
+    const container = overlay.querySelector('.mobile-keybar-setting');
     const editor = overlay.querySelector('[data-mobile-keybar-editor]');
+    if (!container || !editor) {
+      return;
+    }
+    const refresh = () => refreshMobileKeybarPreview(container);
     const move = (button, direction) => {
       const row = button.closest('[data-mobile-keybar-row]');
       const sibling = direction < 0 ? row.previousElementSibling : row.nextElementSibling;
@@ -5839,20 +6058,49 @@
         return;
       }
       editor.insertBefore(row, direction < 0 ? sibling : sibling.nextElementSibling);
+      refresh();
     };
+    editor.addEventListener('input', refresh);
+    editor.addEventListener('change', (event) => {
+      if (event.target.matches('[data-mobile-keybar-action]')) {
+        syncMobileKeybarRowAction(event.target.closest('[data-mobile-keybar-row]'));
+      }
+      refresh();
+    });
     editor.addEventListener('click', (event) => {
+      const row = event.target.closest('[data-mobile-keybar-row]');
+      if (!row) {
+        return;
+      }
       if (event.target.closest('[data-mobile-keybar-up]')) {
         move(event.target, -1);
       } else if (event.target.closest('[data-mobile-keybar-down]')) {
         move(event.target, 1);
       } else if (event.target.closest('[data-mobile-keybar-remove]')) {
-        event.target.closest('[data-mobile-keybar-row]').remove();
+        row.remove();
+        refresh();
+      } else if (event.target.closest('[data-mobile-keybar-duplicate]')) {
+        row.insertAdjacentHTML('afterend', renderMobileKeybarRow(readMobileKeybarRow(row)));
+        syncMobileKeybarRowAction(row.nextElementSibling);
+        refresh();
+      } else if (event.target.closest('[data-mobile-keybar-record]')) {
+        startMobileKeybarRecording(event.target.closest('[data-mobile-keybar-record]'), row, refresh);
       }
     });
+    wireMobileKeybarDrag(editor, refresh);
     overlay.querySelector('[data-mobile-keybar-add]').onclick = () => {
       editor.insertAdjacentHTML('beforeend', renderMobileKeybarRow({ label: 'Custom', action: 'shortcut', value: 'Ctrl+Shift+C', enabled: true }));
+      syncMobileKeybarRowAction(editor.lastElementChild);
       editor.lastElementChild.querySelector('[data-mobile-keybar-label]').focus();
+      refresh();
     };
+    overlay.querySelector('[data-mobile-keybar-reset]').onclick = () => {
+      editor.innerHTML = defaultMobileKeybarButtons.map(renderMobileKeybarRow).join('');
+      editor.querySelectorAll('[data-mobile-keybar-row]').forEach(syncMobileKeybarRowAction);
+      refresh();
+    };
+    editor.querySelectorAll('[data-mobile-keybar-row]').forEach(syncMobileKeybarRowAction);
+    refresh();
   }
 
   async function openSettings() {
@@ -6007,7 +6255,7 @@
                 </div>
               </div>
               <div class="mobile-keybar-setting">
-                <div class="mobile-keybar-setting-heading"><div><h3>PowerShell shortcut buttons</h3><p>Choose buttons shown below PowerShell on desktop and mobile, arrange their order, or add a shortcut or text command. Ctrl stays active for the next software-keyboard key.</p></div><button class="secondary" type="button" data-mobile-keybar-add>${fileActionIcon('add')}<span>Add button</span></button></div>
+                <div class="mobile-keybar-setting-heading"><div><h3>PowerShell shortcut buttons</h3><p>Choose buttons shown below PowerShell on desktop and mobile, arrange their order, or add a shortcut or text command. Ctrl stays active for the next software-keyboard key.</p></div><div class="mobile-keybar-setting-actions"><button class="secondary" type="button" data-mobile-keybar-reset>Reset to defaults</button><button class="secondary" type="button" data-mobile-keybar-add>${fileActionIcon('add')}<span>Add button</span></button></div></div>
                 ${renderMobileKeybarEditor(settings.terminal?.mobile_keybar_buttons)}
               </div>
             </section>
@@ -6181,6 +6429,10 @@
           }
         }
         const payload = settingsPayload(new FormData(event.currentTarget), event.currentTarget);
+        const skippedKeybarButtons = mobileKeybarSkippedCount(event.currentTarget);
+        if (skippedKeybarButtons) {
+          showToast(`${skippedKeybarButtons} shortcut button(s) skipped: fill in a label and a supported key or text.`);
+        }
         const switchingToLan = payload.server.host === '0.0.0.0' && state.config.server.host !== '0.0.0.0';
         const hasPassword = settings.auth?.password_set || Boolean(payload.auth?.password);
         if (payload.server.host === '0.0.0.0' && !hasPassword) {

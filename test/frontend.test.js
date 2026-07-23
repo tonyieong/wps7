@@ -378,7 +378,8 @@ test('mobile Ctrl keeps terminal focus and modifies the next software-keyboard c
   assert.match(appSource, /function applyMobileControlModifier\(element, data\)/);
   assert.match(appSource, /String\.fromCharCode\(code & 31\)/);
   assert.match(appSource, /applyMobileControlModifier\(element, data\)/);
-  assert.match(appSource, /control\?\.setAttribute\('aria-pressed', 'false'\)/);
+  assert.match(appSource, /control\.setAttribute\('aria-pressed', 'false'\)/);
+  assert.match(appSource, /modifierButtons\.forEach\(\(modifier\) => modifier\.setAttribute\('aria-pressed', 'false'\)\)/);
   assert.match(appSource, /terminal\.term\.focus\(\)/);
   assert.match(appSource, /function terminalShortcutSequence\(shortcut\)/);
   assert.match(appSource, /data-terminal-action/);
@@ -393,6 +394,45 @@ test('mobile keybar can be configured, reordered and extended from server-synced
   assert.match(appSource, /mobileKeybarButtonsFromSettings/);
   assert.match(mainSource, /sanitizeMobileKeybarButtons/);
   assert.match(appSource, /PowerShell shortcut buttons/);
+});
+
+test('terminal hides the overlay scrollbar so it never covers the rightmost column', () => {
+  assert.match(styles, /\.terminal \.xterm-scrollable-element > \.scrollbar\s*\{[^}]*display:\s*none !important/s);
+});
+
+test('keybar editor shows a live preview and validates each row without silently dropping buttons', () => {
+  assert.match(appSource, /data-mobile-keybar-preview/);
+  assert.match(appSource, /function renderKeybarPreviewChips\(rows\)/);
+  assert.match(appSource, /function refreshMobileKeybarPreview\(container\)/);
+  assert.match(appSource, /function mobileKeybarRowValidity\(action, value\)/);
+  assert.match(appSource, /function isSupportedShortcut\(value\)/);
+  assert.match(appSource, /row\.classList\.toggle\('invalid', invalid\)/);
+  assert.match(appSource, /function mobileKeybarSkippedCount\(form\)/);
+  assert.match(appSource, /skippedKeybarButtons = mobileKeybarSkippedCount\(event\.currentTarget\)/);
+  assert.match(appSource, /shortcut button\(s\) skipped/);
+  assert.match(styles, /\.mobile-keybar-preview\s*\{/);
+  assert.match(styles, /\.mobile-keybar-setting-row\.invalid\s*\{[^}]*border-color:\s*var\(--danger\)/s);
+});
+
+test('keybar editor switches input by action and offers a modifier select', () => {
+  assert.match(appSource, /const mobileKeybarModifierOptions = \['Control', 'Alt', 'Shift'\]/);
+  assert.match(appSource, /data-mobile-keybar-modifier/);
+  assert.match(appSource, /function syncMobileKeybarRowAction\(row\)/);
+  assert.match(appSource, /action === 'text' \? 'npm test' : 'Ctrl\+C, Escape, ArrowUp'/);
+  assert.match(appSource, /function modifierShortcutToken\(value\)/);
+  assert.match(appSource, /\{ Control: 'Ctrl', Alt: 'Alt', Shift: 'Shift' \}/);
+});
+
+test('keybar editor supports recording, duplicating, resetting and drag reordering', () => {
+  assert.match(appSource, /data-mobile-keybar-record/);
+  assert.match(appSource, /function startMobileKeybarRecording\(recordButton, row, refresh\)/);
+  assert.match(appSource, /data-mobile-keybar-duplicate/);
+  assert.match(appSource, /renderMobileKeybarRow\(readMobileKeybarRow\(row\)\)/);
+  assert.match(appSource, /data-mobile-keybar-reset/);
+  assert.match(appSource, /editor\.innerHTML = defaultMobileKeybarButtons\.map\(renderMobileKeybarRow\)\.join\(''\)/);
+  assert.match(appSource, /function wireMobileKeybarDrag\(editor, refresh\)/);
+  assert.match(appSource, /data-mobile-keybar-drag draggable="true"/);
+  assert.match(styles, /\.mobile-keybar-drag\s*\{[^}]*cursor:\s*grab/s);
 });
 
 test('mobile PowerShell toolbar stays compact at the bottom without hiding the keyboard', () => {
