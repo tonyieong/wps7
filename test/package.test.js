@@ -58,3 +58,8 @@ test('Windows packaging refreshes generated folders without nesting them', () =>
   assert.match(command, /Copy-Item assets\\\* dist\\assets/);
   assert.match(command, /Copy-Item tools\\\* dist\\tools/);
 });
+
+test('Windows packaging clears stale nested resource folders', () => {
+  const command = packageJson.scripts['package:win'];
+  assert.match(command, /Remove-Item 'dist\\scripts\\scripts','dist\\assets\\assets','dist\\tools\\tools' -Recurse -Force -ErrorAction SilentlyContinue/);
+});
