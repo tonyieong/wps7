@@ -25,6 +25,14 @@ For the port `5000` service-managed instance (NSSM `AppExit Default: Restart`), 
 3. Immediately swap the file in (e.g. .NET `[System.IO.File]::Replace('dist\wps7-new.exe', 'dist\wps7.exe', 'dist\wps7-backup.exe')`) — this fast rename fits inside NSSM's ~2s auto-restart window, so NSSM picks up the new exe on its own.
 This only needs write access to `dist/`, no elevation required. Never restart the exe on port `5001` this way.
 
+### Runtime Folder Relocation
+
+Moving WPS7 does not automatically update Windows registrations because NSSM, scheduled tasks, log paths, and the Startup tray shortcut may still contain the old absolute folder path. From the new project root, run `npm run startup:repair`; approve UAC because repairing a service and elevated tasks changes system settings.
+
+The repair must resolve the packaged runtime root (`dist/` for `dist/wps7.exe`) and update the NSSM application, working directory, logs, the WPS7 start/restart/stop tasks, and `wps7 tray.lnk`. It must preserve the existing service account; use `scripts/install-wps7-startup.ps1` when credentials need to change. Afterward, verify port `5000` is healthy, no active registration or process command line references the old path, and the port `5001` PID is unchanged. Never repoint, repair, stop, or restart the portable port `5001` instance.
+
+Keep packaging relocation-safe: copy the contents of resource directories such as `scripts\*`, not the directory itself, so packaged paths do not become accidentally nested.
+
 ## Coding Style & Naming Conventions
 
 Use CommonJS, two-space indentation, semicolons, and single quotes. Use `camelCase` for code identifiers, `PascalCase` for constructors, and kebab-case for CSS/data attributes. Prefer native APIs and avoid unrelated formatting.

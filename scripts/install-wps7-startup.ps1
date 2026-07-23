@@ -6,6 +6,20 @@ $ErrorActionPreference = 'Stop'
 $Root = (Resolve-Path -LiteralPath $Root).Path
 $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 
+function Resolve-Wps7RuntimeRoot {
+  $exe = Join-Path $Root 'wps7.exe'
+  if (Test-Path -LiteralPath $exe) {
+    return $Root
+  }
+  $distRoot = Join-Path $Root 'dist'
+  if (Test-Path -LiteralPath (Join-Path $distRoot 'wps7.exe')) {
+    return $distRoot
+  }
+  return $Root
+}
+
+$runtimeRoot = Resolve-Wps7RuntimeRoot
+
 $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = New-Object System.Security.Principal.WindowsPrincipal($identity)
 if (!$principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -49,7 +63,7 @@ function Resolve-Nssm {
 }
 
 function Read-Wps7ServerPort {
-  $configPath = Join-Path $Root 'config.toml'
+  $configPath = Join-Path $runtimeRoot 'config.toml'
   if (!(Test-Path -LiteralPath $configPath)) {
     return 5000
   }
@@ -76,7 +90,7 @@ function Read-Wps7ConfigValue {
     [string]$Key,
     [string]$Default
   )
-  $configPath = Join-Path $Root 'config.toml'
+  $configPath = Join-Path $runtimeRoot 'config.toml'
   if (!(Test-Path -LiteralPath $configPath)) {
     return $Default
   }
@@ -120,10 +134,10 @@ try {
   }
 
   & $nssm install $serviceName $launch.File @($launch.Args) | Out-Null
-  & $nssm set $serviceName AppDirectory $Root | Out-Null
+  & $nssm set $serviceName AppDirectory $runtimeRoot | Out-Null
   & $nssm set $serviceName AppEnvironmentExtra WPS7_HEADLESS=1 WPS7_SERVICE_MANAGED=1 | Out-Null
-  & $nssm set $serviceName AppStdout (Join-Path $Root 'data\service-stdout.log') | Out-Null
-  & $nssm set $serviceName AppStderr (Join-Path $Root 'data\service-stderr.log') | Out-Null
+  & $nssm set $serviceName AppStdout (Join-Path $runtimeRoot 'data\service-stdout.log') | Out-Null
+  & $nssm set $serviceName AppStderr (Join-Path $runtimeRoot 'data\service-stderr.log') | Out-Null
   & $nssm set $serviceName AppRotateFiles 1 | Out-Null
   & $nssm set $serviceName AppRotateBytes 1048576 | Out-Null
   & $nssm set $serviceName AppExit Default Restart | Out-Null
@@ -132,11 +146,11 @@ try {
   & $nssm set $serviceName ObjectName $user $password | Out-Null
   & $nssm start $serviceName | Out-Null
 
-  $controlScript = Join-Path $Root 'scripts\control-wps7-service.ps1'
+  $controlScript = Join-Path $runtimeRoot 'scripts\control-wps7-service.ps1'
   $controlSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
   foreach ($actionName in @('Start', 'Restart', 'Stop')) {
     $taskName = "wps7-service-$($actionName.ToLowerInvariant())"
-    $taskAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$controlScript`" -Root `"$Root`" -Action $actionName"
+    $taskAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$controlScript`" -Root `"$runtimeRoot`" -Action $actionName"
     Register-ScheduledTask -TaskName $taskName -Action $taskAction -Settings $controlSettings -User $user -Password $password -RunLevel Highest | Out-Null
   }
 } finally {
@@ -145,14 +159,14 @@ try {
   }
 }
 
-$trayScript = Join-Path $Root 'scripts\wps7-tray-companion.ps1'
+$trayScript = Join-Path $runtimeRoot 'scripts\wps7-tray-companion.ps1'
 $shell = New-Object -ComObject WScript.Shell
 $startupFolder = $shell.SpecialFolders.Item('Startup')
 $shortcutPath = Join-Path $startupFolder 'wps7 tray.lnk'
 $shortcut = $shell.CreateShortcut($shortcutPath)
 $shortcut.TargetPath = 'powershell.exe'
-$shortcut.Arguments = "-NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$trayScript`" -Root `"$Root`""
-$shortcut.WorkingDirectory = $Root
+$shortcut.Arguments = "-NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$trayScript`" -Root `"$runtimeRoot`""
+$shortcut.WorkingDirectory = $runtimeRoot
 $shortcut.WindowStyle = 7
 $shortcut.Description = 'wps7 tray icon'
 $shortcut.Save()

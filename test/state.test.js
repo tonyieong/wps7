@@ -354,6 +354,31 @@ test('legacy terminal pane mode is discarded', () => {
   assert.equal(saved.sessions[0].tabs[0].panes[0].mode, undefined);
 });
 
+test('loading state with a deleted or moved pane cwd falls back to the app root', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const dataDir = path.join(root, 'data');
+  fs.mkdirSync(dataDir, { recursive: true });
+  const missingCwd = path.join(root, 'moved-away-folder');
+  fs.writeFileSync(path.join(dataDir, 'state.json'), JSON.stringify({
+    activeSessionId: 'session-1',
+    sessions: [{
+      id: 'session-1',
+      name: 'Session 1',
+      activePaneId: 'pane-1',
+      tabs: [{
+        id: 'tab-1',
+        name: 'Main',
+        activePaneId: 'pane-1',
+        panes: [{ id: 'pane-1', title: 'PowerShell', cwd: missingCwd, split: null }]
+      }]
+    }]
+  }));
+
+  const store = new StateStore(root, 100);
+  store.load();
+  assert.equal(store.findPane('pane-1').pane.cwd, root);
+});
+
 test('loading legacy panes marks them as terminal', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'));
   const dataDir = path.join(root, 'data');

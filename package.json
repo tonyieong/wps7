@@ -8,9 +8,10 @@
   "scripts": {
     "start": "node src/main.js",
     "test": "node --test",
-    "package:win": "pkg . --targets node18-win-x64 --output dist/wps7.exe && powershell -NoProfile -ExecutionPolicy Bypass -Command \"Copy-Item start-wps7.vbs dist\\start-wps7.vbs -Force; Copy-Item scripts dist\\scripts -Recurse -Force; Copy-Item assets dist\\assets -Recurse -Force; if (Test-Path tools) { Copy-Item tools dist\\tools -Recurse -Force }\"",
+    "package:win": "pkg . --targets node18-win-x64 --output dist/wps7.exe && powershell -NoProfile -ExecutionPolicy Bypass -Command \"New-Item -ItemType Directory dist\\scripts,dist\\assets,dist\\tools -Force | Out-Null; Copy-Item start-wps7.vbs dist\\start-wps7.vbs -Force; Copy-Item scripts\\* dist\\scripts -Recurse -Force; Copy-Item assets\\* dist\\assets -Recurse -Force; if (Test-Path tools) { Copy-Item tools\\* dist\\tools -Recurse -Force }\"",
     "nssm:install": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\install-nssm.ps1",
     "startup:install": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\install-wps7-startup.ps1",
+    "startup:repair": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\repair-wps7-paths.ps1",
     "startup:uninstall": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\uninstall-wps7-startup.ps1"
   },
   "pkg": {

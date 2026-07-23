@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { normalizeCwd } = require('./shell');
 
 const DEFAULT_GRID_COLUMNS = 4;
 const DEFAULT_GRID_ROWS = 3;
@@ -91,6 +92,7 @@ function defaultSession(name = 'Workspace 1', paneTitle = 'PowerShell 1') {
 
 class StateStore {
   constructor(root, scrollbackLimit, gridColumns = DEFAULT_GRID_COLUMNS, gridRows = DEFAULT_GRID_ROWS) {
+    this.root = root;
     this.dataDir = path.join(root, 'data');
     this.statePath = path.join(this.dataDir, 'state.json');
     this.scrollbackLimit = scrollbackLimit;
@@ -138,7 +140,7 @@ class StateStore {
         id: pane.id,
         type: paneType(pane.type),
         title: pane.title || 'PowerShell 1',
-        cwd: pane.cwd || process.cwd(),
+        cwd: normalizeCwd(pane.cwd, this.root),
         path: pane.path || '',
         url: pane.url || '',
         fontSize: validPaneFontSize(pane.fontSize) ? Number(pane.fontSize) : undefined,
