@@ -242,6 +242,20 @@ function deleteItem(targetPath) {
   return { ok: true };
 }
 
+function deleteItems(paths) {
+  const list = Array.isArray(paths) ? paths : [];
+  const results = list.map((item) => {
+    try {
+      const target = assertLocalPath(item);
+      deleteItem(target);
+      return { path: target, ok: true };
+    } catch (error) {
+      return { path: String(item || ''), ok: false, error: error.message };
+    }
+  });
+  return { results };
+}
+
 function uniqueChildPath(parent, name) {
   const ext = path.win32.extname(name);
   const base = path.win32.basename(name, ext);
@@ -342,15 +356,62 @@ function prepareDownload(targetPath) {
   });
 }
 
+function prepareBulkDownload(paths) {
+  const list = (Array.isArray(paths) ? paths : []).map((item) => assertLocalPath(item));
+  if (!list.length) {
+    const error = new Error('No files selected for download.');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (list.length === 1) {
+    return prepareDownload(list[0]);
+  }
+  for (const item of list) {
+    fs.statSync(item);
+  }
+  const archivePath = path.join(os.tmpdir(), `wps7-${crypto.randomUUID()}.zip`);
+  const script = '$sources = $env:WPS7_ARCHIVE_SOURCE -split "`n" | Where-Object { $_ }; Compress-Archive -LiteralPath $sources -DestinationPath $env:WPS7_ARCHIVE_TARGET -Force';
+  return new Promise((resolve, reject) => {
+    const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+      windowsHide: true,
+      env: {
+        ...process.env,
+        WPS7_ARCHIVE_SOURCE: list.join('\n'),
+        WPS7_ARCHIVE_TARGET: archivePath
+      }
+    });
+    let stderr = '';
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code !== 0 || !fs.existsSync(archivePath)) {
+        reject(new Error(stderr.trim() || 'Could not create archive.'));
+        return;
+      }
+      resolve({
+        path: archivePath,
+        name: 'wps7-files.zip',
+        size: fs.statSync(archivePath).size,
+        type: 'archive',
+        temporary: true
+      });
+    });
+  });
+}
+
 module.exports = {
   createFolder,
   createFile,
   deleteItem,
+  deleteItems,
   downloadInfo,
   listDirectory,
   listDrives,
   moveItem,
   normalizeLocalPath,
+  prepareBulkDownload,
   prepareDownload,
   repairMojibakeFilename,
   readTextFile,

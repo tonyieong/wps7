@@ -65,6 +65,48 @@ test('marks dot files hidden and recursively deletes folders', () => {
   assert.equal(fs.existsSync(path.join(root, 'folder')), false);
 });
 
+test('bulk delete continues past failures and reports each item', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-files-'));
+  const keep = path.join(root, 'keep.txt');
+  const gone = path.join(root, 'gone.txt');
+  fs.writeFileSync(keep, 'keep');
+  fs.writeFileSync(gone, 'gone');
+  const missing = path.join(root, 'missing.txt');
+
+  const { results } = files.deleteItems([gone, missing, keep]);
+  assert.equal(results.length, 3);
+  assert.equal(results[0].ok, true);
+  assert.equal(results[1].ok, false);
+  assert.equal(results[2].ok, true);
+  assert.equal(fs.existsSync(gone), false);
+  assert.equal(fs.existsSync(keep), false);
+});
+
+test('bulk download rejects empty selections and delegates single items', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-files-'));
+  const only = path.join(root, 'only.txt');
+  fs.writeFileSync(only, 'only');
+
+  assert.throws(() => files.prepareBulkDownload([]), /No files selected/);
+  const single = await files.prepareBulkDownload([only]);
+  assert.equal(single.type, 'file');
+  assert.equal(single.path, path.win32.resolve(only));
+});
+
+test('bulk download archives multiple items into one zip', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-files-'));
+  const first = path.join(root, 'first.txt');
+  const second = path.join(root, 'second.txt');
+  fs.writeFileSync(first, 'first');
+  fs.writeFileSync(second, 'second');
+
+  const archive = await files.prepareBulkDownload([first, second]);
+  assert.equal(archive.type, 'archive');
+  assert.equal(archive.temporary, true);
+  assert.ok(fs.statSync(archive.path).size > 0);
+  fs.unlinkSync(archive.path);
+});
+
 test('reads and writes text files while preserving UTF-8 and UTF-16 encodings', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-files-'));
   const utf8Path = path.join(root, 'notes.txt');

@@ -108,6 +108,26 @@
     localStorage.setItem('wps7.filePathHistory', JSON.stringify(state.filePathHistory));
   }
 
+  function friendlyFileError(message) {
+    const raw = String(message || '').trim();
+    if (!raw) {
+      return '';
+    }
+    if (/ENOENT|no such file/i.test(raw)) {
+      return 'This location does not exist or was moved.';
+    }
+    if (/EPERM|EACCES|denied|permission/i.test(raw)) {
+      return 'Access to this location was denied.';
+    }
+    if (/ENOTDIR|not a directory/i.test(raw)) {
+      return 'This path is not a folder.';
+    }
+    if (/EBUSY|resource busy|in use/i.test(raw)) {
+      return 'This location is in use by another program.';
+    }
+    return raw.replace(/^[A-Z]+:\s*/, '');
+  }
+
   function hexToRgba(hex, alpha) {
     const value = Number.parseInt(hex.slice(1), 16);
     return `rgba(${value >> 16}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
@@ -678,7 +698,10 @@
   function renderFilePathOptions(pane) {
     const bookmarks = filesPaneData(pane.id).bookmarks || [];
     const bookmarkPaths = new Set(bookmarks.map((bookmark) => bookmark.path.toLowerCase()));
-    const history = state.filePathHistory.slice(0, 5);
+    const currentPath = (pane.path || '').toLowerCase();
+    const history = state.filePathHistory
+      .filter((path) => path.toLowerCase() !== currentPath)
+      .slice(0, 5);
     return `
       <div class="file-path-group" role="group" aria-labelledby="file-path-current-${pane.id}">
         <div class="file-path-heading" id="file-path-current-${pane.id}">Current</div>
@@ -753,8 +776,8 @@
             ${renderToolbarPageButton('previous')}
             <button class="file-command-button" type="button" data-toolbar-item data-file-new-file aria-label="New file" title="New file" ${pane.path ? '' : 'disabled'}>${fileActionIcon('file')}</button>
             <button class="file-command-button" type="button" data-toolbar-item data-file-new-folder aria-label="New folder" title="New folder" ${pane.path ? '' : 'disabled'}>${fileActionIcon('new-folder')}</button>
-            <label class="file-command-button file-upload" data-toolbar-item title="Upload files" aria-label="Upload files">${fileActionIcon('upload-file')}<input type="file" multiple data-file-upload ${pane.path ? '' : 'disabled'}></label>
-            <label class="file-command-button file-upload" data-toolbar-item title="Upload folder" aria-label="Upload folder">${fileActionIcon('upload-folder')}<input type="file" multiple webkitdirectory directory data-folder-upload ${pane.path ? '' : 'disabled'}></label>
+            <label class="file-command-button file-upload" data-toolbar-item data-file-upload-trigger role="button" tabindex="${pane.path ? '0' : '-1'}" aria-disabled="${pane.path ? 'false' : 'true'}" title="Upload files" aria-label="Upload files">${fileActionIcon('upload-file')}<input type="file" multiple tabindex="-1" data-file-upload ${pane.path ? '' : 'disabled'}></label>
+            <label class="file-command-button file-upload" data-toolbar-item data-file-upload-trigger role="button" tabindex="${pane.path ? '0' : '-1'}" aria-disabled="${pane.path ? 'false' : 'true'}" title="Upload folder" aria-label="Upload folder">${fileActionIcon('upload-folder')}<input type="file" multiple webkitdirectory directory tabindex="-1" data-folder-upload ${pane.path ? '' : 'disabled'}></label>
             <button class="file-command-button" type="button" data-toolbar-item data-file-download-selected aria-label="Download selected" title="Download selected" ${selectedPaths.length ? '' : 'disabled'}>${fileActionIcon('download')}</button>
             <button class="file-command-button" type="button" data-toolbar-item data-file-copy-selected aria-label="Copy selected paths" title="Copy selected paths" ${selectedPaths.length ? '' : 'disabled'}>${fileActionIcon('copy')}</button>
             <button class="file-command-button" type="button" data-toolbar-item data-file-rename-selected aria-label="Rename selected" title="Rename selected" ${selectedPaths.length === 1 ? '' : 'disabled'}>${fileActionIcon('rename')}</button>
@@ -789,7 +812,12 @@
               <small class="file-modified">${escapeHtml(formatModified(entry.modifiedAt))}</small>
               <small class="file-size">${entry.type === 'file' ? formatBytes(entry.size) : 'Folder'}</small>
             </div>
-          `).join('')}`}
+          `).join('')}
+          ${entries.length ? '' : `
+            <div class="file-empty-state" role="note">
+              ${fileActionIcon(paneData.error ? 'hidden' : 'folder')}
+              <p>${escapeHtml(paneData.error || 'This folder is empty.')}</p>
+            </div>`}`}
         </div>
         <div class="file-drop-overlay" aria-hidden="true">Drop files or folders to upload</div>
       </div>
@@ -2651,6 +2679,9 @@
     }
     const paneData = filesPaneData(pane.id);
     paneData.error = '';
+    paneData.entries = [];
+    paneData.drives = [];
+    updateFilesPane(pane.id);
     try {
       if (pane.path) {
         const [result, bookmarkResult] = await Promise.all([
@@ -2674,7 +2705,9 @@
         paneData.bookmarks = bookmarkResult.bookmarks || [];
       }
     } catch (error) {
-      paneData.error = error.message;
+      paneData.entries = [];
+      paneData.drives = [];
+      paneData.error = friendlyFileError(error.message);
     }
     updateFilesPane(pane.id);
   }
@@ -2785,6 +2818,18 @@
     paneElement.querySelector('[data-file-new-folder]')?.addEventListener('click', () => createFolder(paneId));
     paneElement.querySelector('[data-file-upload]')?.addEventListener('change', (event) => uploadFiles(event, paneId));
     paneElement.querySelector('[data-folder-upload]')?.addEventListener('change', (event) => uploadFiles(event, paneId));
+    paneElement.querySelectorAll('[data-file-upload-trigger]').forEach((trigger) => {
+      trigger.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') {
+          return;
+        }
+        event.preventDefault();
+        if (trigger.getAttribute('aria-disabled') === 'true') {
+          return;
+        }
+        trigger.querySelector('input[type="file"]')?.click();
+      });
+    });
     paneElement.querySelectorAll('[data-file-sort]').forEach((button) => {
       button.onclick = () => {
         const key = button.dataset.fileSort;
@@ -3170,16 +3215,132 @@
     });
   }
 
+  const INVALID_FILENAME_CHARS = /[<>:"/|?*]/;
+
+  function validateFileName(name) {
+    const value = String(name || '').trim();
+    if (!value) {
+      return 'Enter a name.';
+    }
+    if (value === '.' || value === '..') {
+      return 'Choose a different name.';
+    }
+    if (INVALID_FILENAME_CHARS.test(value) || value.includes(String.fromCharCode(92))) {
+      return 'Avoid these characters: < > : " / \\ | ? *';
+    }
+    if (/[. ]$/.test(value)) {
+      return 'Names cannot end with a space or period.';
+    }
+    return '';
+  }
+
+  function openAppModal({ title, message = '', fields = [], confirmLabel = 'OK', cancelLabel = 'Cancel', danger = false, validate }) {
+    return new Promise((resolve) => {
+      document.querySelector('.app-modal-overlay')?.remove();
+      const previousFocus = document.activeElement;
+      const overlay = document.createElement('div');
+      overlay.className = 'app-modal-overlay';
+      overlay.innerHTML = `
+        <div class="app-modal" role="dialog" aria-modal="true" aria-label="${escapeAttr(title)}">
+          <header class="app-modal-header">${escapeHtml(title)}</header>
+          <div class="app-modal-body">
+            ${message ? `<p class="app-modal-message">${escapeHtml(message)}</p>` : ''}
+            ${fields.map((field) => `
+              <label class="app-modal-field">
+                <span>${escapeHtml(field.label)}</span>
+                <input data-modal-field="${escapeAttr(field.name)}" value="${escapeAttr(field.value || '')}" autocomplete="off" autocapitalize="off" spellcheck="false">
+              </label>`).join('')}
+            <div class="app-modal-error" data-modal-error role="alert"></div>
+          </div>
+          <footer class="app-modal-footer">
+            <button type="button" class="secondary" data-modal-cancel>${escapeHtml(cancelLabel)}</button>
+            <button type="button" class="${danger ? 'app-modal-danger' : 'primary'}" data-modal-confirm>${escapeHtml(confirmLabel)}</button>
+          </footer>
+        </div>`;
+      document.body.appendChild(overlay);
+      const inputs = Array.from(overlay.querySelectorAll('[data-modal-field]'));
+      const errorEl = overlay.querySelector('[data-modal-error]');
+      const confirmButton = overlay.querySelector('[data-modal-confirm]');
+      const values = () => Object.fromEntries(inputs.map((input) => [input.dataset.modalField, input.value.trim()]));
+      const runValidate = () => {
+        const error = validate ? validate(values()) : '';
+        errorEl.textContent = error || '';
+        confirmButton.disabled = Boolean(error);
+        return !error;
+      };
+      const close = (result) => {
+        overlay.remove();
+        document.removeEventListener('keydown', onKey, true);
+        previousFocus?.focus?.();
+        resolve(result);
+      };
+      const commit = () => {
+        if (runValidate()) {
+          close(fields.length ? values() : true);
+        }
+      };
+      const onKey = (event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          close(null);
+        } else if (event.key === 'Enter' && !event.shiftKey) {
+          event.preventDefault();
+          commit();
+        }
+      };
+      document.addEventListener('keydown', onKey, true);
+      overlay.addEventListener('mousedown', (event) => {
+        if (event.target === overlay) {
+          close(null);
+        }
+      });
+      inputs.forEach((input) => input.addEventListener('input', runValidate));
+      overlay.querySelector('[data-modal-cancel]').onclick = () => close(null);
+      confirmButton.onclick = commit;
+      runValidate();
+      (inputs[0] || confirmButton).focus();
+      if (inputs[0]) {
+        const value = inputs[0].value;
+        const dot = value.lastIndexOf('.');
+        inputs[0].setSelectionRange(0, dot > 0 ? dot : value.length);
+      }
+    });
+  }
+
+  function confirmDialog(title, message, { danger = false, confirmLabel = 'Delete' } = {}) {
+    return openAppModal({ title, message, confirmLabel, danger }).then((result) => result === true);
+  }
+
+  async function saveResponseAsFile(response, fallbackName) {
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+    const plainName = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+    link.download = encodedName ? decodeURIComponent(encodedName) : (plainName || fallbackName);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   async function createFolder(paneId = '') {
     const found = paneId ? findPaneState(paneId) : null;
-    const name = window.prompt('Folder name');
-    if (!name) {
+    const result = await openAppModal({
+      title: 'New folder',
+      fields: [{ name: 'name', label: 'Folder name', value: '' }],
+      confirmLabel: 'Create',
+      validate: (form) => validateFileName(form.name)
+    });
+    if (!result) {
       return;
     }
     try {
       await api('/api/files/folder', {
         method: 'POST',
-        body: JSON.stringify({ path: found?.pane.path || state.filePath, name })
+        body: JSON.stringify({ path: found?.pane.path || state.filePath, name: result.name })
       });
       if (found) {
         await loadFilesPane(found.pane);
@@ -3188,7 +3349,7 @@
       }
     } catch (error) {
       if (found) {
-        filesPaneData(paneId).error = error.message;
+        filesPaneData(paneId).error = friendlyFileError(error.message);
       } else {
         state.fileError = error.message;
       }
@@ -3199,18 +3360,26 @@
 
   async function createFile(paneId) {
     const found = findPaneState(paneId);
-    const name = window.prompt('File name');
-    if (!found?.pane.path || !name) {
+    if (!found?.pane.path) {
+      return;
+    }
+    const result = await openAppModal({
+      title: 'New file',
+      fields: [{ name: 'name', label: 'File name', value: '' }],
+      confirmLabel: 'Create',
+      validate: (form) => validateFileName(form.name)
+    });
+    if (!result) {
       return;
     }
     try {
       await api('/api/files/file', {
         method: 'POST',
-        body: JSON.stringify({ path: found.pane.path, name })
+        body: JSON.stringify({ path: found.pane.path, name: result.name })
       });
       await loadFilesPane(found.pane);
     } catch (error) {
-      filesPaneData(paneId).error = error.message;
+      filesPaneData(paneId).error = friendlyFileError(error.message);
       showToast(error.message);
       updateFilesPane(paneId);
     }
@@ -3218,14 +3387,20 @@
 
   async function renameFile(path, paneId = '') {
     const found = paneId ? findPaneState(paneId) : null;
-    const name = window.prompt('New name');
-    if (!name) {
+    const currentName = path.split(/[\\/]/).pop() || '';
+    const result = await openAppModal({
+      title: 'Rename',
+      fields: [{ name: 'name', label: 'New name', value: currentName }],
+      confirmLabel: 'Rename',
+      validate: (form) => validateFileName(form.name)
+    });
+    if (!result || result.name === currentName) {
       return;
     }
     try {
       await api('/api/files/rename', {
         method: 'PATCH',
-        body: JSON.stringify({ path, name })
+        body: JSON.stringify({ path, name: result.name })
       });
       if (found) {
         await loadFilesPane(found.pane);
@@ -3234,7 +3409,7 @@
       }
     } catch (error) {
       if (found) {
-        filesPaneData(paneId).error = error.message;
+        filesPaneData(paneId).error = friendlyFileError(error.message);
       } else {
         state.fileError = error.message;
       }
@@ -3245,7 +3420,9 @@
 
   async function deleteFile(path, paneId = '') {
     const found = paneId ? findPaneState(paneId) : null;
-    if (!window.confirm('Delete this item permanently?')) {
+    const name = path.split(/[\\/]/).pop() || 'this item';
+    const confirmed = await confirmDialog('Delete item', `Delete "${name}" permanently? This cannot be undone.`, { danger: true });
+    if (!confirmed) {
       return;
     }
     try {
@@ -3260,7 +3437,7 @@
       }
     } catch (error) {
       if (found) {
-        filesPaneData(paneId).error = error.message;
+        filesPaneData(paneId).error = friendlyFileError(error.message);
       } else {
         state.fileError = error.message;
       }
@@ -3274,20 +3451,25 @@
     if (!found || !paths.length) {
       return;
     }
-    if (!window.confirm(`Delete ${paths.length} selected item(s) permanently?`)) {
+    const confirmed = await confirmDialog('Delete items', `Delete ${paths.length} selected item(s) permanently? This cannot be undone.`, { danger: true });
+    if (!confirmed) {
       return;
     }
     try {
-      for (const path of paths) {
-        await api('/api/files', {
-          method: 'DELETE',
-          body: JSON.stringify({ path })
-        });
-      }
-      state.selectedFiles[paneId] = [];
+      const { results } = await api('/api/files/delete-bulk', {
+        method: 'POST',
+        body: JSON.stringify({ paths })
+      });
+      const failed = (results || []).filter((item) => !item.ok);
+      state.selectedFiles[paneId] = failed.map((item) => item.path);
       await loadFilesPane(found.pane);
+      if (failed.length) {
+        filesPaneData(paneId).error = `${failed.length} of ${paths.length} item(s) could not be deleted.`;
+        updateFilesPane(paneId);
+        showToast(`${failed.length} of ${paths.length} item(s) could not be deleted.`);
+      }
     } catch (error) {
-      filesPaneData(paneId).error = error.message;
+      filesPaneData(paneId).error = friendlyFileError(error.message);
       showToast(error.message);
       updateFilesPane(paneId);
     }
@@ -3304,21 +3486,10 @@
         const result = await response.json().catch(() => ({ error: 'Download failed.' }));
         throw new Error(result.error || 'Download failed.');
       }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      const disposition = response.headers.get('Content-Disposition') || '';
-      const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
-      const plainName = disposition.match(/filename="?([^";]+)"?/i)?.[1];
-      link.download = encodedName ? decodeURIComponent(encodedName) : (plainName || path.split(/[\\/]/).pop() || 'download');
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      await saveResponseAsFile(response, path.split(/[\\/]/).pop() || 'download');
     } catch (error) {
       if (paneId) {
-        filesPaneData(paneId).error = error.message;
+        filesPaneData(paneId).error = friendlyFileError(error.message);
       } else {
         state.fileError = error.message;
       }
@@ -3330,8 +3501,36 @@
   }
 
   async function downloadFiles(paths, paneId) {
-    for (const path of paths) {
-      await downloadFile(path, paneId);
+    if (!paths.length) {
+      return;
+    }
+    if (paths.length === 1) {
+      await downloadFile(paths[0], paneId);
+      return;
+    }
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (state.token) {
+        headers.Authorization = `Bearer ${state.token}`;
+      }
+      const response = await fetch('/api/files/download-archive', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ paths })
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({ error: 'Download failed.' }));
+        throw new Error(result.error || 'Download failed.');
+      }
+      await saveResponseAsFile(response, 'wps7-files.zip');
+    } catch (error) {
+      if (paneId) {
+        filesPaneData(paneId).error = friendlyFileError(error.message);
+      }
+      showToast(error.message);
+      if (paneId) {
+        updateFilesPane(paneId);
+      }
     }
   }
 

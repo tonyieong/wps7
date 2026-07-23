@@ -1234,6 +1234,22 @@ function main() {
     }
   });
 
+  app.post('/api/files/download-archive', requireFileAuth(config), async (req, res) => {
+    try {
+      const download = await files.prepareBulkDownload(req.body.paths);
+      res.download(download.path, download.name, (error) => {
+        if (download.temporary) {
+          fs.unlink(download.path, () => {});
+        }
+        if (error && !res.headersSent) {
+          handleRouteError(res, error);
+        }
+      });
+    } catch (error) {
+      handleRouteError(res, error);
+    }
+  });
+
   app.patch('/api/files/rename', requireFileAuth(config), (req, res) => {
     try {
       res.json(files.renameItem(req.body.path, req.body.name));
@@ -1253,6 +1269,14 @@ function main() {
   app.delete('/api/files', requireFileAuth(config), (req, res) => {
     try {
       res.json(files.deleteItem(req.body.path));
+    } catch (error) {
+      handleRouteError(res, error);
+    }
+  });
+
+  app.post('/api/files/delete-bulk', requireFileAuth(config), (req, res) => {
+    try {
+      res.json(files.deleteItems(req.body.paths));
     } catch (error) {
       handleRouteError(res, error);
     }

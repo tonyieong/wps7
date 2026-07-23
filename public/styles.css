@@ -3251,6 +3251,133 @@ textarea:focus-visible {
   padding: 0 2px 2px;
 }
 
+.file-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 28px 16px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.file-empty-state .file-action-icon {
+  width: 26px;
+  height: 26px;
+  opacity: .6;
+}
+
+.file-empty-state p {
+  margin: 0;
+  max-width: 34ch;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.app-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(5, 7, 10, 0.72);
+}
+
+.app-modal {
+  width: min(420px, 100%);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 24px 60px var(--shadow);
+  overflow: hidden;
+}
+
+.app-modal-header {
+  padding: 14px 16px 10px;
+  font: 600 14px/1.2 "Segoe UI", system-ui, sans-serif;
+  color: var(--text);
+}
+
+.app-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 16px 12px;
+}
+
+.app-modal-message {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.app-modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.app-modal-field input {
+  height: 34px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font: 13px/1 "Cascadia Mono", Consolas, monospace;
+}
+
+.app-modal-field input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.app-modal-error {
+  min-height: 16px;
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.app-modal-error:empty {
+  min-height: 0;
+}
+
+.app-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-soft);
+}
+
+.app-modal-footer button {
+  min-width: 84px;
+  padding: 0 14px;
+}
+
+.app-modal-danger {
+  height: 34px;
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--danger) 22%, var(--panel));
+  color: var(--text);
+  cursor: pointer;
+}
+
+.app-modal-danger:disabled {
+  opacity: .5;
+  cursor: default;
+}
+
 .file-column-header {
   width: max(100%, var(--file-table-width));
   min-width: var(--file-table-width);

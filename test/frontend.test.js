@@ -697,7 +697,7 @@ test('path dropdown combines current, history, and bookmarked paths', () => {
   assert.match(appSource, /filePathHistory:\s*loadFilePathHistory\(\)/);
   assert.match(appSource, /function rememberFilePath\(path\)/);
   assert.match(appSource, /class="file-path-menu"[^>]+role="listbox"/);
-  assert.match(appSource, /state\.filePathHistory\.slice\(0, 5\)/);
+  assert.match(appSource, /state\.filePathHistory\s*\.filter\(\(path\) => path\.toLowerCase\(\) !== currentPath\)\s*\.slice\(0, 5\)/);
   assert.match(appSource, /class="file-path-heading"[^>]*>Current<\/div>[\s\S]*class="file-path-divider"[^>]+role="separator"[\s\S]*class="file-path-heading"[^>]*>History<\/div>[\s\S]*class="file-path-divider"[^>]+role="separator"[\s\S]*class="file-path-heading"[^>]*>Bookmark<\/div>/);
   assert.match(appSource, /data-path-kind="\$\{kind\}"/);
   assert.match(appSource, /data-file-path-choice=/);
