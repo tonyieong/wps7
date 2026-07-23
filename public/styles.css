@@ -4138,6 +4138,7 @@ a:focus-visible {
 .browser-tab-strip {
   display: flex;
   align-items: stretch;
+  gap: 4px;
   min-width: 0;
   height: var(--pane-toolbar-height);
   padding: 2px 3px 0;
@@ -4146,6 +4147,12 @@ a:focus-visible {
   background: color-mix(in srgb, var(--surface-soft) 82%, var(--terminal-bg));
   cursor: move;
   user-select: none;
+}
+
+.browser-tab-strip .pane-kind-icon,
+.notepad-tab-strip .pane-kind-icon {
+  flex: 0 0 auto;
+  align-self: center;
 }
 
 .browser-tab-list {
@@ -4163,7 +4170,7 @@ a:focus-visible {
 
 .browser-tab {
   display: grid;
-  grid-template-columns: 14px minmax(24px, 1fr) 16px;
+  grid-template-columns: minmax(24px, 1fr) 16px;
   align-items: center;
   gap: 3px;
   flex: 0 1 150px;
@@ -4183,12 +4190,6 @@ a:focus-visible {
   border-color: var(--line);
   background: var(--terminal-bg);
   color: var(--text);
-}
-
-.browser-tab-icon,
-.browser-tab-icon svg {
-  width: 13px;
-  height: 13px;
 }
 
 .browser-tab-label {
@@ -4217,14 +4218,24 @@ a:focus-visible {
 .browser-new-tab {
   flex: 0 0 24px;
   width: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0;
   border: 0;
+  border-radius: 3px;
   background: transparent;
   color: var(--muted);
-  font-size: 17px;
 }
 
 .browser-new-tab:hover {
+  background: var(--surface-soft);
   color: var(--text);
+}
+
+.browser-new-tab .file-action-icon,
+.notepad-new-tab .file-action-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .browser-toolbar {
@@ -4359,7 +4370,14 @@ a:focus-visible {
   height: 100%;
   border: 0;
   background: var(--terminal-bg);
+}
+
+.browser-surface {
   object-fit: contain;
+}
+
+.browser-video {
+  object-fit: fill;
 }
 
 .browser-video[hidden] {
@@ -4486,6 +4504,7 @@ a:focus-visible {
 }
 
 .notepad-pane {
+  position: relative;
   grid-template-rows: auto minmax(0, 1fr);
   --notepad-divider: color-mix(in srgb, var(--text) 16%, var(--terminal-bg));
 }
@@ -4502,11 +4521,6 @@ a:focus-visible {
   color: var(--accent);
   cursor: move;
   user-select: none;
-}
-
-.notepad-tab-strip .pane-kind-icon {
-  flex: 0 0 auto;
-  align-self: center;
 }
 
 .notepad-tab-list {
@@ -4589,13 +4603,17 @@ a:focus-visible {
 .notepad-new-tab {
   flex: 0 0 24px;
   width: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0;
   border: 0;
+  border-radius: 3px;
   background: transparent;
   color: var(--muted);
-  font-size: 17px;
 }
 
 .notepad-new-tab:hover {
+  background: var(--surface-soft);
   color: var(--text);
 }
 
@@ -4707,16 +4725,23 @@ a:focus-visible {
 
 .notepad-find-popover,
 .notepad-replace-popover {
-  right: 0;
-  left: auto;
+  top: 50%;
+  left: 50%;
+  right: auto;
+  transform: translate(-50%, -50%);
   display: grid;
-  grid-template-columns: minmax(120px, 1fr) 76px 76px;
+  grid-template-columns: minmax(120px, 1fr) 26px 26px;
   gap: 3px;
-  width: min(370px, calc(100vw - 16px));
+  width: min(300px, calc(100% - 16px));
 }
 
 .notepad-replace-popover {
-  width: min(420px, calc(100vw - 16px));
+  width: min(300px, calc(100% - 16px));
+}
+
+.notepad-find-control,
+.notepad-replace-control {
+  position: static;
 }
 
 .notepad-find-popover input,
@@ -4734,7 +4759,85 @@ a:focus-visible {
 
 .notepad-find-popover button,
 .notepad-replace-popover button {
-  width: 76px;
+  width: 26px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+
+.notepad-find-popover .file-action-icon,
+.notepad-replace-popover .file-action-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.notepad-save-dialog {
+  width: min(480px, calc(100vw - 24px));
+}
+
+.notepad-save-dialog .app-modal-body {
+  display: grid;
+  gap: 8px;
+}
+
+.notepad-save-location {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 3px;
+}
+
+.notepad-save-location input {
+  min-width: 0;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-raised);
+  color: var(--text);
+  font: 11px/1 "Cascadia Mono", Consolas, monospace;
+}
+
+.notepad-save-directory-list {
+  min-height: 140px;
+  max-height: min(320px, 45vh);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--terminal-bg);
+}
+
+.notepad-save-directory-list button {
+  width: 100%;
+  height: 28px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  padding: 0 7px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.notepad-save-directory-list button:hover,
+.notepad-save-directory-list button:focus-visible {
+  background: var(--accent-soft);
+  outline: none;
+}
+
+.notepad-save-directory-list button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notepad-save-empty {
+  padding: 12px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 11px;
 }
 
 .notepad-editor-shell {

@@ -77,6 +77,7 @@
 
   const app = document.getElementById('app');
   document.addEventListener('pointerdown', closeFloatingSidebarFromOutside);
+  document.addEventListener('pointerdown', closeNotepadPopoversFromOutside);
   window.visualViewport?.addEventListener('resize', updateVisualViewport);
   window.visualViewport?.addEventListener('scroll', updateVisualViewport);
   updateVisualViewport();
@@ -594,7 +595,10 @@
       ? `<span class="pane-upload-status" data-pane-upload-status="${pane.id}" aria-live="polite"></span>`
       : '';
     const header = pane.type === 'browser'
-      ? `<div class="browser-tab-strip" data-browser-tab-strip data-pane-title="${pane.id}">${renderBrowserTabs(pane)}</div>`
+      ? `<div class="browser-tab-strip" data-browser-tab-strip data-pane-title="${pane.id}">
+          <span class="pane-kind-icon" aria-hidden="true">${fileActionIcon('browser')}</span>
+          ${renderBrowserTabs(pane)}
+        </div>`
       : pane.type === 'notepad'
         ? `<div class="notepad-tab-strip" data-notepad-tab-strip data-pane-title="${pane.id}">
           <span class="pane-kind-icon" aria-hidden="true">${fileActionIcon('notepad')}</span>
@@ -689,6 +693,7 @@
     cut: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M8.5 8.5 20 20M8.5 15.5 20 4"/>',
     paste: '<rect x="5" y="4" width="14" height="17" rx="2"/><rect x="9" y="2" width="6" height="4" rx="1"/>',
     replace: '<path d="M7 7h10M7 7l3-3M7 7l3 3M17 17H7M17 17l-3-3M17 17l-3 3"/>',
+    'replace-all': '<path d="M5 6h10M5 6l3-3M5 6l3 3M19 11H9M19 11l-3-3M19 11l-3 3M5 18h10M5 18l3-3M5 18l3 3"/>',
     wrap: '<path d="M4 7h16M4 12h11a3 3 0 1 1 0 6h-3M4 17h5"/><path d="m14 15 3 3-3 3"/>',
     indent: '<path d="M4 4v16M9 4v16M4 8h5M4 16h5"/>',
     autosave: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/>',
@@ -883,12 +888,11 @@
       <div class="browser-tab-list" role="tablist">
         ${(pane.browserTabs || [active]).map((tab) => `
           <div class="browser-tab ${tab.id === active.id ? 'active' : ''}" role="tab" tabindex="0" aria-selected="${tab.id === active.id}" data-browser-tab="${tab.id}" title="${escapeAttr(tab.title || tab.url || 'New tab')}">
-            <span class="browser-tab-icon" aria-hidden="true">${fileActionIcon('browser')}</span>
             <span class="browser-tab-label">${escapeHtml(tab.title || 'New tab')}</span>
             <button class="browser-tab-close" type="button" aria-label="Close ${escapeAttr(tab.title || 'tab')}" data-browser-close-tab="${tab.id}">×</button>
           </div>`).join('')}
       </div>
-      <button class="browser-new-tab" type="button" data-browser-new-tab aria-label="New tab" title="New tab">+</button>`;
+      <button class="browser-new-tab" type="button" data-browser-new-tab aria-label="New tab" title="New tab">${fileActionIcon('add')}</button>`;
   }
 
   function renderBrowserPane(pane) {
@@ -1000,21 +1004,26 @@
     }).join('');
   }
 
+  function notepadTabLabel(tab) {
+    const pathLabel = String(tab?.path || '').split(/[\\/]/).filter(Boolean).pop();
+    return pathLabel || tab?.title || 'Untitled';
+  }
+
   function renderNotepadTabs(pane) {
     const tabs = pane.notepadTabs || [];
     return `
       <div class="notepad-tab-list" role="tablist">
         ${tabs.map((tab) => {
           const data = notepadTabData(tab.id);
-          const label = tab.path || tab.title || 'Untitled';
+          const label = notepadTabLabel(tab);
           return `
-          <div class="notepad-tab ${tab.id === pane.activeNotepadTabId ? 'active' : ''}" role="tab" tabindex="0" aria-selected="${tab.id === pane.activeNotepadTabId}" data-notepad-tab="${tab.id}" title="${escapeAttr(label)}">
+          <div class="notepad-tab ${tab.id === pane.activeNotepadTabId ? 'active' : ''}" role="tab" tabindex="0" aria-selected="${tab.id === pane.activeNotepadTabId}" data-notepad-tab="${tab.id}" title="${escapeAttr(tab.path || label)}">
             <span class="notepad-tab-label">${data.dirty ? '<span class="notepad-tab-modified">*</span>' : ''}${escapeHtml(label)}</span>
             <button class="notepad-tab-close" type="button" aria-label="Close ${escapeAttr(label)}" data-notepad-close-tab="${tab.id}">×</button>
           </div>`;
         }).join('')}
       </div>
-      <button class="notepad-new-tab" type="button" data-notepad-new-tab aria-label="New file" title="New file (Ctrl+N)">+</button>`;
+      <button class="notepad-new-tab" type="button" data-notepad-new-tab aria-label="New file" title="New file (Ctrl+N)">${fileActionIcon('add')}</button>`;
   }
 
   function renderNotepadPane(pane) {
@@ -1049,19 +1058,19 @@
             <button class="file-command-button" type="button" data-notepad-find aria-label="Find" aria-expanded="false" title="Find (Ctrl+F)">${fileActionIcon('search')}</button>
             <div class="notepad-popover notepad-find-popover" data-notepad-find-popover role="dialog" aria-label="Find" hidden>
               <input type="text" data-notepad-find-input placeholder="Find" aria-label="Find">
-              <button type="button" data-notepad-find-prev>Previous</button>
-              <button type="button" data-notepad-find-next>Next</button>
+              <button type="button" data-notepad-find-prev aria-label="Previous match" title="Previous match">${fileActionIcon('browser-back')}</button>
+              <button type="button" data-notepad-find-next aria-label="Next match" title="Next match">${fileActionIcon('browser-forward')}</button>
             </div>
           </div>
           <div class="notepad-popover-control notepad-replace-control" data-toolbar-item>
             <button class="file-command-button" type="button" data-notepad-replace aria-label="Replace" aria-expanded="false" title="Replace (Ctrl+H)">${fileActionIcon('replace')}</button>
             <div class="notepad-popover notepad-replace-popover" data-notepad-replace-popover role="dialog" aria-label="Replace" hidden>
               <input type="text" data-notepad-replace-find-input placeholder="Find" aria-label="Find">
-              <button type="button" data-notepad-replace-prev>Previous</button>
-              <button type="button" data-notepad-replace-next>Next</button>
+              <button type="button" data-notepad-replace-prev aria-label="Previous match" title="Previous match">${fileActionIcon('browser-back')}</button>
+              <button type="button" data-notepad-replace-next aria-label="Next match" title="Next match">${fileActionIcon('browser-forward')}</button>
               <input type="text" data-notepad-replace-input placeholder="Replace" aria-label="Replace">
-              <button type="button" data-notepad-replace-one>Replace</button>
-              <button type="button" data-notepad-replace-all>Replace all</button>
+              <button type="button" data-notepad-replace-one aria-label="Replace" title="Replace">${fileActionIcon('replace')}</button>
+              <button type="button" data-notepad-replace-all aria-label="Replace all" title="Replace all">${fileActionIcon('replace-all')}</button>
             </div>
           </div>
           <button class="file-command-button ${data.wrap ? 'active' : ''}" type="button" data-toolbar-item data-notepad-wrap aria-label="Word wrap" aria-pressed="${data.wrap}" title="Word wrap">${fileActionIcon('wrap')}</button>
@@ -2027,6 +2036,12 @@
       const rect = inputSurface.getBoundingClientRect();
       const contentWidth = Math.max(1, remoteViewport.width);
       const contentHeight = Math.max(1, remoteViewport.height);
+      if (streamMode === 'webrtc') {
+        return {
+          x: Math.max(0, Math.min(contentWidth, (event.clientX - rect.left) / Math.max(1, rect.width) * contentWidth)),
+          y: Math.max(0, Math.min(contentHeight, (event.clientY - rect.top) / Math.max(1, rect.height) * contentHeight))
+        };
+      }
       const scale = Math.min(rect.width / contentWidth, rect.height / contentHeight);
       const renderedWidth = contentWidth * scale;
       const renderedHeight = contentHeight * scale;
@@ -2493,6 +2508,156 @@
     paneElement.querySelector('[data-notepad-new-tab]')?.addEventListener('click', () => addNotepadTab(paneId, ''));
   }
 
+  function localPathDirectory(filePath) {
+    const value = String(filePath || '').replace(/[\\/]+$/, '');
+    const separator = Math.max(value.lastIndexOf('\\'), value.lastIndexOf('/'));
+    if (separator < 0) return '';
+    if (separator === 2 && /^[A-Za-z]:/.test(value)) return value.slice(0, 3);
+    return value.slice(0, separator);
+  }
+
+  function joinLocalPath(directory, name) {
+    return `${String(directory || '').replace(/[\\/]+$/, '')}\\${name}`;
+  }
+
+  function openNotepadSaveDialog(paneId, tabId) {
+    return new Promise((resolve) => {
+      document.querySelector('.app-modal-overlay')?.remove();
+      const found = findPaneState(paneId);
+      const tab = found?.pane.notepadTabs?.find((candidate) => candidate.id === tabId);
+      if (!found || !tab) {
+        resolve(null);
+        return;
+      }
+      const previousFocus = document.activeElement;
+      const startLocation = tab.path ? localPathDirectory(tab.path) : found.pane.cwd;
+      const startName = notepadTabLabel(tab) === 'Untitled' ? 'Untitled.txt' : notepadTabLabel(tab);
+      const overlay = document.createElement('div');
+      overlay.className = 'app-modal-overlay';
+      overlay.innerHTML = `
+        <div class="app-modal notepad-save-dialog" role="dialog" aria-modal="true" aria-label="Save file">
+          <header class="app-modal-header">Save file</header>
+          <div class="app-modal-body">
+            <div class="notepad-save-location">
+              <button class="file-command-button" type="button" data-notepad-save-up aria-label="Up one level" title="Up one level">${fileActionIcon('up')}</button>
+              <input type="text" data-notepad-save-location value="${escapeAttr(startLocation)}" aria-label="Save location" autocomplete="off" autocapitalize="off" spellcheck="false">
+              <button class="file-command-button" type="button" data-notepad-save-refresh aria-label="Refresh" title="Refresh">${fileActionIcon('refresh')}</button>
+            </div>
+            <div class="notepad-save-directory-list" data-notepad-save-directories role="listbox" aria-label="Folders"></div>
+            <label class="app-modal-field">
+              <span>File name</span>
+              <input data-notepad-save-name value="${escapeAttr(startName)}" autocomplete="off" autocapitalize="off" spellcheck="false">
+            </label>
+            <div class="app-modal-error" data-modal-error role="alert"></div>
+          </div>
+          <footer class="app-modal-footer">
+            <button type="button" class="secondary" data-modal-cancel>Cancel</button>
+            <button type="button" class="primary" data-modal-confirm>Save</button>
+          </footer>
+        </div>`;
+      document.body.appendChild(overlay);
+      const locationInput = overlay.querySelector('[data-notepad-save-location]');
+      const nameInput = overlay.querySelector('[data-notepad-save-name]');
+      const list = overlay.querySelector('[data-notepad-save-directories]');
+      const errorElement = overlay.querySelector('[data-modal-error]');
+      const confirmButton = overlay.querySelector('[data-modal-confirm]');
+      const upButton = overlay.querySelector('[data-notepad-save-up]');
+      let currentLocation = startLocation;
+      let parentLocation = '';
+      let loading = false;
+      let locationError = '';
+
+      const validate = () => {
+        const error = locationError || validateFileName(nameInput.value) || (!currentLocation ? 'Choose a folder.' : '');
+        errorElement.textContent = error;
+        confirmButton.disabled = Boolean(error) || loading;
+        return !error && !loading;
+      };
+      const close = (result) => {
+        document.removeEventListener('keydown', onKey, true);
+        overlay.remove();
+        previousFocus?.focus?.();
+        resolve(result);
+      };
+      const renderLocations = (items) => {
+        list.innerHTML = items.length ? items.map((item) => `
+          <button type="button" role="option" data-notepad-save-directory="${escapeAttr(item.path)}" title="${escapeAttr(item.path)}">
+            ${fileActionIcon(item.drive ? 'drive' : 'folder')}
+            <span>${escapeHtml(item.name)}</span>
+          </button>`).join('') : '<div class="notepad-save-empty">No folders here</div>';
+        list.querySelectorAll('[data-notepad-save-directory]').forEach((button) => {
+          button.onclick = () => loadLocation(button.dataset.notepadSaveDirectory);
+        });
+      };
+      const loadLocation = async (location) => {
+        loading = true;
+        locationError = '';
+        list.innerHTML = '<div class="notepad-save-empty">Loading…</div>';
+        validate();
+        try {
+          if (!location) {
+            const result = await api('/api/files/drives');
+            currentLocation = '';
+            parentLocation = '';
+            locationInput.value = '';
+            renderLocations((result.drives || []).map((drive) => ({ ...drive, drive: true })));
+          } else {
+            const result = await api(`/api/files?path=${encodeURIComponent(location)}`);
+            currentLocation = result.path;
+            parentLocation = result.parent || '';
+            locationInput.value = currentLocation;
+            renderLocations((result.entries || []).filter((entry) => entry.type === 'directory'));
+          }
+        } catch (error) {
+          currentLocation = '';
+          parentLocation = '';
+          locationError = error.message;
+          list.innerHTML = '<div class="notepad-save-empty">Location unavailable</div>';
+        } finally {
+          loading = false;
+          upButton.disabled = !currentLocation;
+          validate();
+        }
+      };
+      const commit = () => {
+        if (validate()) close(joinLocalPath(currentLocation, nameInput.value.trim()));
+      };
+      const onKey = (event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          close(null);
+        } else if (event.key === 'Enter' && event.target === locationInput) {
+          event.preventDefault();
+          loadLocation(locationInput.value.trim());
+        } else if (event.key === 'Enter' && event.target === nameInput) {
+          event.preventDefault();
+          commit();
+        }
+      };
+
+      document.addEventListener('keydown', onKey, true);
+      overlay.addEventListener('mousedown', (event) => {
+        if (event.target === overlay) close(null);
+      });
+      upButton.onclick = () => loadLocation(parentLocation);
+      overlay.querySelector('[data-notepad-save-refresh]').onclick = () => loadLocation(currentLocation);
+      overlay.querySelector('[data-modal-cancel]').onclick = () => close(null);
+      confirmButton.onclick = commit;
+      nameInput.oninput = validate;
+      locationInput.oninput = () => {
+        if (locationInput.value.trim() !== currentLocation) {
+          currentLocation = '';
+          parentLocation = '';
+          locationError = 'Press Enter to open this location.';
+          validate();
+        }
+      };
+      loadLocation(startLocation);
+      nameInput.focus();
+      nameInput.select();
+    });
+  }
+
   async function saveNotepadTab(paneId, tabId, silent = false) {
     const found = findPaneState(paneId);
     const tab = found?.pane.notepadTabs?.find((candidate) => candidate.id === tabId);
@@ -2511,15 +2676,16 @@
       }
       return;
     }
-    if (!tab.path) {
-      editNotepadTabPath(paneId, tabId);
-      showToast('Enter a file path before saving.');
-      return;
+    let savePath = tab.path;
+    if (!savePath) {
+      const selectedPath = await openNotepadSaveDialog(paneId, tabId);
+      if (!selectedPath) return;
+      savePath = selectedPath;
     }
     try {
       const result = await api('/api/files/text', {
         method: 'PUT',
-        body: JSON.stringify({ path: tab.path, content: data.content, encoding: data.encoding })
+        body: JSON.stringify({ path: savePath, content: data.content, encoding: data.encoding })
       });
       data.loadedPath = result.path;
       data.encoding = result.encoding;
@@ -2615,6 +2781,15 @@
       const candidateOpen = candidate === popover && open;
       candidate.hidden = !candidateOpen;
       candidate.parentElement.querySelector('[aria-expanded]')?.setAttribute('aria-expanded', String(candidateOpen));
+    });
+  }
+
+  function closeNotepadPopoversFromOutside(event) {
+    document.querySelectorAll('.notepad-font-popover:not([hidden]), .notepad-font-size-popover:not([hidden])').forEach((popover) => {
+      const control = popover.closest('.notepad-popover-control');
+      if (!control?.contains(event.target)) {
+        setNotepadPopoverOpen(popover.closest('.notepad-pane'), popover, false);
+      }
     });
   }
 

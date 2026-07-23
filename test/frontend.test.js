@@ -229,10 +229,12 @@ test('workspace exposes browser panes with URL history, bookmarks and an embedde
 });
 
 test('browser tabs replace the browser pane title at the shared title height', () => {
-  assert.match(appSource, /pane\.type === 'browser'[\s\S]*?class="browser-tab-strip"[\s\S]*?data-pane-title="\$\{pane\.id\}"/);
+  assert.match(appSource, /pane\.type === 'browser'[\s\S]*?class="browser-tab-strip"[\s\S]*?data-pane-title="\$\{pane\.id\}"[\s\S]*?fileActionIcon\('browser'\)/);
   assert.doesNotMatch(appSource, /function renderBrowserPane\(pane\)[\s\S]*?<div class="browser-tab-strip"/);
   assert.match(styles, /\.pane\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\)/s);
   assert.match(styles, /\.browser-tab-strip\s*\{[^}]*height:\s*var\(--pane-toolbar-height\)[^}]*padding-right:\s*38px/s);
+  assert.match(appSource, /data-browser-new-tab[^>]*>\$\{fileActionIcon\('add'\)\}<\/button>/);
+  assert.match(appSource, /data-notepad-new-tab[^>]*>\$\{fileActionIcon\('add'\)\}<\/button>/);
 });
 
 test('workspace exposes multi-tab notepad panes with line numbers and text-file save support', () => {
@@ -599,17 +601,37 @@ test('Notepad uses compact popovers, four-space tabs, and synchronized wrapped r
   assert.match(appSource, /data-notepad-font-size-popover[^>]*role="dialog"/);
   assert.match(appSource, /data-notepad-find-popover[^>]*role="dialog"/);
   assert.match(appSource, /data-notepad-replace-popover[^>]*role="dialog"/);
-  assert.match(appSource, /data-notepad-find-prev[^>]*>Previous<\/button>/);
-  assert.match(appSource, /data-notepad-find-next[^>]*>Next<\/button>/);
-  assert.match(appSource, /data-notepad-replace-one[^>]*>Replace<\/button>/);
-  assert.match(appSource, /data-notepad-replace-all[^>]*>Replace all<\/button>/);
+  assert.match(appSource, /data-notepad-find-prev[^>]*>\$\{fileActionIcon\('browser-back'\)\}<\/button>/);
+  assert.match(appSource, /data-notepad-find-next[^>]*>\$\{fileActionIcon\('browser-forward'\)\}<\/button>/);
+  assert.match(appSource, /data-notepad-replace-one[^>]*>\$\{fileActionIcon\('replace'\)\}<\/button>/);
+  assert.match(appSource, /data-notepad-replace-all[^>]*>\$\{fileActionIcon\('replace-all'\)\}<\/button>/);
   assert.match(appSource, /editor\.setRangeText\(' {4}', start, editor\.selectionEnd, 'end'\)/);
   assert.match(appSource, /function syncNotepadRows\(paneElement, editor, gutter, guides\)/);
   assert.match(appSource, /function renderNotepadIndentGuides\(content/);
   assert.match(styles, /\.notepad-toolbar\s*\{[^}]*justify-content:\s*flex-start/s);
   assert.match(styles, /\.notepad-popover\s*\{[^}]*position:\s*absolute/s);
+  assert.match(styles, /\.notepad-find-popover,\s*\.notepad-replace-popover\s*\{[^}]*top:\s*50%[^}]*left:\s*50%[^}]*transform:\s*translate\(-50%, -50%\)/s);
+  assert.match(appSource, /function closeNotepadPopoversFromOutside\(event\)/);
+  assert.match(appSource, /changePaneFontSize\(paneId, -1\)/);
+  assert.match(appSource, /changePaneFontSize\(paneId, 1\)/);
   assert.match(styles, /tab-size:\s*4/);
   assert.doesNotMatch(styles, /\.notepad-editor-shell\.indent-guides-on \.notepad-editor\s*\{[^}]*repeating-linear-gradient/s);
+});
+
+test('Notepad titles show file names and pathless saves use a server-side location picker', () => {
+  assert.match(appSource, /function notepadTabLabel\(tab\)/);
+  assert.match(appSource, /split\(\/\[\\\\\/\]\//);
+  assert.match(appSource, /function openNotepadSaveDialog\(paneId, tabId\)/);
+  assert.match(appSource, /class="app-modal notepad-save-dialog"/);
+  assert.match(appSource, /api\('\/api\/files\/drives'\)/);
+  assert.match(appSource, /api\(`\/api\/files\?path=\$\{encodeURIComponent\(location\)\}`\)/);
+  assert.match(appSource, /const selectedPath = await openNotepadSaveDialog\(paneId, tabId\)/);
+  assert.match(styles, /\.notepad-save-directory-list\s*\{[^}]*overflow:\s*auto/s);
+});
+
+test('WebRTC browser video fills the pane while preserving remote input coordinates', () => {
+  assert.match(styles, /\.browser-video\s*\{[^}]*object-fit:\s*fill/s);
+  assert.match(appSource, /if \(streamMode === 'webrtc'\)[\s\S]*?rect\.width[\s\S]*?contentWidth[\s\S]*?rect\.height[\s\S]*?contentHeight/);
 });
 
 test('Notepad persists autosave drafts and editor toggles through the server state', () => {

@@ -128,6 +128,17 @@ test('tab capture ending signals every WebRTC peer sharing the stream', () => {
   assert.match(expression, /peerId: activePeerId, type: 'captureEnded'/);
 });
 
+test('tab capture crops WebRTC video to the emulated page viewport when Chromium supports it', () => {
+  const page = Object.create(RemoteBrowserPage.prototype);
+  page.rtcStateKey = '__state';
+  page.rtcBinding = '__signal';
+  const expression = page.rtcCaptureExpression('peer-1');
+
+  assert.match(expression, /CropTarget\?\.fromElement/);
+  assert.match(expression, /CropTarget\.fromElement\(document\.documentElement\)/);
+  assert.match(expression, /videoTrack\.cropTo\(cropTarget\)/);
+});
+
 test('remote browser blocks every local interface on the WPS7 server port', () => {
   const interfaces = {
     Ethernet: [

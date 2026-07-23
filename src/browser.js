@@ -390,6 +390,15 @@ class RemoteBrowserPage {
             }
           })();
           state.stream = await state.streamPromise;
+          const videoTrack = state.stream.getVideoTracks()[0];
+          if (videoTrack && globalThis.CropTarget?.fromElement && typeof videoTrack.cropTo === 'function') {
+            try {
+              const cropTarget = await CropTarget.fromElement(document.documentElement);
+              await videoTrack.cropTo(cropTarget);
+            } catch (error) {
+              // Region Capture is optional; the client still fills the pane when unavailable.
+            }
+          }
           state.stream.getTracks().forEach((track) => {
             track.addEventListener('ended', () => {
               for (const activePeerId of state.peers.keys()) {
