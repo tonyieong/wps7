@@ -3670,7 +3670,12 @@
     const clipboardReady = Boolean(state.fileClipboard?.paths?.length);
     const items = [];
     if (anchorPath && selected.length === 1) {
-      items.push({ label: 'Open', action: () => openFileRow(paneElement.querySelector(`[data-file-open="${cssEscape(anchorPath)}"]`)?.closest('[data-file-row]') || paneElement.querySelector(`[data-file-row="${cssEscape(anchorPath)}"]`), paneId) });
+      items.push({ label: 'Open', action: () => {
+        const row = paneElement.querySelector(`[data-file-row="${cssEscape(anchorPath)}"]`);
+        if (row) {
+          openFileRow(row, paneId);
+        }
+      } });
     }
     if (selected.length) {
       items.push({ label: selected.length > 1 ? `Download (${selected.length})` : 'Download', action: () => downloadFiles(selected, paneId) });
