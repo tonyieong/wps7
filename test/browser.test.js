@@ -56,12 +56,21 @@ test('mobile viewport enables device metrics, touch and the mobile user agent', 
 
   await page.applyViewport();
 
-  assert.equal(calls[0].method, 'Emulation.setDeviceMetricsOverride');
-  assert.equal(calls[0].params.mobile, true);
-  assert.equal(calls[1].method, 'Emulation.setTouchEmulationEnabled');
-  assert.equal(calls[1].params.enabled, true);
-  assert.equal(calls[2].method, 'Emulation.setUserAgentOverride');
-  assert.match(calls[2].params.userAgent, /Mobile/);
+  // The window is sized to the viewport (so screencast frames fill the pane)
+  // before the emulation overrides are applied. Insets are 0 with the mock,
+  // so the final window bounds equal the viewport.
+  const windowBounds = calls.filter((call) => call.method === 'Browser.setWindowBounds').at(-1);
+  assert.ok(windowBounds);
+  assert.equal(windowBounds.params.bounds.width, page.viewport.width);
+  assert.equal(windowBounds.params.bounds.height, page.viewport.height);
+
+  const deviceMetrics = calls.find((call) => call.method === 'Emulation.setDeviceMetricsOverride');
+  assert.ok(deviceMetrics);
+  assert.equal(deviceMetrics.params.mobile, true);
+  const touch = calls.find((call) => call.method === 'Emulation.setTouchEmulationEnabled');
+  assert.equal(touch.params.enabled, true);
+  const userAgent = calls.find((call) => call.method === 'Emulation.setUserAgentOverride');
+  assert.match(userAgent.params.userAgent, /Mobile/);
 });
 
 test('only the latest controlling browser client can resize a shared tab', async () => {

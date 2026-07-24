@@ -669,6 +669,29 @@ test('Notepad uses compact popovers, four-space tabs, and synchronized wrapped r
   assert.doesNotMatch(styles, /\.notepad-editor-shell\.indent-guides-on \.notepad-editor\s*\{[^}]*repeating-linear-gradient/s);
 });
 
+test('notepad find and replace popovers are draggable and closeable', () => {
+  assert.match(appSource, /class="notepad-popover-header" data-notepad-popover-drag/);
+  assert.match(appSource, /data-notepad-popover-close aria-label="Close find"/);
+  assert.match(appSource, /data-notepad-popover-close aria-label="Close replace"/);
+  assert.match(appSource, /function wireNotepadPopoverDrag\(popover\)/);
+  assert.match(appSource, /handle\.setPointerCapture\(event\.pointerId\)/);
+  assert.match(appSource, /wirePopover\('\[data-notepad-find\]', '\[data-notepad-find-popover\]', true\)/);
+  assert.match(appSource, /wirePopover\('\[data-notepad-replace\]', '\[data-notepad-replace-popover\]', true\)/);
+  assert.match(appSource, /if \(persistent\) \{[\s\S]*?wireNotepadPopoverDrag\(popover\)/);
+  assert.match(styles, /\.notepad-popover-header\s*\{[^}]*grid-column:\s*1 \/ -1[^}]*cursor:\s*move/s);
+  assert.match(styles, /\.notepad-popover-header \.notepad-popover-close\s*\{/);
+});
+
+test('remote browser sizes its window so screencast frames fill the pane without distortion', () => {
+  assert.match(browserSource, /async ensureWindowFits\(\)/);
+  assert.match(browserSource, /async calibrateWindowInsets\(\)/);
+  assert.match(browserSource, /Browser\.getWindowForTarget/);
+  assert.match(browserSource, /Browser\.setWindowBounds/);
+  assert.match(browserSource, /width: this\.viewport\.width \+ insets\.width/);
+  assert.match(browserSource, /height: this\.viewport\.height \+ insets\.height/);
+  assert.match(browserSource, /async applyViewport\(\) \{[\s\S]*?await this\.ensureWindowFits\(\)/);
+});
+
 test('Notepad titles show file names and pathless saves use a server-side location picker', () => {
   assert.match(appSource, /function notepadTabLabel\(tab\)/);
   assert.match(appSource, /split\(\/\[\\\\\/\]\//);

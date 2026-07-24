@@ -4853,6 +4853,50 @@ a:focus-visible {
   position: static;
 }
 
+.notepad-popover-header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: -3px -3px 4px;
+  padding: 3px 3px 3px 8px;
+  border-bottom: 1px solid var(--line);
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}
+
+.notepad-popover-title {
+  color: var(--muted);
+  font: 700 9px/1 "Cascadia Mono", Consolas, monospace;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.notepad-popover-header .notepad-popover-close {
+  width: 20px;
+  min-height: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  font: 15px/1 "Segoe UI", system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.notepad-popover-header .notepad-popover-close:hover,
+.notepad-popover-header .notepad-popover-close:focus-visible {
+  background: var(--accent-soft);
+  color: var(--accent);
+  outline: none;
+}
+
 .notepad-find-popover input,
 .notepad-replace-popover input {
   min-width: 0;

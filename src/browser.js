@@ -110,6 +110,8 @@ class RemoteBrowserPage {
     this.nextRequestId = 1;
     this.viewport = normalizeViewport(1280, 720, 1);
     this.viewportOwner = null;
+    this.windowId = null;
+    this.windowInsets = null;
     this.clientMetadata = new Map();
     this.clientStreamModes = new Map();
     this.rtcClients = new Map();
@@ -299,8 +301,66 @@ class RemoteBrowserPage {
     if (changed) this.broadcastViewportOwner();
   }
 
+  async resolveWindowId() {
+    if (!this.windowId) {
+      const result = await this.send('Browser.getWindowForTarget', { targetId: this.targetId });
+      this.windowId = result.windowId;
+    }
+    return this.windowId;
+  }
+
+  async calibrateWindowInsets() {
+    // The screencast captures the window's web-contents area, not the device
+    // metrics override. That content area is the window frame minus fixed
+    // chrome insets, so measure them once (before any override is active) to
+    // later size the window so its content area equals the requested viewport.
+    try {
+      const windowId = await this.resolveWindowId();
+      const probeWidth = 1024;
+      const probeHeight = 768;
+      await this.send('Browser.setWindowBounds', {
+        windowId,
+        bounds: { windowState: 'normal', width: probeWidth, height: probeHeight }
+      });
+      const metrics = await this.send('Page.getLayoutMetrics');
+      const viewport = metrics.cssLayoutViewport || metrics.layoutViewport || {};
+      const clientWidth = Number(viewport.clientWidth) || probeWidth;
+      const clientHeight = Number(viewport.clientHeight) || probeHeight;
+      this.windowInsets = {
+        width: Math.max(0, Math.round(probeWidth - clientWidth)),
+        height: Math.max(0, Math.round(probeHeight - clientHeight))
+      };
+    } catch (error) {
+      this.windowInsets = { width: 0, height: 0 };
+    }
+  }
+
+  async ensureWindowFits() {
+    // If the requested viewport is larger than the window content area, the
+    // screencast frame comes back smaller than the pane and gets stretched.
+    // Size the window so its content area matches the viewport exactly.
+    try {
+      if (!this.windowInsets) {
+        await this.calibrateWindowInsets();
+      }
+      const windowId = await this.resolveWindowId();
+      const insets = this.windowInsets || { width: 0, height: 0 };
+      await this.send('Browser.setWindowBounds', {
+        windowId,
+        bounds: {
+          windowState: 'normal',
+          width: this.viewport.width + insets.width,
+          height: this.viewport.height + insets.height
+        }
+      });
+    } catch (error) {
+      // Older Chromium builds or detached windows can reject window bounds.
+    }
+  }
+
   async applyViewport() {
     const mobile = this.emulationMode === 'mobile';
+    await this.ensureWindowFits();
     await this.send('Emulation.setDeviceMetricsOverride', {
       ...this.viewport,
       mobile,

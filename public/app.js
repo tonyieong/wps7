@@ -1057,6 +1057,10 @@
           <div class="notepad-popover-control notepad-find-control" data-toolbar-item>
             <button class="file-command-button" type="button" data-notepad-find aria-label="Find" aria-expanded="false" title="Find (Ctrl+F)">${fileActionIcon('search')}</button>
             <div class="notepad-popover notepad-find-popover" data-notepad-find-popover role="dialog" aria-label="Find" hidden>
+              <div class="notepad-popover-header" data-notepad-popover-drag>
+                <span class="notepad-popover-title">Find</span>
+                <button type="button" class="notepad-popover-close" data-notepad-popover-close aria-label="Close find">×</button>
+              </div>
               <input type="text" data-notepad-find-input placeholder="Find" aria-label="Find">
               <button type="button" data-notepad-find-prev aria-label="Previous match" title="Previous match">${fileActionIcon('browser-back')}</button>
               <button type="button" data-notepad-find-next aria-label="Next match" title="Next match">${fileActionIcon('browser-forward')}</button>
@@ -1065,6 +1069,10 @@
           <div class="notepad-popover-control notepad-replace-control" data-toolbar-item>
             <button class="file-command-button" type="button" data-notepad-replace aria-label="Replace" aria-expanded="false" title="Replace (Ctrl+H)">${fileActionIcon('replace')}</button>
             <div class="notepad-popover notepad-replace-popover" data-notepad-replace-popover role="dialog" aria-label="Replace" hidden>
+              <div class="notepad-popover-header" data-notepad-popover-drag>
+                <span class="notepad-popover-title">Replace</span>
+                <button type="button" class="notepad-popover-close" data-notepad-popover-close aria-label="Close replace">×</button>
+              </div>
               <input type="text" data-notepad-replace-find-input placeholder="Find" aria-label="Find">
               <button type="button" data-notepad-replace-prev aria-label="Previous match" title="Previous match">${fileActionIcon('browser-back')}</button>
               <button type="button" data-notepad-replace-next aria-label="Next match" title="Next match">${fileActionIcon('browser-forward')}</button>
@@ -2782,6 +2790,41 @@
     });
   }
 
+  function wireNotepadPopoverDrag(popover) {
+    const handle = popover.querySelector('[data-notepad-popover-drag]');
+    if (!handle) return;
+    handle.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0 || event.target.closest('[data-notepad-popover-close]')) return;
+      event.preventDefault();
+      const parent = popover.offsetParent || document.body;
+      const parentRect = parent.getBoundingClientRect();
+      const rect = popover.getBoundingClientRect();
+      let left = rect.left - parentRect.left;
+      let top = rect.top - parentRect.top;
+      popover.style.transform = 'none';
+      popover.style.right = 'auto';
+      popover.style.left = `${left}px`;
+      popover.style.top = `${top}px`;
+      const startX = event.clientX;
+      const startY = event.clientY;
+      const maxLeft = Math.max(0, parentRect.width - rect.width);
+      const maxTop = Math.max(0, parentRect.height - rect.height);
+      handle.setPointerCapture(event.pointerId);
+      const onMove = (moveEvent) => {
+        if (!handle.hasPointerCapture(moveEvent.pointerId)) return;
+        popover.style.left = `${Math.max(0, Math.min(maxLeft, left + moveEvent.clientX - startX))}px`;
+        popover.style.top = `${Math.max(0, Math.min(maxTop, top + moveEvent.clientY - startY))}px`;
+      };
+      const onUp = (upEvent) => {
+        if (handle.hasPointerCapture(upEvent.pointerId)) handle.releasePointerCapture(upEvent.pointerId);
+        handle.removeEventListener('pointermove', onMove);
+        handle.removeEventListener('pointerup', onUp);
+      };
+      handle.addEventListener('pointermove', onMove);
+      handle.addEventListener('pointerup', onUp);
+    });
+  }
+
   function showNotepadFindPopover(paneElement, replace) {
     const popover = paneElement.querySelector(replace ? '[data-notepad-replace-popover]' : '[data-notepad-find-popover]');
     if (!popover) return;
@@ -2897,7 +2940,7 @@
 
     if (newButton) newButton.onclick = () => addNotepadTab(paneId, '');
     if (saveButton) saveButton.onclick = () => saveNotepadTab(paneId, tabId);
-    const wirePopover = (toggleSelector, popoverSelector) => {
+    const wirePopover = (toggleSelector, popoverSelector, persistent = false) => {
       const toggle = paneElement.querySelector(toggleSelector);
       const popover = paneElement.querySelector(popoverSelector);
       const control = toggle?.closest('.notepad-popover-control');
@@ -2907,9 +2950,11 @@
         setNotepadPopoverOpen(paneElement, popover, open);
         if (open) popover.querySelector('input')?.focus();
       };
-      control.onfocusout = (event) => {
-        if (!control.contains(event.relatedTarget)) setNotepadPopoverOpen(paneElement, popover, false);
-      };
+      if (!persistent) {
+        control.onfocusout = (event) => {
+          if (!control.contains(event.relatedTarget)) setNotepadPopoverOpen(paneElement, popover, false);
+        };
+      }
       control.onkeydown = (event) => {
         if (event.key === 'Escape') {
           event.preventDefault();
@@ -2917,11 +2962,18 @@
           toggle.focus();
         }
       };
+      if (persistent) {
+        wireNotepadPopoverDrag(popover);
+        popover.querySelector('[data-notepad-popover-close]')?.addEventListener('click', () => {
+          setNotepadPopoverOpen(paneElement, popover, false);
+          toggle.focus();
+        });
+      }
     };
     wirePopover('[data-notepad-font-toggle]', '[data-notepad-font-popover]');
     wirePopover('[data-notepad-font-size-toggle]', '[data-notepad-font-size-popover]');
-    wirePopover('[data-notepad-find]', '[data-notepad-find-popover]');
-    wirePopover('[data-notepad-replace]', '[data-notepad-replace-popover]');
+    wirePopover('[data-notepad-find]', '[data-notepad-find-popover]', true);
+    wirePopover('[data-notepad-replace]', '[data-notepad-replace-popover]', true);
     paneElement.querySelectorAll('[data-notepad-font]').forEach((button) => {
       button.onclick = () => {
         data.fontFamily = button.dataset.notepadFont;
