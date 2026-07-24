@@ -4482,7 +4482,7 @@ a:focus-visible {
 }
 
 .browser-surface {
-  object-fit: contain;
+  object-fit: fill;
 }
 
 .browser-video {

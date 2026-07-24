@@ -596,7 +596,6 @@
       : '';
     const header = pane.type === 'browser'
       ? `<div class="browser-tab-strip" data-browser-tab-strip data-pane-title="${pane.id}">
-          <span class="pane-kind-icon" aria-hidden="true">${fileActionIcon('browser')}</span>
           ${renderBrowserTabs(pane)}
         </div>`
       : pane.type === 'notepad'
@@ -885,6 +884,7 @@
   function renderBrowserTabs(pane) {
     const active = activeBrowserTab(pane);
     return `
+      <span class="pane-kind-icon" aria-hidden="true">${fileActionIcon('browser')}</span>
       <div class="browser-tab-list" role="tablist">
         ${(pane.browserTabs || [active]).map((tab) => `
           <div class="browser-tab ${tab.id === active.id ? 'active' : ''}" role="tab" tabindex="0" aria-selected="${tab.id === active.id}" data-browser-tab="${tab.id}" title="${escapeAttr(tab.title || tab.url || 'New tab')}">
@@ -2036,20 +2036,9 @@
       const rect = inputSurface.getBoundingClientRect();
       const contentWidth = Math.max(1, remoteViewport.width);
       const contentHeight = Math.max(1, remoteViewport.height);
-      if (streamMode === 'webrtc') {
-        return {
-          x: Math.max(0, Math.min(contentWidth, (event.clientX - rect.left) / Math.max(1, rect.width) * contentWidth)),
-          y: Math.max(0, Math.min(contentHeight, (event.clientY - rect.top) / Math.max(1, rect.height) * contentHeight))
-        };
-      }
-      const scale = Math.min(rect.width / contentWidth, rect.height / contentHeight);
-      const renderedWidth = contentWidth * scale;
-      const renderedHeight = contentHeight * scale;
-      const offsetX = (rect.width - renderedWidth) / 2;
-      const offsetY = (rect.height - renderedHeight) / 2;
       return {
-        x: Math.max(0, Math.min(contentWidth, (event.clientX - rect.left - offsetX) / Math.max(.001, scale))),
-        y: Math.max(0, Math.min(contentHeight, (event.clientY - rect.top - offsetY) / Math.max(.001, scale)))
+        x: Math.max(0, Math.min(contentWidth, (event.clientX - rect.left) / Math.max(1, rect.width) * contentWidth)),
+        y: Math.max(0, Math.min(contentHeight, (event.clientY - rect.top) / Math.max(1, rect.height) * contentHeight))
       };
     };
     const sendMouse = (eventName, event, extra = {}) => {

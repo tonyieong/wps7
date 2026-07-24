@@ -237,6 +237,17 @@ test('browser tabs replace the browser pane title at the shared title height', (
   assert.match(appSource, /data-notepad-new-tab[^>]*>\$\{fileActionIcon\('add'\)\}<\/button>/);
 });
 
+test('browser tab strip keeps its icon after tab updates and the surface fills the viewport', () => {
+  // The browser icon lives inside renderBrowserTabs so tab-strip re-renders keep it.
+  assert.match(appSource, /function renderBrowserTabs\(pane\)[\s\S]*?<span class="pane-kind-icon" aria-hidden="true">\$\{fileActionIcon\('browser'\)\}<\/span>/);
+  assert.match(appSource, /strip\.innerHTML = renderBrowserTabs\(found\.pane\)/);
+  // The JPEG canvas fills the box like the WebRTC video, so no letterbox bars appear.
+  assert.match(styles, /\.browser-surface\s*\{[^}]*object-fit:\s*fill/s);
+  // Pointer mapping is a single proportional map for both stream modes (no contain offset math).
+  assert.doesNotMatch(appSource, /const renderedWidth = contentWidth \* scale/);
+  assert.match(appSource, /const pointerPosition = \(event\) => \{\s*const rect = inputSurface\.getBoundingClientRect\(\);[\s\S]*?event\.clientX - rect\.left\) \/ Math\.max\(1, rect\.width\) \* contentWidth/);
+});
+
 test('workspace exposes multi-tab notepad panes with line numbers and text-file save support', () => {
   assert.match(appSource, /data-action="notepad"[^>]+aria-label="New notepad"/);
   assert.match(appSource, /function renderNotepadPane\(pane\)/);
