@@ -542,15 +542,22 @@ test('terminal title and bell sequences update pane names and browser notificati
   assert.match(appSource, /notificationInput\?\.disabled/);
 });
 
-test('panes expose invisible resize targets on every edge and corner over a dotted infinite canvas', () => {
+test('panes expose invisible resize targets on every edge and corner over an aligned grid canvas', () => {
   for (const direction of ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw']) {
     assert.match(appSource, new RegExp(`data-pane-resize-direction="${direction}"`));
   }
   assert.match(appSource, /function bringPaneToFront\(tab, pane, paneElement\)/);
   assert.match(appSource, /savePaneLayoutLocal\(paneId, nextLayout\)/);
-  assert.match(styles, /\.pane-grid\s*\{[^}]*radial-gradient[^}]*\}/s);
+  assert.match(styles, /\.pane-grid\s*\{[^}]*linear-gradient[^}]*\}/s);
   assert.match(styles, /\.pane-canvas\s*\{[^}]*transform-origin:\s*0 0/s);
   assert.doesNotMatch(styles, /\.pane-resize::after\s*\{[^}]*border-/s);
+});
+
+test('pane layouts snap to a fixed grid unit so every pane area is a multiple of one cell', () => {
+  assert.match(appSource, /function snapUnit\(value\)/);
+  assert.match(appSource, /Math\.round\(value \/ GRID_UNIT\) \* GRID_UNIT/);
+  assert.match(appSource, /const w = Math\.max\(GRID_UNIT, snapUnit\(/);
+  assert.match(appSource, /const x = snapUnit\(/);
 });
 
 test('pane resize uses free world-pixel deltas scaled by the camera zoom', () => {

@@ -3,11 +3,10 @@ const path = require('path');
 const crypto = require('crypto');
 const { normalizeCwd } = require('./shell');
 
-const DEFAULT_PANE_WIDTH = 760;
+const GRID_UNIT = 120;
+const DEFAULT_PANE_WIDTH = 720;
 const DEFAULT_PANE_HEIGHT = 480;
-const MIN_PANE_WIDTH = 160;
-const MIN_PANE_HEIGHT = 120;
-const PANE_CASCADE_STEP = 32;
+const PANE_CASCADE_STEP = GRID_UNIT;
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 4;
 const PANE_TYPES = new Set(['terminal', 'files', 'browser', 'notepad']);
@@ -95,7 +94,7 @@ function defaultSession(name = 'Workspace 1', paneTitle = 'PowerShell 1') {
             title: paneTitle,
             cwd: process.cwd(),
             split: null,
-            layout: { x: 40, y: 40, w: DEFAULT_PANE_WIDTH, h: DEFAULT_PANE_HEIGHT, z: 1 },
+            layout: { x: GRID_UNIT, y: GRID_UNIT, w: DEFAULT_PANE_WIDTH, h: DEFAULT_PANE_HEIGHT, z: 1 },
             scrollback: []
           }
         ]
@@ -663,11 +662,15 @@ module.exports = {
   nextNumberedName
 };
 
+function snapUnit(value) {
+  return Math.round(value / GRID_UNIT) * GRID_UNIT;
+}
+
 function sanitizeLayout(layout) {
-  const w = Math.max(MIN_PANE_WIDTH, Math.round(Number(layout?.w)) || DEFAULT_PANE_WIDTH);
-  const h = Math.max(MIN_PANE_HEIGHT, Math.round(Number(layout?.h)) || DEFAULT_PANE_HEIGHT);
-  const x = Math.round(Number(layout?.x)) || 0;
-  const y = Math.round(Number(layout?.y)) || 0;
+  const w = Math.max(GRID_UNIT, snapUnit(Math.round(Number(layout?.w)) || DEFAULT_PANE_WIDTH));
+  const h = Math.max(GRID_UNIT, snapUnit(Math.round(Number(layout?.h)) || DEFAULT_PANE_HEIGHT));
+  const x = snapUnit(Math.round(Number(layout?.x)) || 0);
+  const y = snapUnit(Math.round(Number(layout?.y)) || 0);
   const z = Math.max(0, Math.round(Number(layout?.z)) || 0);
   return { x, y, w, h, z };
 }
@@ -703,10 +706,10 @@ function nextPaneZ(panes) {
 }
 
 function cascadeLayout(panes) {
-  const step = PANE_CASCADE_STEP * (panes.length % 8);
+  const step = PANE_CASCADE_STEP * (panes.length % 6);
   return {
-    x: 40 + step,
-    y: 40 + step,
+    x: PANE_CASCADE_STEP + step,
+    y: PANE_CASCADE_STEP + step,
     w: DEFAULT_PANE_WIDTH,
     h: DEFAULT_PANE_HEIGHT,
     z: nextPaneZ(panes)

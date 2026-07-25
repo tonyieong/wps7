@@ -5282,9 +5282,10 @@
     mountPaneContent(pane);
   }
 
-  const MIN_PANE_WIDTH = 160;
-  const MIN_PANE_HEIGHT = 120;
-  const DEFAULT_PANE_WIDTH = 760;
+  const GRID_UNIT = 120;
+  const MIN_PANE_WIDTH = GRID_UNIT;
+  const MIN_PANE_HEIGHT = GRID_UNIT;
+  const DEFAULT_PANE_WIDTH = 720;
   const DEFAULT_PANE_HEIGHT = 480;
   const MIN_ZOOM = 0.2;
   const MAX_ZOOM = 4;
@@ -5293,11 +5294,15 @@
     return `left: ${layout.x}px; top: ${layout.y}px; width: ${layout.w}px; height: ${layout.h}px; z-index: ${layout.z || 1};`;
   }
 
+  function snapUnit(value) {
+    return Math.round(value / GRID_UNIT) * GRID_UNIT;
+  }
+
   function normalizePaneLayout(layout) {
-    const w = Math.max(MIN_PANE_WIDTH, Math.round(Number(layout?.w)) || DEFAULT_PANE_WIDTH);
-    const h = Math.max(MIN_PANE_HEIGHT, Math.round(Number(layout?.h)) || DEFAULT_PANE_HEIGHT);
-    const x = Math.round(Number(layout?.x)) || 0;
-    const y = Math.round(Number(layout?.y)) || 0;
+    const w = Math.max(GRID_UNIT, snapUnit(Math.round(Number(layout?.w)) || DEFAULT_PANE_WIDTH));
+    const h = Math.max(GRID_UNIT, snapUnit(Math.round(Number(layout?.h)) || DEFAULT_PANE_HEIGHT));
+    const x = snapUnit(Math.round(Number(layout?.x)) || 0);
+    const y = snapUnit(Math.round(Number(layout?.y)) || 0);
     const z = Math.max(0, Math.round(Number(layout?.z)) || 0);
     return { x, y, w, h, z };
   }
@@ -5329,7 +5334,7 @@
     }
     const grid = app.querySelector('.pane-grid');
     if (grid) {
-      const size = 40 * cam.scale;
+      const size = GRID_UNIT * cam.scale;
       grid.style.backgroundSize = `${size}px ${size}px`;
       grid.style.backgroundPosition = `${cam.x}px ${cam.y}px`;
     }

@@ -33,7 +33,7 @@ test('saved state keeps layout only', () => {
   assert.equal(savedPane.title, 'PowerShell 1');
   assert.equal(savedPane.scrollback, undefined);
   assert.equal(savedPane.lastProgram, undefined);
-  assert.deepEqual(savedPane.layout, { x: 40, y: 40, w: 760, h: 480, z: 1 });
+  assert.deepEqual(savedPane.layout, { x: 120, y: 120, w: 720, h: 480, z: 1 });
 });
 
 test('pane font size is validated and persisted per pane', () => {
@@ -84,7 +84,7 @@ test('loading old state strips non-layout terminal data', () => {
   const pane = store.findPane('pane-1').pane;
   assert.deepEqual(pane.scrollback, []);
   assert.equal(pane.lastProgram, undefined);
-  assert.deepEqual(pane.layout, { x: 0, y: 0, w: 760, h: 480, z: 0 });
+  assert.deepEqual(pane.layout, { x: 0, y: 0, w: 720, h: 480, z: 0 });
 });
 
 test('new sessions and panes use unique default names', () => {
@@ -102,8 +102,8 @@ test('new sessions and panes use unique default names', () => {
   const thirdPane = store.splitPane(secondPane.id, 'vertical');
   assert.equal(secondPane.title, 'PowerShell 2');
   assert.equal(thirdPane.title, 'PowerShell 3');
-  assert.deepEqual(secondPane.layout, { x: 72, y: 72, w: 760, h: 480, z: 2 });
-  assert.deepEqual(thirdPane.layout, { x: 104, y: 104, w: 760, h: 480, z: 3 });
+  assert.deepEqual(secondPane.layout, { x: 240, y: 240, w: 720, h: 480, z: 2 });
+  assert.deepEqual(thirdPane.layout, { x: 360, y: 360, w: 720, h: 480, z: 3 });
 });
 
 test('resizePane saves free world coordinates and allows overlap', () => {
@@ -113,13 +113,17 @@ test('resizePane saves free world coordinates and allows overlap', () => {
   const paneId = store.state.sessions[0].tabs[0].panes[0].id;
   const secondPane = store.splitPane(paneId, 'horizontal');
 
-  // world coordinates are stored as-is, without clamping to any grid
-  assert.equal(store.resizePane(paneId, { x: 1200, y: 800, w: 500, h: 300, z: 5 }), true);
-  assert.deepEqual(store.findPane(paneId).pane.layout, { x: 1200, y: 800, w: 500, h: 300, z: 5 });
+  // grid-aligned world coordinates are stored as-is, without clamping to any bounds
+  assert.equal(store.resizePane(paneId, { x: 1200, y: 840, w: 480, h: 360, z: 5 }), true);
+  assert.deepEqual(store.findPane(paneId).pane.layout, { x: 1200, y: 840, w: 480, h: 360, z: 5 });
+
+  // off-grid input snaps to the nearest grid unit (120)
+  assert.equal(store.resizePane(secondPane.id, { x: 610, y: 130, w: 500, h: 300, z: 6 }), true);
+  assert.deepEqual(store.findPane(secondPane.id).pane.layout, { x: 600, y: 120, w: 480, h: 360, z: 6 });
 
   // overlapping another pane is allowed on the whiteboard
-  assert.equal(store.resizePane(secondPane.id, { x: 1200, y: 800, w: 500, h: 300, z: 6 }), true);
-  assert.deepEqual(store.findPane(secondPane.id).pane.layout, { x: 1200, y: 800, w: 500, h: 300, z: 6 });
+  assert.equal(store.resizePane(secondPane.id, { x: 1200, y: 840, w: 480, h: 360, z: 7 }), true);
+  assert.deepEqual(store.findPane(secondPane.id).pane.layout, { x: 1200, y: 840, w: 480, h: 360, z: 7 });
 });
 
 test('new PowerShell and files panes get cascaded world layouts', () => {
@@ -135,9 +139,11 @@ test('new PowerShell and files panes get cascaded world layouts', () => {
       : store.createFilesPane(firstPane.id, 'C:\\');
 
     assert.ok(newPane);
-    // new pane sits on the whiteboard with a valid world-pixel box, stacked above the first
-    assert.equal(newPane.layout.w, 760);
+    // new pane sits on the whiteboard with a grid-aligned world-pixel box, stacked above the first
+    assert.equal(newPane.layout.w, 720);
     assert.equal(newPane.layout.h, 480);
+    assert.equal(newPane.layout.w % 120, 0);
+    assert.equal(newPane.layout.h % 120, 0);
     assert.ok(newPane.layout.z > firstPane.layout.z);
     // creating a pane never mutates existing panes
     assert.deepEqual(firstPane.layout, firstLayout);
@@ -173,9 +179,9 @@ test('loading legacy cell layouts migrates them to world pixels', () => {
   assert.deepEqual(
     store.state.sessions[0].tabs[0].panes.map((pane) => pane.layout),
     [
-      { x: 0, y: 0, w: 760, h: 480, z: 0 },
-      { x: 760, y: 0, w: 1520, h: 480, z: 0 },
-      { x: 0, y: 480, w: 760, h: 960, z: 0 }
+      { x: 0, y: 0, w: 720, h: 480, z: 0 },
+      { x: 720, y: 0, w: 1440, h: 480, z: 0 },
+      { x: 0, y: 480, w: 720, h: 960, z: 0 }
     ]
   );
 });
