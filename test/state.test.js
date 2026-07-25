@@ -33,7 +33,7 @@ test('saved state keeps layout only', () => {
   assert.equal(savedPane.title, 'PowerShell 1');
   assert.equal(savedPane.scrollback, undefined);
   assert.equal(savedPane.lastProgram, undefined);
-  assert.deepEqual(savedPane.layout, { x: 0, y: 0, cols: 1, rows: 1 });
+  assert.deepEqual(savedPane.layout, { x: 40, y: 40, w: 760, h: 480, z: 1 });
 });
 
 test('pane font size is validated and persisted per pane', () => {
@@ -84,7 +84,7 @@ test('loading old state strips non-layout terminal data', () => {
   const pane = store.findPane('pane-1').pane;
   assert.deepEqual(pane.scrollback, []);
   assert.equal(pane.lastProgram, undefined);
-  assert.deepEqual(pane.layout, { x: 0, y: 0, cols: 1, rows: 1 });
+  assert.deepEqual(pane.layout, { x: 0, y: 0, w: 760, h: 480, z: 0 });
 });
 
 test('new sessions and panes use unique default names', () => {
@@ -102,77 +102,49 @@ test('new sessions and panes use unique default names', () => {
   const thirdPane = store.splitPane(secondPane.id, 'vertical');
   assert.equal(secondPane.title, 'PowerShell 2');
   assert.equal(thirdPane.title, 'PowerShell 3');
-  assert.deepEqual(secondPane.layout, { x: 1, y: 0, cols: 1, rows: 1 });
-  assert.deepEqual(thirdPane.layout, { x: 2, y: 0, cols: 1, rows: 1 });
+  assert.deepEqual(secondPane.layout, { x: 72, y: 72, w: 760, h: 480, z: 2 });
+  assert.deepEqual(thirdPane.layout, { x: 104, y: 104, w: 760, h: 480, z: 3 });
 });
 
-test('pane layout resize rejects overlap and saves free grid layout', () => {
+test('resizePane saves free world coordinates and allows overlap', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
   const store = new StateStore(root, 100);
   store.load();
   const paneId = store.state.sessions[0].tabs[0].panes[0].id;
   const secondPane = store.splitPane(paneId, 'horizontal');
 
-  assert.equal(store.resizePane(paneId, { x: 0, y: 0, cols: 2, rows: 1 }, 4, 3), false);
-  assert.equal(store.resizePane(secondPane.id, { x: 3, y: 2, cols: 1, rows: 1 }, 4, 3), true);
-  assert.deepEqual(store.findPane(paneId).pane.layout, { x: 0, y: 0, cols: 1, rows: 1 });
-  assert.deepEqual(store.findPane(secondPane.id).pane.layout, { x: 3, y: 2, cols: 1, rows: 1 });
+  // world coordinates are stored as-is, without clamping to any grid
+  assert.equal(store.resizePane(paneId, { x: 1200, y: 800, w: 500, h: 300, z: 5 }), true);
+  assert.deepEqual(store.findPane(paneId).pane.layout, { x: 1200, y: 800, w: 500, h: 300, z: 5 });
+
+  // overlapping another pane is allowed on the whiteboard
+  assert.equal(store.resizePane(secondPane.id, { x: 1200, y: 800, w: 500, h: 300, z: 6 }), true);
+  assert.deepEqual(store.findPane(secondPane.id).pane.layout, { x: 1200, y: 800, w: 500, h: 300, z: 6 });
 });
 
-test('shared pane edge resize updates exactly two adjacent panes atomically', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100, 4, 4);
-  store.load();
-  const firstPane = store.state.sessions[0].tabs[0].panes[0];
-  const secondPane = store.splitPane(firstPane.id, 'horizontal');
-  const thirdPane = store.splitPane(secondPane.id, 'horizontal');
-  firstPane.layout = { x: 0, y: 0, cols: 2, rows: 4 };
-  secondPane.layout = { x: 2, y: 0, cols: 2, rows: 4 };
-  thirdPane.layout = { x: 0, y: 0, cols: 1, rows: 1 };
-  store.closePane(thirdPane.id);
-
-  assert.equal(store.resizePanePair(
-    firstPane.id,
-    { x: 0, y: 0, cols: 3, rows: 4 },
-    secondPane.id,
-    { x: 3, y: 0, cols: 1, rows: 4 },
-    4,
-    4
-  ), true);
-  assert.deepEqual(firstPane.layout, { x: 0, y: 0, cols: 3, rows: 4 });
-  assert.deepEqual(secondPane.layout, { x: 3, y: 0, cols: 1, rows: 4 });
-
-  assert.equal(store.resizePanePair(
-    firstPane.id,
-    { x: 0, y: 0, cols: 4, rows: 4 },
-    secondPane.id,
-    { x: 4, y: 0, cols: 0, rows: 4 },
-    4,
-    4
-  ), false);
-  assert.deepEqual(firstPane.layout, { x: 0, y: 0, cols: 3, rows: 4 });
-  assert.deepEqual(secondPane.layout, { x: 3, y: 0, cols: 1, rows: 4 });
-});
-
-test('new PowerShell and files panes make room inside a fully occupied grid', () => {
+test('new PowerShell and files panes get cascaded world layouts', () => {
   for (const type of ['terminal', 'files']) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-    const store = new StateStore(root, 100, 4, 3);
+    const store = new StateStore(root, 100);
     store.load();
     const firstPane = store.state.sessions[0].tabs[0].panes[0];
-    firstPane.layout = { x: 0, y: 0, cols: 4, rows: 3 };
+    const firstLayout = { ...firstPane.layout };
 
     const newPane = type === 'terminal'
       ? store.splitPane(firstPane.id, 'horizontal')
       : store.createFilesPane(firstPane.id, 'C:\\');
 
     assert.ok(newPane);
-    assert.deepEqual(newPane.layout, { x: 3, y: 0, cols: 1, rows: 1 });
-    assert.deepEqual(firstPane.layout, { x: 0, y: 0, cols: 3, rows: 3 });
+    // new pane sits on the whiteboard with a valid world-pixel box, stacked above the first
+    assert.equal(newPane.layout.w, 760);
+    assert.equal(newPane.layout.h, 480);
+    assert.ok(newPane.layout.z > firstPane.layout.z);
+    // creating a pane never mutates existing panes
+    assert.deepEqual(firstPane.layout, firstLayout);
   }
 });
 
-test('loading legacy layouts assigns non-overlapping grid positions', () => {
+test('loading legacy cell layouts migrates them to world pixels', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
   const dataDir = path.join(root, 'data');
   fs.mkdirSync(dataDir, { recursive: true });
@@ -188,22 +160,22 @@ test('loading legacy layouts assigns non-overlapping grid positions', () => {
         name: 'Main',
         activePaneId: 'pane-1',
         panes: [
-          { id: 'pane-1', title: 'PowerShell', cwd: root, split: null, layout: { cols: 1, rows: 1 } },
-          { id: 'pane-2', title: 'PowerShell', cwd: root, split: null, layout: { cols: 1, rows: 1 } },
-          { id: 'pane-3', title: 'PowerShell', cwd: root, split: null, layout: { cols: 1, rows: 1 } }
+          { id: 'pane-1', title: 'PowerShell', cwd: root, split: null, layout: { x: 0, y: 0, cols: 1, rows: 1 } },
+          { id: 'pane-2', title: 'PowerShell', cwd: root, split: null, layout: { x: 1, y: 0, cols: 2, rows: 1 } },
+          { id: 'pane-3', title: 'PowerShell', cwd: root, split: null, layout: { x: 0, y: 1, cols: 1, rows: 2 } }
         ]
       }]
     }]
   }));
 
-  const store = new StateStore(root, 100, 4, 3);
+  const store = new StateStore(root, 100);
   store.load();
   assert.deepEqual(
     store.state.sessions[0].tabs[0].panes.map((pane) => pane.layout),
     [
-      { x: 0, y: 0, cols: 1, rows: 1 },
-      { x: 1, y: 0, cols: 1, rows: 1 },
-      { x: 2, y: 0, cols: 1, rows: 1 }
+      { x: 0, y: 0, w: 760, h: 480, z: 0 },
+      { x: 760, y: 0, w: 1520, h: 480, z: 0 },
+      { x: 0, y: 480, w: 760, h: 960, z: 0 }
     ]
   );
 });
@@ -434,4 +406,22 @@ test('loading legacy panes marks them as terminal', () => {
   const store = new StateStore(root, 10);
   store.load();
   assert.equal(store.state.sessions[0].tabs[0].panes[0].type, 'terminal');
+});
+
+test('camera state persists per tab and clamps invalid zoom', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100);
+  store.load();
+  const tabId = store.state.sessions[0].tabs[0].id;
+
+  assert.equal(store.setCamera(tabId, { x: -320, y: 128, scale: 1.5 }), true);
+  assert.deepEqual(store.state.sessions[0].tabs[0].camera, { x: -320, y: 128, scale: 1.5 });
+
+  const restored = new StateStore(root, 100);
+  restored.load();
+  assert.deepEqual(restored.state.sessions[0].tabs[0].camera, { x: -320, y: 128, scale: 1.5 });
+
+  // out-of-range zoom falls back to 1
+  assert.equal(store.setCamera(tabId, { x: 0, y: 0, scale: 99 }), true);
+  assert.equal(store.state.sessions[0].tabs[0].camera.scale, 1);
 });

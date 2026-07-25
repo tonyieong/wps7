@@ -253,8 +253,21 @@ textarea {
   height: 100%;
   background: var(--terminal);
   position: relative;
-  padding: 2px;
+  padding: 0;
   overflow: hidden;
+  touch-action: none;
+}
+
+.pane-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.pane-grid.panning {
+  cursor: grabbing;
 }
 
 .pane {
@@ -3017,28 +3030,11 @@ textarea:focus-visible {
   margin: 0;
   border: 0;
   border-radius: 0;
-  background: var(--terminal-bg);
-}
-
-.pane-grid::before,
-.pane-grid::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-}
-
-.pane-grid::before {
-  background-image: linear-gradient(to right, transparent calc(100% - 1px), color-mix(in srgb, var(--line) 58%, transparent) calc(100% - 1px));
-  background-size: calc(100% / var(--pane-columns)) 100%;
-  mask-image: repeating-linear-gradient(to bottom, #000 0 5px, transparent 5px 9px);
-}
-
-.pane-grid::after {
-  background-image: linear-gradient(to bottom, transparent calc(100% - 1px), color-mix(in srgb, var(--line) 58%, transparent) calc(100% - 1px));
-  background-size: 100% calc(100% / var(--pane-rows));
-  mask-image: repeating-linear-gradient(to right, #000 0 5px, transparent 5px 9px);
+  background-color: var(--terminal-bg);
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--line) 60%, transparent) 1px, transparent 1px);
+  background-repeat: repeat;
+  background-size: 40px 40px;
+  background-position: 0 0;
 }
 
 .terminal {

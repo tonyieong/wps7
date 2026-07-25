@@ -531,12 +531,7 @@ function main() {
   let shell = resolveShell(config);
   let configReloadError = '';
   let restartRequired = false;
-  const store = new StateStore(
-    root,
-    config.persistence.scrollback_lines,
-    config.ui.max_pane_columns,
-    config.ui.max_pane_rows
-  );
+  const store = new StateStore(root, config.persistence.scrollback_lines);
   store.load();
 
   const app = express();
@@ -573,8 +568,6 @@ function main() {
     replaceObject(config, nextConfig);
     shell = resolveShell(config);
     store.scrollbackLimit = config.persistence.scrollback_lines;
-    store.gridColumns = config.ui.max_pane_columns;
-    store.gridRows = config.ui.max_pane_rows;
     terminalManager.updateConfig(config, shell);
     clearInterval(autosaveTimer);
     autosaveTimer = startAutosave(store, config);
@@ -787,18 +780,13 @@ function main() {
 
   app.post('/api/panes/:paneId/split', requireAuth(config), (req, res) => {
     const found = store.findPane(req.params.paneId);
-    const maxPanes = (Number(config.ui.max_pane_columns) || 5) * (Number(config.ui.max_pane_rows) || 3);
     if (!found) {
       res.status(404).json({ error: 'Pane not found.' });
       return;
     }
-    if (found.tab.panes.length >= maxPanes) {
-      res.status(400).json({ error: `This tab can contain at most ${maxPanes} panes.` });
-      return;
-    }
     const pane = store.splitPane(req.params.paneId, req.body.direction);
     if (!pane) {
-      res.status(400).json({ error: 'No free grid cell is available.' });
+      res.status(400).json({ error: 'Unable to create pane.' });
       return;
     }
     res.status(201).json({
@@ -809,18 +797,13 @@ function main() {
 
   app.post('/api/panes/:paneId/files', requireFileAuth(config), (req, res) => {
     const found = store.findPane(req.params.paneId);
-    const maxPanes = (Number(config.ui.max_pane_columns) || 5) * (Number(config.ui.max_pane_rows) || 3);
     if (!found) {
       res.status(404).json({ error: 'Pane not found.' });
       return;
     }
-    if (found.tab.panes.length >= maxPanes) {
-      res.status(400).json({ error: `This tab can contain at most ${maxPanes} panes.` });
-      return;
-    }
     const pane = store.createFilesPane(req.params.paneId, req.body.path);
     if (!pane) {
-      res.status(400).json({ error: 'No free grid cell is available.' });
+      res.status(400).json({ error: 'Unable to create pane.' });
       return;
     }
     res.status(201).json({
@@ -860,7 +843,7 @@ function main() {
     }
     const pane = store.createBrowserPane(req.params.paneId, url || '', req.body.emulationMode);
     if (!pane) {
-      res.status(400).json({ error: 'No free grid cell is available.' });
+      res.status(400).json({ error: 'Unable to create pane.' });
       return;
     }
     res.status(201).json({
@@ -899,7 +882,7 @@ function main() {
     }
     const pane = store.createNotepadPane(req.params.paneId, targetPath);
     if (!pane) {
-      res.status(400).json({ error: 'No free grid cell is available.' });
+      res.status(400).json({ error: 'Unable to create pane.' });
       return;
     }
     res.status(201).json({
@@ -989,33 +972,20 @@ function main() {
       res.status(404).json({ error: 'Pane not found.' });
       return;
     }
-    const paired = Boolean(req.body.adjacentPaneId && req.body.adjacentLayout);
-    const ok = paired
-      ? store.resizePanePair(
-        req.params.paneId,
-        req.body.layout,
-        req.body.adjacentPaneId,
-        req.body.adjacentLayout,
-        config.ui.max_pane_columns,
-        config.ui.max_pane_rows
-      )
-      : store.resizePane(
-        req.params.paneId,
-        req.body.layout,
-        config.ui.max_pane_columns,
-        config.ui.max_pane_rows
-      );
-    if (!ok) {
-      res.status(400).json({ error: 'Pane layout overlaps another pane.' });
+    if (!store.resizePane(req.params.paneId, req.body.layout)) {
+      res.status(400).json({ error: 'Unable to update pane layout.' });
       return;
     }
     const { pane } = store.findPane(req.params.paneId);
-    const adjacentPane = paired ? store.findPane(req.body.adjacentPaneId)?.pane : null;
-    res.json({
-      id: pane.id,
-      layout: pane.layout,
-      adjacentPane: adjacentPane ? { id: adjacentPane.id, layout: adjacentPane.layout } : null
-    });
+    res.json({ id: pane.id, layout: pane.layout });
+  });
+
+  app.patch('/api/tabs/:tabId/camera', requireAuth(config), (req, res) => {
+    if (!store.setCamera(req.params.tabId, req.body.camera)) {
+      res.status(404).json({ error: 'Tab not found.' });
+      return;
+    }
+    res.json({ ok: true });
   });
 
   app.post('/api/panes/:paneId/move', requireAuth(config), (req, res) => {

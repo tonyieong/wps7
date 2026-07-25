@@ -3,8 +3,13 @@ const path = require('path');
 const crypto = require('crypto');
 const { normalizeCwd } = require('./shell');
 
-const DEFAULT_GRID_COLUMNS = 4;
-const DEFAULT_GRID_ROWS = 3;
+const DEFAULT_PANE_WIDTH = 760;
+const DEFAULT_PANE_HEIGHT = 480;
+const MIN_PANE_WIDTH = 160;
+const MIN_PANE_HEIGHT = 120;
+const PANE_CASCADE_STEP = 32;
+const MIN_ZOOM = 0.2;
+const MAX_ZOOM = 4;
 const PANE_TYPES = new Set(['terminal', 'files', 'browser', 'notepad']);
 const NOTEPAD_ENCODINGS = new Set(['utf8', 'utf8-bom', 'utf16le', 'utf16be', 'latin1']);
 const MAX_NOTEPAD_CONTENT_LENGTH = 10 * 1024 * 1024;
@@ -90,7 +95,7 @@ function defaultSession(name = 'Workspace 1', paneTitle = 'PowerShell 1') {
             title: paneTitle,
             cwd: process.cwd(),
             split: null,
-            layout: { x: 0, y: 0, cols: 1, rows: 1 },
+            layout: { x: 40, y: 40, w: DEFAULT_PANE_WIDTH, h: DEFAULT_PANE_HEIGHT, z: 1 },
             scrollback: []
           }
         ]
@@ -100,13 +105,11 @@ function defaultSession(name = 'Workspace 1', paneTitle = 'PowerShell 1') {
 }
 
 class StateStore {
-  constructor(root, scrollbackLimit, gridColumns = DEFAULT_GRID_COLUMNS, gridRows = DEFAULT_GRID_ROWS) {
+  constructor(root, scrollbackLimit) {
     this.root = root;
     this.dataDir = path.join(root, 'data');
     this.statePath = path.join(this.dataDir, 'state.json');
     this.scrollbackLimit = scrollbackLimit;
-    this.gridColumns = positiveInteger(gridColumns, DEFAULT_GRID_COLUMNS);
-    this.gridRows = positiveInteger(gridRows, DEFAULT_GRID_ROWS);
     const session = defaultSession();
     this.state = {
       activeSessionId: session.id,
@@ -154,7 +157,7 @@ class StateStore {
         url: pane.url || '',
         fontSize: validPaneFontSize(pane.fontSize) ? Number(pane.fontSize) : undefined,
         split: pane.split || null,
-        layout: sanitizeLayout(pane.layout, this.gridColumns, this.gridRows),
+        layout: migrateLayout(pane.layout),
         scrollback: []
       };
       if (nextPane.type === 'browser') {
@@ -169,14 +172,9 @@ class StateStore {
         nextPane.activeNotepadTabId = notepadState.activeNotepadTabId;
         nextPane.path = nextPane.notepadTabs.find((tab) => tab.id === nextPane.activeNotepadTabId)?.path || '';
       }
-      if (!isLayoutFree(panes, nextPane.id, nextPane.layout, this.gridColumns, this.gridRows)) {
-        nextPane.layout = firstAvailableLayout(panes, this.gridColumns, this.gridRows, nextPane.layout) ||
-          firstAvailableLayout(panes, this.gridColumns, this.gridRows, { x: 0, y: 0, cols: 1, rows: 1 }) ||
-          { x: 0, y: 0, cols: 1, rows: 1 };
-      }
       panes.push(nextPane);
     }
-    return { ...tab, panes };
+    return { ...tab, panes, camera: sanitizeCamera(tab.camera) };
   }
 
   getPersistedState() {
@@ -186,6 +184,7 @@ class StateStore {
         ...session,
         tabs: session.tabs.map((tab) => ({
           ...tab,
+          camera: sanitizeCamera(tab.camera),
           panes: tab.panes.map((pane) => ({
             id: pane.id,
             type: paneType(pane.type),
@@ -199,7 +198,7 @@ class StateStore {
             activeNotepadTabId: pane.type === 'notepad' ? pane.activeNotepadTabId : undefined,
             fontSize: validPaneFontSize(pane.fontSize) ? pane.fontSize : undefined,
             split: pane.split,
-            layout: sanitizeLayout(pane.layout, this.gridColumns, this.gridRows)
+            layout: sanitizeLayout(pane.layout)
           }))
         }))
       }))
@@ -213,6 +212,7 @@ class StateStore {
         ...session,
         tabs: session.tabs.map((tab) => ({
           ...tab,
+          camera: sanitizeCamera(tab.camera),
           panes: tab.panes.map((pane) => ({
             id: pane.id,
             type: paneType(pane.type),
@@ -226,7 +226,7 @@ class StateStore {
             activeNotepadTabId: pane.type === 'notepad' ? pane.activeNotepadTabId : undefined,
             fontSize: validPaneFontSize(pane.fontSize) ? pane.fontSize : undefined,
             split: pane.split,
-            layout: sanitizeLayout(pane.layout, this.gridColumns, this.gridRows)
+            layout: sanitizeLayout(pane.layout)
           }))
         }))
       }))
@@ -314,8 +314,7 @@ class StateStore {
       return null;
     }
 
-    const layout = firstAvailableLayout(found.tab.panes, this.gridColumns, this.gridRows, { x: 0, y: 0, cols: 1, rows: 1 }) ||
-      makeRoomForLayout(found.tab.panes, this.gridColumns, this.gridRows);
+    const layout = cascadeLayout(found.tab.panes);
     const pane = {
       id: crypto.randomUUID(),
       type: 'terminal',
@@ -340,8 +339,7 @@ class StateStore {
     if (!found) {
       return null;
     }
-    const layout = firstAvailableLayout(found.tab.panes, this.gridColumns, this.gridRows, { x: 0, y: 0, cols: 1, rows: 1 }) ||
-      makeRoomForLayout(found.tab.panes, this.gridColumns, this.gridRows);
+    const layout = cascadeLayout(found.tab.panes);
     const pane = {
       id: crypto.randomUUID(),
       type: 'files',
@@ -528,8 +526,7 @@ class StateStore {
     if (!found) {
       return null;
     }
-    const layout = firstAvailableLayout(found.tab.panes, this.gridColumns, this.gridRows, { x: 0, y: 0, cols: 1, rows: 1 }) ||
-      makeRoomForLayout(found.tab.panes, this.gridColumns, this.gridRows);
+    const layout = cascadeLayout(found.tab.panes);
     if (!layout) {
       return null;
     }
@@ -602,49 +599,13 @@ class StateStore {
     return true;
   }
 
-  resizePane(paneId, layout, maxColumns, maxRows) {
+  resizePane(paneId, layout) {
     const found = this.findPane(paneId);
     if (!found) {
       return false;
     }
 
-    const columns = positiveInteger(maxColumns, this.gridColumns);
-    const rows = positiveInteger(maxRows, this.gridRows);
-    const nextLayout = sanitizeLayout(layout, columns, rows);
-    if (!isLayoutFree(found.tab.panes, paneId, nextLayout, columns, rows)) {
-      return false;
-    }
-
-    found.pane.layout = nextLayout;
-    this.save();
-    return true;
-  }
-
-  resizePanePair(paneId, layout, adjacentPaneId, adjacentLayout, maxColumns, maxRows) {
-    const found = this.findPane(paneId);
-    const adjacent = this.findPane(adjacentPaneId);
-    if (!found || !adjacent || found.tab !== adjacent.tab || paneId === adjacentPaneId) {
-      return false;
-    }
-
-    const columns = positiveInteger(maxColumns, this.gridColumns);
-    const rows = positiveInteger(maxRows, this.gridRows);
-    if (!validLayoutSize(layout, columns, rows) || !validLayoutSize(adjacentLayout, columns, rows)) {
-      return false;
-    }
-    const nextLayout = sanitizeLayout(layout, columns, rows);
-    const nextAdjacentLayout = sanitizeLayout(adjacentLayout, columns, rows);
-    if (layoutsOverlap(nextLayout, nextAdjacentLayout)) {
-      return false;
-    }
-    const otherPanes = found.tab.panes.filter((pane) => pane.id !== paneId && pane.id !== adjacentPaneId);
-    if (!isLayoutFree(otherPanes, '', nextLayout, columns, rows) ||
-        !isLayoutFree(otherPanes, '', nextAdjacentLayout, columns, rows)) {
-      return false;
-    }
-
-    found.pane.layout = nextLayout;
-    adjacent.pane.layout = nextAdjacentLayout;
+    found.pane.layout = sanitizeLayout(layout);
     this.save();
     return true;
   }
@@ -682,6 +643,18 @@ class StateStore {
     this.save();
     return true;
   }
+
+  setCamera(tabId, camera) {
+    for (const session of this.state.sessions) {
+      const tab = session.tabs.find((candidate) => candidate.id === tabId);
+      if (tab) {
+        tab.camera = sanitizeCamera(camera);
+        this.save();
+        return true;
+      }
+    }
+    return false;
+  }
 }
 
 module.exports = {
@@ -690,78 +663,57 @@ module.exports = {
   nextNumberedName
 };
 
-function sanitizeLayout(layout, maxColumns = DEFAULT_GRID_COLUMNS, maxRows = DEFAULT_GRID_ROWS) {
-  const columns = positiveInteger(maxColumns, DEFAULT_GRID_COLUMNS);
-  const rows = positiveInteger(maxRows, DEFAULT_GRID_ROWS);
-  const cols = Math.max(1, Math.min(columns, Number(layout?.cols) || 1));
-  const rowSpan = Math.max(1, Math.min(rows, Number(layout?.rows) || 1));
-  const x = Math.max(0, Math.min(columns - cols, Number(layout?.x) || 0));
-  const y = Math.max(0, Math.min(rows - rowSpan, Number(layout?.y) || 0));
+function sanitizeLayout(layout) {
+  const w = Math.max(MIN_PANE_WIDTH, Math.round(Number(layout?.w)) || DEFAULT_PANE_WIDTH);
+  const h = Math.max(MIN_PANE_HEIGHT, Math.round(Number(layout?.h)) || DEFAULT_PANE_HEIGHT);
+  const x = Math.round(Number(layout?.x)) || 0;
+  const y = Math.round(Number(layout?.y)) || 0;
+  const z = Math.max(0, Math.round(Number(layout?.z)) || 0);
+  return { x, y, w, h, z };
+}
+
+function migrateLayout(layout) {
+  if (layout && (Number.isFinite(Number(layout.w)) || Number.isFinite(Number(layout.h)))) {
+    return sanitizeLayout(layout);
+  }
+  const cols = Math.max(1, Math.round(Number(layout?.cols)) || 1);
+  const rows = Math.max(1, Math.round(Number(layout?.rows)) || 1);
+  const cellX = Math.round(Number(layout?.x)) || 0;
+  const cellY = Math.round(Number(layout?.y)) || 0;
+  return sanitizeLayout({
+    x: cellX * DEFAULT_PANE_WIDTH,
+    y: cellY * DEFAULT_PANE_HEIGHT,
+    w: cols * DEFAULT_PANE_WIDTH,
+    h: rows * DEFAULT_PANE_HEIGHT,
+    z: 0
+  });
+}
+
+function sanitizeCamera(camera) {
+  const scale = Number(camera?.scale);
   return {
-    x,
-    y,
-    cols,
-    rows: rowSpan
+    x: Math.round(Number(camera?.x)) || 0,
+    y: Math.round(Number(camera?.y)) || 0,
+    scale: scale >= MIN_ZOOM && scale <= MAX_ZOOM ? scale : 1
+  };
+}
+
+function nextPaneZ(panes) {
+  return panes.reduce((max, pane) => Math.max(max, Number(pane.layout?.z) || 0), 0) + 1;
+}
+
+function cascadeLayout(panes) {
+  const step = PANE_CASCADE_STEP * (panes.length % 8);
+  return {
+    x: 40 + step,
+    y: 40 + step,
+    w: DEFAULT_PANE_WIDTH,
+    h: DEFAULT_PANE_HEIGHT,
+    z: nextPaneZ(panes)
   };
 }
 
 function validPaneFontSize(value) {
   const size = Number(value);
   return Number.isInteger(size) && size >= 8 && size <= 32;
-}
-
-function positiveInteger(value, fallback) {
-  const number = Number(value);
-  return Number.isInteger(number) && number > 0 ? number : fallback;
-}
-
-function validLayoutSize(layout, maxColumns, maxRows) {
-  const x = Number(layout?.x);
-  const y = Number(layout?.y);
-  const cols = Number(layout?.cols);
-  const rows = Number(layout?.rows);
-  return Number.isInteger(x) && Number.isInteger(y) && Number.isInteger(cols) && Number.isInteger(rows) &&
-    x >= 0 && y >= 0 && cols >= 1 && rows >= 1 && x + cols <= maxColumns && y + rows <= maxRows;
-}
-
-function firstAvailableLayout(panes, maxColumns, maxRows, preferred) {
-  const size = sanitizeLayout(preferred, maxColumns, maxRows);
-  for (let y = 0; y <= maxRows - size.rows; y += 1) {
-    for (let x = 0; x <= maxColumns - size.cols; x += 1) {
-      const layout = { ...size, x, y };
-      if (isLayoutFree(panes, '', layout, maxColumns, maxRows)) {
-        return layout;
-      }
-    }
-  }
-  return null;
-}
-
-function makeRoomForLayout(panes, maxColumns, maxRows) {
-  const candidate = panes
-    .map((pane) => ({ pane, layout: sanitizeLayout(pane.layout, maxColumns, maxRows) }))
-    .filter(({ layout }) => layout.cols > 1 || layout.rows > 1)
-    .sort((a, b) => (b.layout.cols * b.layout.rows) - (a.layout.cols * a.layout.rows))[0];
-  if (!candidate) {
-    return null;
-  }
-
-  if (candidate.layout.cols >= candidate.layout.rows && candidate.layout.cols > 1) {
-    candidate.layout.cols -= 1;
-  } else {
-    candidate.layout.rows -= 1;
-  }
-  candidate.pane.layout = candidate.layout;
-  return firstAvailableLayout(panes, maxColumns, maxRows, { x: 0, y: 0, cols: 1, rows: 1 });
-}
-
-function isLayoutFree(panes, paneId, layout, maxColumns = DEFAULT_GRID_COLUMNS, maxRows = DEFAULT_GRID_ROWS) {
-  return !panes.some((pane) => pane.id !== paneId && layoutsOverlap(sanitizeLayout(pane.layout, maxColumns, maxRows), layout));
-}
-
-function layoutsOverlap(a, b) {
-  return a.x < b.x + b.cols &&
-    a.x + a.cols > b.x &&
-    a.y < b.y + b.rows &&
-    a.y + a.rows > b.y;
 }

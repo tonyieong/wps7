@@ -439,19 +439,11 @@
     `;
   }
 
-  function paneGridStyle() {
-    const maxColumns = Number(state.config.ui?.max_pane_columns) || 5;
-    const maxRows = Number(state.config.ui?.max_pane_rows) || 3;
-    return `--pane-columns: ${maxColumns}; --pane-rows: ${maxRows};`;
-  }
-
   function paneItemStyle(pane) {
-    const maxColumns = Number(state.config.ui?.max_pane_columns) || 5;
-    const maxRows = Number(state.config.ui?.max_pane_rows) || 3;
-    const layout = normalizePaneLayout(pane.layout, maxColumns, maxRows);
+    const layout = normalizePaneLayout(pane.layout);
     const fontSize = Number(pane.fontSize);
     const fontStyle = Number.isInteger(fontSize) ? ` --pane-font-size: ${fontSize}px;` : '';
-    return `${paneLayoutStyle(layout, maxColumns, maxRows)}${fontStyle}`;
+    return `${paneLayoutStyle(layout)}${fontStyle}`;
   }
 
   function paneFontSize(pane) {
@@ -1179,14 +1171,17 @@
             <button type="button" class="primary" data-switch-mobile>Switch to Mobile</button>
             <button type="button" class="desktop-mode-banner-dismiss" data-dismiss-banner aria-label="Keep desktop layout" title="Keep desktop layout">×</button>
           </div>
-          <div class="pane-grid" style="${paneGridStyle(tab.panes.length)}">
-            ${tab.panes.map((pane) => renderPane(pane)).join('')}
+          <div class="pane-grid">
+            <div class="pane-canvas" data-pane-canvas>
+              ${tab.panes.map((pane) => renderPane(pane)).join('')}
+            </div>
           </div>
         </section>
       </main>
     `;
 
     wireControls();
+    applyCameraTransform();
     updateDesktopModeBanner();
     for (const pane of tab.panes) {
       mountPaneContent(pane);
@@ -4324,6 +4319,23 @@
     return `${Math.round(size / 1024 / 1024)} MB`;
   }
 
+  function renderMiniPanes(tab) {
+    if (!tab.panes.length) {
+      return '';
+    }
+    const layouts = tab.panes.map((pane) => normalizePaneLayout(pane.layout));
+    const minX = Math.min(...layouts.map((l) => l.x));
+    const minY = Math.min(...layouts.map((l) => l.y));
+    const spanX = Math.max(1, Math.max(...layouts.map((l) => l.x + l.w)) - minX);
+    const spanY = Math.max(1, Math.max(...layouts.map((l) => l.y + l.h)) - minY);
+    return tab.panes.map((pane, index) => {
+      const l = layouts[index];
+      const style = `left:${((l.x - minX) / spanX) * 100}%;top:${((l.y - minY) / spanY) * 100}%;width:${(l.w / spanX) * 100}%;height:${(l.h / spanY) * 100}%;`;
+      const label = ({ files: 'Files', browser: 'Web', notepad: 'Notes' })[pane.type] || 'PS';
+      return `<button class="mini-pane ${pane.id === state.activePaneId ? 'active' : ''}" data-layout-pane="${pane.id}" style="${style}">${label}</button>`;
+    }).join('');
+  }
+
   function toggleLayoutPanel() {
     state.layoutPanelOpen = !state.layoutPanelOpen;
     renderLayoutPanel();
@@ -4364,8 +4376,8 @@
         <button class="secondary" data-layout-size="tall" title="Taller">H+</button>
         <button class="secondary" data-layout-size="short" title="Shorter">H-</button>
       </div>
-      <div class="mini-grid" style="${paneGridStyle()}">
-        ${tab.panes.map((pane) => `<button class="mini-pane ${pane.id === state.activePaneId ? 'active' : ''}" data-layout-pane="${pane.id}" style="${paneItemStyle(pane)}">${({ files: 'Files', browser: 'Web', notepad: 'Notes' })[pane.type] || 'PS'}</button>`).join('')}
+      <div class="mini-grid">
+        ${renderMiniPanes(tab)}
       </div>
       <div class="layout-list">
         ${tab.panes.map((pane) => `
@@ -4412,23 +4424,17 @@
     if (!found) {
       return;
     }
-    const maxColumns = Number(state.config.ui?.max_pane_columns) || 5;
-    const maxRows = Number(state.config.ui?.max_pane_rows) || 3;
-    const layout = normalizePaneLayout(found.pane.layout, maxColumns, maxRows);
-    const next = { ...layout };
-    if (action === 'left') next.x -= 1;
-    if (action === 'right') next.x += 1;
-    if (action === 'up') next.y -= 1;
-    if (action === 'down') next.y += 1;
-    if (action === 'wide') next.cols += 1;
-    if (action === 'narrow') next.cols -= 1;
-    if (action === 'tall') next.rows += 1;
-    if (action === 'short') next.rows -= 1;
-    const normalized = normalizePaneLayout(next, maxColumns, maxRows);
-    if (!isClientLayoutFree(found.tab, found.pane.id, normalized, maxColumns, maxRows)) {
-      showToast('Pane layout overlaps another pane.');
-      return;
-    }
+    const step = 40;
+    const next = normalizePaneLayout(found.pane.layout);
+    if (action === 'left') next.x -= step;
+    if (action === 'right') next.x += step;
+    if (action === 'up') next.y -= step;
+    if (action === 'down') next.y += step;
+    if (action === 'wide') next.w += step;
+    if (action === 'narrow') next.w -= step;
+    if (action === 'tall') next.h += step;
+    if (action === 'short') next.h -= step;
+    const normalized = normalizePaneLayout(next);
     const saved = await savePaneLayoutLocal(found.pane.id, normalized);
     if (saved) {
       applyPaneLayoutStyle(document.querySelector(`[data-pane="${found.pane.id}"]`), normalized);
@@ -4453,12 +4459,6 @@
         }
         setActivePane(pane.dataset.pane, pane.dataset.paneType !== 'files');
       };
-      pane.addEventListener('wheel', (event) => {
-        if (event.ctrlKey && event.deltaY !== 0) {
-          event.preventDefault();
-          changePaneFontSize(pane.dataset.pane, event.deltaY < 0 ? 1 : -1);
-        }
-      }, { passive: false });
     });
     findAll(root, '[data-pane-title]').forEach((title) => {
       title.onpointerdown = startPaneMove;
@@ -4962,18 +4962,87 @@
       if (!tab) {
         return;
       }
-      const maxColumns = Number(state.config.ui?.max_pane_columns) || 5;
-      const maxRows = Number(state.config.ui?.max_pane_rows) || 3;
       const rect = grid.getBoundingClientRect();
-      const x = Math.max(0, Math.min(maxColumns - 1, Math.floor(((event.clientX - rect.left) / rect.width) * maxColumns)));
-      const y = Math.max(0, Math.min(maxRows - 1, Math.floor(((event.clientY - rect.top) / rect.height) * maxRows)));
-      const layout = { x, y, cols: 1, rows: 1 };
-      if (isClientLayoutFree(tab, '', layout, maxColumns, maxRows)) {
-        await createPane(layout);
-      } else {
-        showToast('Pane layout overlaps another pane.');
-      }
+      const world = pointerToWorld(event.clientX, event.clientY, rect, activeCamera());
+      await createPane({
+        x: Math.round(world.x - DEFAULT_PANE_WIDTH / 2),
+        y: Math.round(world.y - DEFAULT_PANE_HEIGHT / 2),
+        w: DEFAULT_PANE_WIDTH,
+        h: DEFAULT_PANE_HEIGHT
+      });
     };
+    grid.addEventListener('wheel', (event) => onCanvasWheel(grid, event), { passive: false, capture: true });
+    grid.addEventListener('pointerdown', (event) => onCanvasPanStart(grid, event));
+  }
+
+  function onCanvasWheel(grid, event) {
+    const rect = grid.getBoundingClientRect();
+    const cam = activeCamera();
+    if (event.ctrlKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      const paneEl = event.target.closest?.('[data-pane]');
+      if (event.shiftKey && paneEl) {
+        changePaneFontSize(paneEl.dataset.pane, event.deltaY < 0 ? 1 : -1);
+        return;
+      }
+      const oldScale = cam.scale;
+      const newScale = clampZoom(oldScale * Math.exp(-event.deltaY * 0.0015));
+      if (newScale === oldScale) {
+        return;
+      }
+      // keep the world point under the cursor fixed while zooming
+      const px = event.clientX - rect.left;
+      const py = event.clientY - rect.top;
+      cam.x = px - ((px - cam.x) / oldScale) * newScale;
+      cam.y = py - ((py - cam.y) / oldScale) * newScale;
+      cam.scale = newScale;
+      applyCameraTransform();
+      saveCameraSoon();
+      return;
+    }
+    if (event.target.closest?.('[data-pane]')) {
+      return; // over a pane: let the terminal / pane content scroll
+    }
+    // over empty canvas: scroll-to-pan (Excalidraw-style)
+    event.preventDefault();
+    if (event.shiftKey) {
+      cam.x -= event.deltaY || event.deltaX;
+    } else {
+      cam.x -= event.deltaX;
+      cam.y -= event.deltaY;
+    }
+    applyCameraTransform();
+    saveCameraSoon();
+  }
+
+  function onCanvasPanStart(grid, event) {
+    if (event.button !== 1) {
+      return; // middle-button drag pans the canvas
+    }
+    event.preventDefault();
+    const cam = activeCamera();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const startCamX = cam.x;
+    const startCamY = cam.y;
+    grid.classList.add('panning');
+    grid.setPointerCapture(event.pointerId);
+    const onMove = (moveEvent) => {
+      cam.x = startCamX + (moveEvent.clientX - startX);
+      cam.y = startCamY + (moveEvent.clientY - startY);
+      applyCameraTransform();
+    };
+    const onUp = () => {
+      grid.removeEventListener('pointermove', onMove);
+      grid.removeEventListener('pointerup', onUp);
+      grid.removeEventListener('pointercancel', onUp);
+      grid.classList.remove('panning');
+      saveCameraSoon();
+    };
+    grid.addEventListener('pointermove', onMove);
+    grid.addEventListener('pointerup', onUp);
+    grid.addEventListener('pointercancel', onUp);
   }
 
   async function createPane(preferredLayout) {
@@ -4991,11 +5060,12 @@
       });
       if (preferredLayout) {
         try {
+          const layout = { ...preferredLayout, z: preferredLayout.z ?? pane.layout?.z ?? nextPaneZ(tab) };
           const result = await api(`/api/panes/${pane.id}/layout`, {
             method: 'PATCH',
-            body: JSON.stringify({ layout: preferredLayout })
+            body: JSON.stringify({ layout })
           });
-          pane.layout = result.layout || preferredLayout;
+          pane.layout = result.layout || layout;
         } catch (error) {
           showToast(error.message);
         }
@@ -5006,54 +5076,15 @@
     }
   }
 
-  function findAdjacentResizePane(tab, paneId, layout, direction, maxColumns, maxRows, pointerColumn, pointerRow) {
-    const panes = tab.panes.filter((pane) => pane.id !== paneId).map((pane) => ({
-      pane,
-      layout: normalizePaneLayout(pane.layout, maxColumns, maxRows)
-    }));
-    const verticalOverlap = (candidate) => candidate.layout.y < layout.y + layout.rows &&
-      candidate.layout.y + candidate.layout.rows > layout.y;
-    const horizontalOverlap = (candidate) => candidate.layout.x < layout.x + layout.cols &&
-      candidate.layout.x + candidate.layout.cols > layout.x;
-    const atPointerRow = (candidate) => pointerRow >= candidate.layout.y &&
-      pointerRow < candidate.layout.y + candidate.layout.rows;
-    const atPointerColumn = (candidate) => pointerColumn >= candidate.layout.x &&
-      pointerColumn < candidate.layout.x + candidate.layout.cols;
-    if (direction.includes('e')) {
-      const match = panes.find((candidate) => candidate.layout.x === layout.x + layout.cols && verticalOverlap(candidate) && atPointerRow(candidate));
-      if (match) return { ...match, edge: 'e' };
+  function bringPaneToFront(tab, pane, paneElement) {
+    const others = (tab?.panes || []).filter((candidate) => candidate.id !== pane.id);
+    const topZ = others.reduce((max, candidate) => Math.max(max, Number(candidate.layout?.z) || 0), 0) + 1;
+    const layout = { ...normalizePaneLayout(pane.layout), z: topZ };
+    pane.layout = layout;
+    if (paneElement) {
+      paneElement.style.zIndex = topZ;
     }
-    if (direction.includes('w')) {
-      const match = panes.find((candidate) => candidate.layout.x + candidate.layout.cols === layout.x && verticalOverlap(candidate) && atPointerRow(candidate));
-      if (match) return { ...match, edge: 'w' };
-    }
-    if (direction.includes('s')) {
-      const match = panes.find((candidate) => candidate.layout.y === layout.y + layout.rows && horizontalOverlap(candidate) && atPointerColumn(candidate));
-      if (match) return { ...match, edge: 's' };
-    }
-    if (direction.includes('n')) {
-      const match = panes.find((candidate) => candidate.layout.y + candidate.layout.rows === layout.y && horizontalOverlap(candidate) && atPointerColumn(candidate));
-      if (match) return { ...match, edge: 'n' };
-    }
-    return null;
-  }
-
-  function layoutInsideGrid(layout, maxColumns, maxRows) {
-    return layout.x >= 0 && layout.y >= 0 && layout.cols >= 1 && layout.rows >= 1 &&
-      layout.x + layout.cols <= maxColumns && layout.y + layout.rows <= maxRows;
-  }
-
-  function resizePairIsFree(tab, paneId, layout, adjacentPaneId, adjacentLayout, maxColumns, maxRows) {
-    if (!layoutInsideGrid(layout, maxColumns, maxRows) || !layoutInsideGrid(adjacentLayout, maxColumns, maxRows) || layoutsOverlap(layout, adjacentLayout)) {
-      return false;
-    }
-    return !tab.panes.some((pane) => {
-      if (pane.id === paneId || pane.id === adjacentPaneId) {
-        return false;
-      }
-      const other = normalizePaneLayout(pane.layout, maxColumns, maxRows);
-      return layoutsOverlap(other, layout) || layoutsOverlap(other, adjacentLayout);
-    });
+    return layout;
   }
 
   function startPaneResize(event) {
@@ -5063,83 +5094,51 @@
     const paneId = handle.dataset.paneResize;
     const paneElement = handle.closest('[data-pane]');
     const found = findPaneState(paneId);
-    const grid = document.querySelector('.pane-grid');
-    if (!paneElement || !found || !grid) {
+    if (!paneElement || !found) {
       return;
     }
 
-    const maxColumns = Number(state.config.ui?.max_pane_columns) || 5;
-    const maxRows = Number(state.config.ui?.max_pane_rows) || 3;
     const direction = handle.dataset.paneResizeDirection || 'se';
-    const gridRect = grid.getBoundingClientRect();
-    const cellWidth = Math.max(1, gridRect.width / maxColumns);
-    const cellHeight = Math.max(1, gridRect.height / maxRows);
+    const scale = activeCamera().scale;
     const startX = event.clientX;
     const startY = event.clientY;
-    const startLayout = normalizePaneLayout(found.pane.layout, maxColumns, maxRows);
-    const pointerColumn = Math.min(startLayout.x + startLayout.cols - 1, Math.max(startLayout.x, Math.floor((startX - gridRect.left) / cellWidth)));
-    const pointerRow = Math.min(startLayout.y + startLayout.rows - 1, Math.max(startLayout.y, Math.floor((startY - gridRect.top) / cellHeight)));
-    const adjacent = findAdjacentResizePane(found.tab, paneId, startLayout, direction, maxColumns, maxRows, pointerColumn, pointerRow);
-    const adjacentElement = adjacent ? document.querySelector(`[data-pane="${adjacent.pane.id}"]`) : null;
-    const startAdjacentLayout = adjacent?.layout || null;
-    let nextLayout = startLayout;
-    let nextAdjacentLayout = startAdjacentLayout;
+    const startLayout = normalizePaneLayout(found.pane.layout);
+    let nextLayout = bringPaneToFront(found.tab, found.pane, paneElement);
 
     handle.setPointerCapture(event.pointerId);
     const onMove = (moveEvent) => {
-      const dx = Math.round((moveEvent.clientX - startX) / cellWidth);
-      const dy = Math.round((moveEvent.clientY - startY) / cellHeight);
-      const candidate = { ...startLayout };
-      if (direction.includes('e')) candidate.cols += dx;
+      const dx = (moveEvent.clientX - startX) / scale;
+      const dy = (moveEvent.clientY - startY) / scale;
+      const candidate = { ...startLayout, z: nextLayout.z };
+      if (direction.includes('e')) candidate.w = startLayout.w + dx;
       if (direction.includes('w')) {
-        candidate.x += dx;
-        candidate.cols -= dx;
+        candidate.x = startLayout.x + dx;
+        candidate.w = startLayout.w - dx;
       }
-      if (direction.includes('s')) candidate.rows += dy;
+      if (direction.includes('s')) candidate.h = startLayout.h + dy;
       if (direction.includes('n')) {
-        candidate.y += dy;
-        candidate.rows -= dy;
+        candidate.y = startLayout.y + dy;
+        candidate.h = startLayout.h - dy;
       }
-      if (adjacent) {
-        const adjacentCandidate = { ...startAdjacentLayout };
-        if (adjacent.edge === 'e') {
-          adjacentCandidate.x += dx;
-          adjacentCandidate.cols -= dx;
-        }
-        if (adjacent.edge === 'w') adjacentCandidate.cols += dx;
-        if (adjacent.edge === 's') {
-          adjacentCandidate.y += dy;
-          adjacentCandidate.rows -= dy;
-        }
-        if (adjacent.edge === 'n') adjacentCandidate.rows += dy;
-        if (resizePairIsFree(found.tab, paneId, candidate, adjacent.pane.id, adjacentCandidate, maxColumns, maxRows)) {
-          nextLayout = candidate;
-          nextAdjacentLayout = adjacentCandidate;
-        }
-      } else {
-        const normalized = normalizePaneLayout(candidate, maxColumns, maxRows);
-        if (isClientLayoutFree(found.tab, paneId, normalized, maxColumns, maxRows)) {
-          nextLayout = normalized;
-        }
+      // keep the anchored (west/north) edge fixed when clamped to the minimum size
+      if (direction.includes('w') && candidate.w < MIN_PANE_WIDTH) {
+        candidate.x = startLayout.x + startLayout.w - MIN_PANE_WIDTH;
       }
+      if (direction.includes('n') && candidate.h < MIN_PANE_HEIGHT) {
+        candidate.y = startLayout.y + startLayout.h - MIN_PANE_HEIGHT;
+      }
+      nextLayout = normalizePaneLayout(candidate);
       applyPaneLayoutStyle(paneElement, nextLayout);
-      if (adjacentElement && nextAdjacentLayout) {
-        applyPaneLayoutStyle(adjacentElement, nextAdjacentLayout);
-      }
     };
     const onUp = async () => {
       handle.removeEventListener('pointermove', onMove);
       handle.removeEventListener('pointerup', onUp);
       handle.removeEventListener('pointercancel', onUp);
-      const saved = adjacent
-        ? await savePaneLayoutPair(paneId, nextLayout, adjacent.pane.id, nextAdjacentLayout)
-        : await savePaneLayoutLocal(paneId, nextLayout);
+      const saved = await savePaneLayoutLocal(paneId, nextLayout);
       if (!saved) {
         applyPaneLayoutStyle(paneElement, startLayout);
-        if (adjacentElement) applyPaneLayoutStyle(adjacentElement, startAdjacentLayout);
       }
       state.terminals.get(paneId)?.sendResize();
-      if (adjacent) state.terminals.get(adjacent.pane.id)?.sendResize();
     };
     handle.addEventListener('pointermove', onMove);
     handle.addEventListener('pointerup', onUp);
@@ -5156,19 +5155,14 @@
     const paneId = title.dataset.paneTitle;
     const paneElement = title.closest('[data-pane]');
     const found = findPaneState(paneId);
-    const grid = document.querySelector('.pane-grid');
-    if (!paneElement || !found || !grid) {
+    if (!paneElement || !found) {
       return;
     }
 
-    const maxColumns = Number(state.config.ui?.max_pane_columns) || 5;
-    const maxRows = Number(state.config.ui?.max_pane_rows) || 3;
-    const gridRect = grid.getBoundingClientRect();
-    const cellWidth = Math.max(1, gridRect.width / maxColumns);
-    const cellHeight = Math.max(1, gridRect.height / maxRows);
+    const scale = activeCamera().scale;
     const startX = event.clientX;
     const startY = event.clientY;
-    const startLayout = normalizePaneLayout(found.pane.layout, maxColumns, maxRows);
+    const startLayout = normalizePaneLayout(found.pane.layout);
     let nextLayout = startLayout;
     let moved = false;
 
@@ -5177,18 +5171,17 @@
       if (!moved && Math.abs(moveEvent.clientX - startX) + Math.abs(moveEvent.clientY - startY) < 6) {
         return;
       }
-      moved = true;
-      cancelClick();
-      const candidate = normalizePaneLayout({
-        ...startLayout,
-        x: startLayout.x + Math.round((moveEvent.clientX - startX) / cellWidth),
-        y: startLayout.y + Math.round((moveEvent.clientY - startY) / cellHeight)
-      }, maxColumns, maxRows);
-      if (isClientLayoutFree(found.tab, paneId, candidate, maxColumns, maxRows)) {
-        nextLayout = candidate;
+      if (!moved) {
+        moved = true;
+        cancelClick();
+        nextLayout = bringPaneToFront(found.tab, found.pane, paneElement);
       }
+      nextLayout = normalizePaneLayout({
+        ...nextLayout,
+        x: startLayout.x + (moveEvent.clientX - startX) / scale,
+        y: startLayout.y + (moveEvent.clientY - startY) / scale
+      });
       applyPaneLayoutStyle(paneElement, nextLayout);
-      state.terminals.get(paneId)?.sendResize();
     };
     const onUp = async () => {
       title.removeEventListener('pointermove', onMove);
@@ -5199,7 +5192,6 @@
       const saved = await savePaneLayoutLocal(paneId, nextLayout);
       if (!saved) {
         applyPaneLayoutStyle(paneElement, startLayout);
-        state.terminals.get(paneId)?.sendResize();
         return;
       }
       await setActivePane(paneId);
@@ -5225,23 +5217,6 @@
     }
   }
 
-  async function savePaneLayoutPair(paneId, layout, adjacentPaneId, adjacentLayout) {
-    try {
-      const result = await api(`/api/panes/${paneId}/layout`, {
-        method: 'PATCH',
-        body: JSON.stringify({ layout, adjacentPaneId, adjacentLayout })
-      });
-      const found = findPaneState(paneId);
-      const adjacent = findPaneState(adjacentPaneId);
-      if (found) found.pane.layout = result.layout || layout;
-      if (adjacent) adjacent.pane.layout = result.adjacentPane?.layout || adjacentLayout;
-      return true;
-    } catch (error) {
-      showToast(error.message);
-      return false;
-    }
-  }
-
   function syncPaneTitleWidth(paneElement) {
     const label = paneElement?.querySelector('[data-rename-pane]');
     if (!label || paneElement.clientWidth <= 0) {
@@ -5254,12 +5229,11 @@
   }
 
   function applyPaneLayoutStyle(paneElement, layout) {
-    const maxColumns = Number(state.config.ui?.max_pane_columns) || 5;
-    const maxRows = Number(state.config.ui?.max_pane_rows) || 3;
-    paneElement.style.left = `${(layout.x / maxColumns) * 100}%`;
-    paneElement.style.top = `${(layout.y / maxRows) * 100}%`;
-    paneElement.style.width = `${(layout.cols / maxColumns) * 100}%`;
-    paneElement.style.height = `${(layout.rows / maxRows) * 100}%`;
+    paneElement.style.left = `${layout.x}px`;
+    paneElement.style.top = `${layout.y}px`;
+    paneElement.style.width = `${layout.w}px`;
+    paneElement.style.height = `${layout.h}px`;
+    paneElement.style.zIndex = layout.z || 1;
     syncPaneTitleWidth(paneElement);
     paneElement.querySelectorAll('[data-paged-toolbar]').forEach(updatePagedToolbar);
   }
@@ -5268,16 +5242,14 @@
     if (!Array.isArray(paneLayouts)) {
       return;
     }
-    const maxColumns = Number(state.config.ui?.max_pane_columns) || 5;
-    const maxRows = Number(state.config.ui?.max_pane_rows) || 3;
     for (const update of paneLayouts) {
       const pane = tab.panes.find((candidate) => candidate.id === update.id);
       if (!pane) continue;
-      const previous = normalizePaneLayout(pane.layout, maxColumns, maxRows);
-      const next = normalizePaneLayout(update.layout, maxColumns, maxRows);
+      const previous = normalizePaneLayout(pane.layout);
+      const next = normalizePaneLayout(update.layout);
       pane.layout = next;
       applyPaneLayoutStyle(document.querySelector(`[data-pane="${pane.id}"]`), next);
-      if (previous.cols !== next.cols || previous.rows !== next.rows) {
+      if (previous.w !== next.w || previous.h !== next.h) {
         state.terminals.get(pane.id)?.sendResize();
       }
     }
@@ -5292,9 +5264,9 @@
     state.activeSessionId = session.id;
     state.activePaneId = pane.id;
 
-    const grid = app.querySelector('.pane-grid');
-    grid?.insertAdjacentHTML('beforeend', renderPane(pane));
-    const paneElement = grid?.querySelector(`[data-pane="${pane.id}"]`);
+    const canvas = app.querySelector('[data-pane-canvas]');
+    canvas?.insertAdjacentHTML('beforeend', renderPane(pane));
+    const paneElement = canvas?.querySelector(`[data-pane="${pane.id}"]`);
     if (paneElement) {
       wirePaneControls(paneElement);
       wireFilesPane(paneElement);
@@ -5310,51 +5282,80 @@
     mountPaneContent(pane);
   }
 
-  function paneLayoutStyle(layout, maxColumns, maxRows) {
-    const left = (layout.x / maxColumns) * 100;
-    const top = (layout.y / maxRows) * 100;
-    const width = (layout.cols / maxColumns) * 100;
-    const height = (layout.rows / maxRows) * 100;
-    return `left: ${left}%; top: ${top}%; width: ${width}%; height: ${height}%;`;
+  const MIN_PANE_WIDTH = 160;
+  const MIN_PANE_HEIGHT = 120;
+  const DEFAULT_PANE_WIDTH = 760;
+  const DEFAULT_PANE_HEIGHT = 480;
+  const MIN_ZOOM = 0.2;
+  const MAX_ZOOM = 4;
+
+  function paneLayoutStyle(layout) {
+    return `left: ${layout.x}px; top: ${layout.y}px; width: ${layout.w}px; height: ${layout.h}px; z-index: ${layout.z || 1};`;
   }
 
-  function normalizePaneLayout(layout, maxColumns, maxRows) {
-    const cols = Math.max(1, Math.min(maxColumns, Number(layout?.cols) || 1));
-    const rows = Math.max(1, Math.min(maxRows, Number(layout?.rows) || 1));
+  function normalizePaneLayout(layout) {
+    const w = Math.max(MIN_PANE_WIDTH, Math.round(Number(layout?.w)) || DEFAULT_PANE_WIDTH);
+    const h = Math.max(MIN_PANE_HEIGHT, Math.round(Number(layout?.h)) || DEFAULT_PANE_HEIGHT);
+    const x = Math.round(Number(layout?.x)) || 0;
+    const y = Math.round(Number(layout?.y)) || 0;
+    const z = Math.max(0, Math.round(Number(layout?.z)) || 0);
+    return { x, y, w, h, z };
+  }
+
+  function nextPaneZ(tab) {
+    return (tab?.panes || []).reduce((max, pane) => Math.max(max, Number(pane.layout?.z) || 0), 0) + 1;
+  }
+
+  function activeCamera() {
+    const tab = activeTab(activeSession());
+    if (!tab) {
+      return { x: 0, y: 0, scale: 1 };
+    }
+    if (!tab.camera || typeof tab.camera !== 'object') {
+      tab.camera = { x: 0, y: 0, scale: 1 };
+    }
+    return tab.camera;
+  }
+
+  function clampZoom(scale) {
+    return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, scale));
+  }
+
+  function applyCameraTransform() {
+    const cam = activeCamera();
+    const canvas = app.querySelector('[data-pane-canvas]');
+    if (canvas) {
+      canvas.style.transform = `translate(${cam.x}px, ${cam.y}px) scale(${cam.scale})`;
+    }
+    const grid = app.querySelector('.pane-grid');
+    if (grid) {
+      const size = 40 * cam.scale;
+      grid.style.backgroundSize = `${size}px ${size}px`;
+      grid.style.backgroundPosition = `${cam.x}px ${cam.y}px`;
+    }
+  }
+
+  function pointerToWorld(clientX, clientY, gridRect, cam) {
     return {
-      x: Math.max(0, Math.min(maxColumns - cols, Number(layout?.x) || 0)),
-      y: Math.max(0, Math.min(maxRows - rows, Number(layout?.y) || 0)),
-      cols,
-      rows
+      x: (clientX - gridRect.left - cam.x) / cam.scale,
+      y: (clientY - gridRect.top - cam.y) / cam.scale
     };
   }
 
-  function firstAvailableClientLayout(tab, maxColumns, maxRows) {
-    for (let y = 0; y < maxRows; y += 1) {
-      for (let x = 0; x < maxColumns; x += 1) {
-        const layout = { x, y, cols: 1, rows: 1 };
-        if (isClientLayoutFree(tab, '', layout, maxColumns, maxRows)) {
-          return layout;
-        }
-      }
+  let cameraSaveTimer = 0;
+  function saveCameraSoon() {
+    const tab = activeTab(activeSession());
+    if (!tab) {
+      return;
     }
-    return null;
-  }
-
-  function isClientLayoutFree(tab, paneId, layout, maxColumns, maxRows) {
-    return !tab.panes.some((pane) => {
-      if (pane.id === paneId) {
-        return false;
-      }
-      return layoutsOverlap(normalizePaneLayout(pane.layout, maxColumns, maxRows), layout);
-    });
-  }
-
-  function layoutsOverlap(a, b) {
-    return a.x < b.x + b.cols &&
-      a.x + a.cols > b.x &&
-      a.y < b.y + b.rows &&
-      a.y + a.rows > b.y;
+    const cam = activeCamera();
+    window.clearTimeout(cameraSaveTimer);
+    cameraSaveTimer = window.setTimeout(() => {
+      api(`/api/tabs/${tab.id}/camera`, {
+        method: 'PATCH',
+        body: JSON.stringify({ camera: cam })
+      }).catch(() => {});
+    }, 400);
   }
 
   function mountTerminal(paneId) {
@@ -6653,11 +6654,9 @@
     const tab = activeTab(session);
     const grid = document.querySelector('.pane-grid');
     if (grid && tab) {
-      grid.setAttribute('style', paneGridStyle(tab.panes.length));
-      const maxColumns = Number(state.config.ui?.max_pane_columns) || 5;
-      const maxRows = Number(state.config.ui?.max_pane_rows) || 3;
+      applyCameraTransform();
       for (const pane of tab.panes) {
-        pane.layout = normalizePaneLayout(pane.layout, maxColumns, maxRows);
+        pane.layout = normalizePaneLayout(pane.layout);
         applyPaneLayoutStyle(document.querySelector(`[data-pane="${pane.id}"]`), pane.layout);
       }
     }

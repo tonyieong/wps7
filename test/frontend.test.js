@@ -96,7 +96,7 @@ test('long pane titles keep the close button visible immediately while resizing'
 test('each pane supports independent Ctrl zoom controls', () => {
   assert.match(appSource, /function paneFontSize\(pane\)/);
   assert.match(appSource, /function changePaneFontSize\(paneId, delta\)/);
-  assert.match(appSource, /event\.ctrlKey[^\n]*event\.deltaY/);
+  assert.match(appSource, /event\.shiftKey && paneEl[\s\S]*?changePaneFontSize\(paneEl\.dataset\.pane, event\.deltaY/);
   assert.match(appSource, /key === '\+' \|\| key === '='/);
   assert.match(appSource, /--pane-font-size/);
   assert.match(appSource, /body:\s*JSON\.stringify\(\{ fontSize: nextSize \}\)/);
@@ -141,7 +141,7 @@ test('server access uses Local and LAN choices with password-gated automatic res
 test('pane grid settings resize existing panes immediately without rebuilding terminals', () => {
   const source = appSource.slice(appSource.indexOf('function applyConfigLive()'), appSource.indexOf('function escapeHtml'));
   assert.match(source, /for \(const pane of tab\.panes\)/);
-  assert.match(source, /normalizePaneLayout\(pane\.layout, maxColumns, maxRows\)/);
+  assert.match(source, /normalizePaneLayout\(pane\.layout\)/);
   assert.match(source, /applyPaneLayoutStyle\(document\.querySelector\(`\[data-pane="\$\{pane\.id\}"\]`\), pane\.layout\)/);
   assert.doesNotMatch(source, /render\(\)|loadState\(\)/);
 });
@@ -542,25 +542,25 @@ test('terminal title and bell sequences update pane names and browser notificati
   assert.match(appSource, /notificationInput\?\.disabled/);
 });
 
-test('panes expose invisible resize targets on every edge and corner over a dashed workspace grid', () => {
+test('panes expose invisible resize targets on every edge and corner over a dotted infinite canvas', () => {
   for (const direction of ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw']) {
     assert.match(appSource, new RegExp(`data-pane-resize-direction="${direction}"`));
   }
-  assert.match(appSource, /findAdjacentResizePane/);
-  assert.match(appSource, /savePaneLayoutPair/);
-  assert.match(styles, /\.pane-grid::before\s*\{[^}]*--pane-columns[^}]*repeating-linear-gradient/s);
-  assert.match(styles, /\.pane-grid::after\s*\{[^}]*--pane-rows[^}]*repeating-linear-gradient/s);
+  assert.match(appSource, /function bringPaneToFront\(tab, pane, paneElement\)/);
+  assert.match(appSource, /savePaneLayoutLocal\(paneId, nextLayout\)/);
+  assert.match(styles, /\.pane-grid\s*\{[^}]*radial-gradient[^}]*\}/s);
+  assert.match(styles, /\.pane-canvas\s*\{[^}]*transform-origin:\s*0 0/s);
   assert.doesNotMatch(styles, /\.pane-resize::after\s*\{[^}]*border-/s);
 });
 
-test('partially shared pane edges select and resize the pane under the pointer', () => {
-  assert.match(appSource, /function findAdjacentResizePane\([^)]*pointerColumn, pointerRow\)/);
-  assert.match(appSource, /candidate\.layout\.y < layout\.y \+ layout\.rows/);
-  assert.match(appSource, /candidate\.layout\.y \+ candidate\.layout\.rows > layout\.y/);
-  assert.match(appSource, /candidate\.layout\.x < layout\.x \+ layout\.cols/);
-  assert.match(appSource, /candidate\.layout\.x \+ candidate\.layout\.cols > layout\.x/);
-  assert.match(appSource, /pointerRow >= candidate\.layout\.y/);
-  assert.match(appSource, /pointerColumn >= candidate\.layout\.x/);
+test('pane resize uses free world-pixel deltas scaled by the camera zoom', () => {
+  const source = appSource.slice(appSource.indexOf('function startPaneResize'), appSource.indexOf('function startPaneMove'));
+  assert.match(source, /const scale = activeCamera\(\)\.scale/);
+  assert.match(source, /const dx = \(moveEvent\.clientX - startX\) \/ scale/);
+  assert.match(source, /candidate\.w = startLayout\.w \+ dx/);
+  assert.match(source, /candidate\.h = startLayout\.h \+ dy/);
+  assert.match(source, /candidate\.w < MIN_PANE_WIDTH/);
+  assert.doesNotMatch(source, /findAdjacentResizePane|resizePairIsFree/);
 });
 
 test('switching panes clears file selections and their range anchors', () => {
