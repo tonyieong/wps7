@@ -3934,64 +3934,40 @@ textarea:focus-visible {
   overscroll-behavior: contain;
 }
 
-.usage-overlay {
-  position: fixed;
-  z-index: 75;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 16px;
-  background: rgba(3, 8, 13, .58);
-  backdrop-filter: blur(7px);
-}
-
-.usage-panel {
-  width: min(680px, 100%);
-  max-height: min(760px, calc(100vh - 32px));
+.usage-pane {
+  min-height: 0;
+  height: 100%;
   overflow: hidden;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--panel);
-  box-shadow: 0 20px 60px var(--shadow);
+  background: var(--terminal-bg);
 }
 
-.usage-header {
-  min-height: 58px;
-  padding: 10px 12px 10px 16px;
+.usage-pane-toolbar {
+  height: var(--pane-toolbar-height);
+  padding: 0 4px 0 8px;
   border-bottom: 1px solid var(--line);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
+  color: var(--muted);
+  font: 11px "Cascadia Mono", Consolas, monospace;
 }
 
-.usage-header h2,
-.usage-header p,
 .usage-card h3,
 .usage-card h4,
 .usage-card p {
   margin: 0;
 }
 
-.usage-header h2 {
-  font-size: 16px;
-}
-
-.usage-header p,
 .usage-card small,
 .usage-card p {
   color: var(--muted);
   font-size: 11px;
 }
 
-.usage-header-actions {
-  display: flex;
-  gap: 4px;
-}
-
-.usage-header-actions .file-action-icon {
+.usage-pane-toolbar .file-action-icon {
   width: 16px;
   height: 16px;
 }
@@ -4112,17 +4088,6 @@ textarea:focus-visible {
   .app.mode-auto .terminal {
     touch-action: none;
     overscroll-behavior: contain;
-  }
-
-  .usage-overlay {
-    align-items: end;
-    padding: 0;
-  }
-
-  .usage-panel {
-    width: 100%;
-    max-height: 82dvh;
-    border-radius: 12px 12px 0 0;
   }
 
   .usage-content {

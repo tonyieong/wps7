@@ -38,6 +38,9 @@ test('creates default config with localhost port 5000', () => {
   assert.equal(config.custom_theme.light_accent, '#159d83');
   assert.equal(config.usage.minimax_api_key, '');
   assert.equal(config.usage.minimax_region, 'global');
+  assert.equal(config.usage.show_codex, true);
+  assert.equal(config.usage.show_claude, true);
+  assert.equal(config.usage.show_minimax, true);
 });
 
 test('rejects 0.0.0.0 without password hash', () => {
@@ -135,7 +138,10 @@ test('updates known config values while preserving loadability', () => {
     },
     usage: {
       minimax_api_key: 'sk-cp-test',
-      minimax_region: 'china'
+      minimax_region: 'china',
+      show_codex: false,
+      show_claude: true,
+      show_minimax: false
     },
     custom_theme: {
       selected_light: 'claude-light',
@@ -192,6 +198,9 @@ test('updates known config values while preserving loadability', () => {
   ]);
   assert.equal(config.usage.minimax_api_key, 'sk-cp-test');
   assert.equal(config.usage.minimax_region, 'china');
+  assert.equal(config.usage.show_codex, false);
+  assert.equal(config.usage.show_claude, true);
+  assert.equal(config.usage.show_minimax, false);
   assert.equal(config.custom_theme.mode, 'light');
   assert.equal(config.custom_theme.selected_light, 'claude-light');
   assert.equal(config.custom_theme.selected_dark, 'codex-dark');

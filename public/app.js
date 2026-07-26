@@ -350,7 +350,7 @@
 
   function renderLogin() {
     disposeTerminals();
-    document.querySelectorAll('.settings-overlay, .help-overlay, .layout-panel, .file-panel, .usage-overlay').forEach((element) => element.remove());
+    document.querySelectorAll('.settings-overlay, .help-overlay, .layout-panel, .file-panel').forEach((element) => element.remove());
     applyTheme();
     applyUiTypography();
     app.innerHTML = `
@@ -580,7 +580,8 @@
   function renderPane(pane) {
     const body = pane.type === 'files' ? renderFilesPane(pane)
       : pane.type === 'browser' ? renderBrowserPane(pane)
-        : pane.type === 'notepad' ? renderNotepadPane(pane) : `
+        : pane.type === 'notepad' ? renderNotepadPane(pane)
+          : pane.type === 'usage' ? renderUsagePane(pane) : `
           ${renderMobileKeybar()}
           <div class="terminal" id="terminal-${pane.id}"></div>`;
     const uploadStatus = pane.type === 'files'
@@ -596,7 +597,7 @@
           ${renderNotepadTabs(pane)}
         </div>`
         : `<div class="pane-title ${pane.type === 'files' ? 'file-pane-title' : ''}" data-pane-title="${pane.id}">
-          <span class="pane-kind-icon" aria-hidden="true">${fileActionIcon(({ files: 'file', notepad: 'notepad' })[pane.type] || 'terminal')}</span>
+          <span class="pane-kind-icon" aria-hidden="true">${fileActionIcon(({ files: 'file', notepad: 'notepad', usage: 'usage' })[pane.type] || 'terminal')}</span>
           ${uploadStatus}
           <span data-rename-pane="${pane.id}">${escapeHtml(pane.title)}</span>
         </div>`;
@@ -1097,6 +1098,7 @@
       const tab = notepadActiveTab(pane);
       loadNotepadTab(pane.id, tab?.id, tab?.path || '');
     }
+    else if (pane.type === 'usage') loadUsagePane(pane.id);
     else {
       loadFilesPane(pane);
     }
@@ -1136,7 +1138,7 @@
             <button class="rail-button" data-action="notepad" aria-label="New notepad" title="New notepad">
               <span class="rail-icon" aria-hidden="true">${fileActionIcon('notepad')}</span><span class="rail-label">New notepad</span>
             </button>
-            <button class="rail-button" data-action="usage" aria-label="Usage" title="Usage"><span class="rail-icon" aria-hidden="true">${fileActionIcon('usage')}</span><span class="rail-label">Usage</span></button>
+            <button class="rail-button" data-action="usage" aria-label="New usage pane" title="New usage pane"><span class="rail-icon" aria-hidden="true">${fileActionIcon('usage')}</span><span class="rail-label">Usage pane</span></button>
             <button class="rail-button" data-action="layout" aria-label="Layouts" title="Layouts"><span class="rail-icon">⊞</span><span class="rail-label">Layouts</span></button>
             <button class="rail-button" data-action="help" aria-label="Keyboard shortcuts" title="Keyboard shortcuts"><span class="rail-icon">?</span><span class="rail-label">Shortcuts</span></button>
             <button class="rail-button" data-action="settings" aria-label="Settings" title="Settings"><span class="rail-icon">⚙</span><span class="rail-label">Settings</span></button>
@@ -1225,7 +1227,7 @@
     app.querySelectorAll('[data-action="files"]').forEach((button) => button.onclick = openFilesPane);
     app.querySelectorAll('[data-action="browser"]').forEach((button) => button.onclick = openBrowserPane);
     app.querySelectorAll('[data-action="notepad"]').forEach((button) => button.onclick = () => openNotepadPane());
-    app.querySelectorAll('[data-action="usage"]').forEach((button) => button.onclick = openUsage);
+    app.querySelectorAll('[data-action="usage"]').forEach((button) => button.onclick = openUsagePane);
     app.querySelectorAll('[data-action="layout"]').forEach((button) => button.onclick = toggleLayoutPanel);
     app.querySelectorAll('[data-action="settings"]').forEach((button) => button.onclick = openSettings);
     app.querySelectorAll('[data-action="help"]').forEach((button) => button.onclick = openHelp);
@@ -1475,6 +1477,19 @@
         method: 'POST',
         body: JSON.stringify({ path: '' })
       });
+      appendPaneToWorkspace(session, tab, pane);
+    } catch (error) {
+      showToast(error.message);
+    }
+  }
+
+  async function openUsagePane() {
+    const session = activeSession();
+    const tab = activeTab(session);
+    const basePaneId = state.activePaneId || tab?.activePaneId || tab?.panes[0]?.id;
+    if (!session || !tab || !basePaneId) return;
+    try {
+      const pane = await api(`/api/panes/${basePaneId}/usage`, { method: 'POST' });
       appendPaneToWorkspace(session, tab, pane);
     } catch (error) {
       showToast(error.message);
@@ -4331,7 +4346,7 @@
     return tab.panes.map((pane, index) => {
       const l = layouts[index];
       const style = `left:${((l.x - minX) / spanX) * 100}%;top:${((l.y - minY) / spanY) * 100}%;width:${(l.w / spanX) * 100}%;height:${(l.h / spanY) * 100}%;`;
-      const label = ({ files: 'Files', browser: 'Web', notepad: 'Notes' })[pane.type] || 'PS';
+      const label = ({ files: 'Files', browser: 'Web', notepad: 'Notes', usage: 'Usage' })[pane.type] || 'PS';
       return `<button class="mini-pane ${pane.id === state.activePaneId ? 'active' : ''}" data-layout-pane="${pane.id}" style="${style}">${label}</button>`;
     }).join('');
   }
@@ -5816,39 +5831,38 @@
     `;
   }
 
-  async function openUsage() {
-    document.querySelector('.usage-overlay')?.remove();
-    const overlay = document.createElement('div');
-    overlay.className = 'usage-overlay';
-    overlay.innerHTML = `
-      <section class="usage-panel" aria-label="Provider usage">
-        <header class="usage-header"><div><h2>Usage</h2><p>Codex and MiniMax quota windows</p></div><div class="usage-header-actions"><button class="icon-button" type="button" data-usage-refresh aria-label="Refresh usage" title="Refresh usage">${fileActionIcon('refresh')}</button><button class="icon-button" type="button" data-usage-close aria-label="Close usage" title="Close">×</button></div></header>
+  function renderUsagePane(pane) {
+    return `
+      <div class="usage-pane" data-usage-pane="${pane.id}">
+        <div class="usage-pane-toolbar">
+          <span>AI provider quota windows</span>
+          <button class="file-command-button" type="button" data-usage-refresh aria-label="Refresh usage" title="Refresh usage">${fileActionIcon('refresh')}</button>
+        </div>
         <div class="usage-content" data-usage-content><div class="usage-loading">Reading provider usage…</div></div>
-      </section>
+      </div>
     `;
-    document.body.appendChild(overlay);
-    const content = overlay.querySelector('[data-usage-content]');
-    const loadUsage = async (refresh = false) => {
-      content.innerHTML = '<div class="usage-loading">Reading provider usage…</div>';
-      try {
-        const result = refresh ? await api('/api/usage?refresh=1') : await api('/api/usage');
-        content.innerHTML = (result.providers || []).map(usageProviderMarkup).join('');
-        content.querySelector('[data-usage-settings]')?.addEventListener('click', () => {
-          overlay.remove();
-          openSettings();
-        });
-      } catch (error) {
-        content.innerHTML = `<div class="usage-loading error">${escapeHtml(error.message)}</div>`;
-      }
-    };
-    overlay.querySelector('[data-usage-close]').onclick = () => overlay.remove();
-    overlay.querySelector('[data-usage-refresh]').onclick = () => loadUsage(true);
-    overlay.onclick = (event) => {
-      if (event.target === overlay) {
-        overlay.remove();
-      }
-    };
-    await loadUsage();
+  }
+
+  async function loadUsagePane(paneId, refresh = false) {
+    const pane = document.querySelector(`[data-pane="${paneId}"]`);
+    const content = pane?.querySelector('[data-usage-content]');
+    const refreshButton = pane?.querySelector('[data-usage-refresh]');
+    if (!content) return;
+    refreshButton.onclick = () => loadUsagePane(paneId, true);
+    refreshButton.disabled = true;
+    content.innerHTML = '<div class="usage-loading">Reading provider usage…</div>';
+    try {
+      const result = refresh ? await api('/api/usage?refresh=1') : await api('/api/usage');
+      const providers = result.providers || [];
+      content.innerHTML = providers.length
+        ? providers.map(usageProviderMarkup).join('')
+        : '<div class="usage-loading">Choose at least one provider in Settings → Usage.</div>';
+      content.querySelector('[data-usage-settings]')?.addEventListener('click', openSettings);
+    } catch (error) {
+      content.innerHTML = `<div class="usage-loading error">${escapeHtml(error.message)}</div>`;
+    } finally {
+      refreshButton.disabled = false;
+    }
   }
 
   const mobileKeybarModifierOptions = ['Control', 'Alt', 'Shift'];
@@ -6336,8 +6350,11 @@
               </div>
             </section>
             <section class="settings-section" id="settings-usage">
-              <div class="section-heading"><div><h2>Usage</h2><p>Provider credentials stay on the WPS7 server.</p></div></div>
+              <div class="section-heading"><div><h2>Usage</h2><p>Choose the provider cards shown in Usage panes.</p></div></div>
               <div class="settings-grid">
+                <label class="settings-check"><input name="usage.show_codex" type="checkbox" ${settings.usage?.show_codex !== false ? 'checked' : ''}> Codex</label>
+                <label class="settings-check"><input name="usage.show_claude" type="checkbox" ${settings.usage?.show_claude !== false ? 'checked' : ''}> Claude Code</label>
+                <label class="settings-check"><input name="usage.show_minimax" type="checkbox" ${settings.usage?.show_minimax !== false ? 'checked' : ''}> MiniMax</label>
                 <label class="settings-wide">MiniMax Coding Plan API key<input name="usage.minimax_api_key" type="password" autocomplete="off" placeholder="${settings.usage?.minimax_configured ? 'Saved — leave blank to keep' : 'sk-cp-…'}"></label>
                 <label>MiniMax region<select name="usage.minimax_region"><option value="global" ${settings.usage?.minimax_region !== 'china' ? 'selected' : ''}>Global</option><option value="china" ${settings.usage?.minimax_region === 'china' ? 'selected' : ''}>China mainland</option></select></label>
                 <label class="settings-check"><input name="usage.clear_minimax_api_key" type="checkbox"> Clear saved MiniMax key</label>
@@ -6499,6 +6516,7 @@
         state.customThemeDraft = { ...customThemeDefaults, ...(state.config.custom_theme || {}) };
         applyTheme(savedTheme);
         applyConfigLive();
+        document.querySelectorAll('[data-pane-type="usage"]').forEach((pane) => loadUsagePane(pane.dataset.pane, true));
         if (state.config.restarting) {
           if (payload.auth?.password) {
             clearToken();
@@ -6573,7 +6591,10 @@
         max_upload_bytes: numberOrUndefined(form.get('file_manager.max_upload_bytes')) || 0
       },
       usage: {
-        minimax_region: form.get('usage.minimax_region')
+        minimax_region: form.get('usage.minimax_region'),
+        show_codex: form.get('usage.show_codex') === 'on',
+        show_claude: form.get('usage.show_claude') === 'on',
+        show_minimax: form.get('usage.show_minimax') === 'on'
       },
       custom_theme: customThemeFromForm(form)
     };

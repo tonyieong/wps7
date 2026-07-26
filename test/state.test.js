@@ -234,6 +234,24 @@ test('allows more than one files pane in the same tab', () => {
   assert.equal(store.state.sessions[0].tabs[0].panes.filter((pane) => pane.type === 'files').length, 2);
 });
 
+test('usage panes persist as workspace panes', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100);
+  store.load();
+  const firstPane = store.state.sessions[0].tabs[0].panes[0];
+  const usagePane = store.createUsagePane(firstPane.id);
+
+  assert.equal(usagePane.type, 'usage');
+  assert.equal(usagePane.title, 'Usage 1');
+  store.save();
+
+  const restored = new StateStore(root, 100);
+  restored.load();
+  const restoredPane = restored.findPane(usagePane.id).pane;
+  assert.equal(restoredPane.type, 'usage');
+  assert.equal(restoredPane.title, 'Usage 1');
+});
+
 test('browser and notepad panes persist their URL and file path', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
   const store = new StateStore(root, 100, 4, 4);

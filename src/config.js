@@ -72,7 +72,10 @@ const defaultConfig = {
   },
   usage: {
     minimax_api_key: '',
-    minimax_region: 'global'
+    minimax_region: 'global',
+    show_codex: true,
+    show_claude: true,
+    show_minimax: true
   },
   custom_theme: {
     selected_light: 'wps-light',
@@ -169,6 +172,9 @@ history = []
 # MiniMax Coding Plan key. MINIMAX_CODING_API_KEY or MINIMAX_API_KEY takes precedence.
 minimax_api_key = ""
 minimax_region = "global"
+show_codex = true
+show_claude = true
+show_minimax = true
 
 [custom_theme]
 selected_light = "wps-light"
@@ -302,6 +308,9 @@ bookmarks = []
   }
   nextText = ensureTomlKey(nextText, 'usage', 'minimax_api_key', defaultConfig.usage.minimax_api_key);
   nextText = ensureTomlKey(nextText, 'usage', 'minimax_region', defaultConfig.usage.minimax_region);
+  nextText = ensureTomlKey(nextText, 'usage', 'show_codex', defaultConfig.usage.show_codex);
+  nextText = ensureTomlKey(nextText, 'usage', 'show_claude', defaultConfig.usage.show_claude);
+  nextText = ensureTomlKey(nextText, 'usage', 'show_minimax', defaultConfig.usage.show_minimax);
   if (!/^\[terminal\]\s*$/m.test(nextText)) {
     nextText = `${nextText.trimEnd()}
 
@@ -396,7 +405,7 @@ function updateConfigFile(root, updates) {
     ui: ['sidebar_width', 'max_pane_columns', 'max_pane_rows', 'terminal_font_family', 'terminal_font_size', 'mobile_terminal_font_size', 'file_pane_font_size', 'system_font_size'],
     file_manager: ['enabled', 'root_mode', 'max_upload_bytes', 'show_hidden', 'bookmarks'],
     browser: ['bookmarks', 'history'],
-    usage: ['minimax_api_key', 'minimax_region'],
+    usage: ['minimax_api_key', 'minimax_region', 'show_codex', 'show_claude', 'show_minimax'],
     custom_theme: ['selected_light', 'selected_dark', 'mode', 'ink', 'panel', 'rail', 'surface', 'line', 'text', 'muted', 'accent', 'warn', 'danger', 'terminal_bg', 'terminal_fg', 'light_ink', 'light_panel', 'light_rail', 'light_surface', 'light_line', 'light_text', 'light_muted', 'light_accent', 'light_warn', 'light_danger', 'light_terminal_bg', 'light_terminal_fg']
   };
 

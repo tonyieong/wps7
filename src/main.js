@@ -147,7 +147,10 @@ function publicConfig(config, shell, restartRequired, reloadError) {
     browser: config.browser,
     usage: {
       minimax_configured: Boolean(process.env.MINIMAX_CODING_API_KEY || process.env.MINIMAX_API_KEY || config.usage.minimax_api_key),
-      minimax_region: config.usage.minimax_region
+      minimax_region: config.usage.minimax_region,
+      show_codex: config.usage.show_codex !== false,
+      show_claude: config.usage.show_claude !== false,
+      show_minimax: config.usage.show_minimax !== false
     },
     custom_theme: config.custom_theme,
     restartRequired,
@@ -202,7 +205,10 @@ function settingsConfig(config, runtimeConfig) {
     },
     usage: {
       minimax_configured: Boolean(process.env.MINIMAX_CODING_API_KEY || process.env.MINIMAX_API_KEY || config.usage.minimax_api_key),
-      minimax_region: config.usage.minimax_region === 'china' ? 'china' : 'global'
+      minimax_region: config.usage.minimax_region === 'china' ? 'china' : 'global',
+      show_codex: config.usage.show_codex !== false,
+      show_claude: config.usage.show_claude !== false,
+      show_minimax: config.usage.show_minimax !== false
     },
     custom_theme: config.custom_theme
   };
@@ -378,6 +384,11 @@ function sanitizeSettingsUpdates(updates) {
     }
     if (updates.usage.minimax_region === 'global' || updates.usage.minimax_region === 'china') {
       next.usage.minimax_region = updates.usage.minimax_region;
+    }
+    for (const key of ['show_codex', 'show_claude', 'show_minimax']) {
+      if (typeof updates.usage[key] === 'boolean') {
+        next.usage[key] = updates.usage[key];
+      }
     }
   }
   if (updates.custom_theme) {
@@ -659,8 +670,11 @@ function main() {
       }
       const minimaxApiKey = process.env.MINIMAX_CODING_API_KEY || process.env.MINIMAX_API_KEY || config.usage.minimax_api_key;
       const value = await usage.fetchUsageOverview({
-        codex: () => usage.fetchCodexUsage(),
-        minimax: () => usage.fetchMiniMaxUsage({ apiKey: minimaxApiKey, region: config.usage.minimax_region })
+        codex: config.usage.show_codex !== false ? () => usage.fetchCodexUsage() : null,
+        claude: config.usage.show_claude !== false ? () => usage.fetchClaudeUsage() : null,
+        minimax: config.usage.show_minimax !== false
+          ? () => usage.fetchMiniMaxUsage({ apiKey: minimaxApiKey, region: config.usage.minimax_region })
+          : null
       });
       usageCache = { createdAt: Date.now(), value };
       res.json(value);
@@ -802,6 +816,23 @@ function main() {
       return;
     }
     const pane = store.createFilesPane(req.params.paneId, req.body.path);
+    if (!pane) {
+      res.status(400).json({ error: 'Unable to create pane.' });
+      return;
+    }
+    res.status(201).json({
+      ...pane,
+      paneLayouts: found.tab.panes.map((candidate) => ({ id: candidate.id, layout: candidate.layout }))
+    });
+  });
+
+  app.post('/api/panes/:paneId/usage', requireAuth(config), (req, res) => {
+    const found = store.findPane(req.params.paneId);
+    if (!found) {
+      res.status(404).json({ error: 'Pane not found.' });
+      return;
+    }
+    const pane = store.createUsagePane(req.params.paneId);
     if (!pane) {
       res.status(400).json({ error: 'Unable to create pane.' });
       return;

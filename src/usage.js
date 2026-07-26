@@ -17,6 +17,11 @@ function resetDate(value, milliseconds = false) {
   return new Date(milliseconds ? number : number * 1000).toISOString();
 }
 
+function isoDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
 function windowLabel(seconds, fallback) {
   const hours = Number(seconds) / 3600;
   if (hours > 0 && hours <= 6) {
@@ -96,6 +101,51 @@ async function fetchCodexUsage({ codexHome, fetchImpl = fetch } = {}) {
   };
 }
 
+async function fetchClaudeUsage({ claudeHome, fetchImpl = fetch } = {}) {
+  const home = claudeHome || process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
+  const credentialsPath = path.join(home, '.credentials.json');
+  if (!fs.existsSync(credentialsPath)) {
+    throw new Error('Claude Code is not signed in on this server.');
+  }
+  let credentials;
+  try {
+    credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
+  } catch (error) {
+    throw new Error('Claude Code credentials could not be read.');
+  }
+  const accessToken = credentials.claudeAiOauth?.accessToken || credentials.claude_ai_oauth?.access_token;
+  if (!accessToken) {
+    throw new Error('Claude Code OAuth token is missing.');
+  }
+
+  const payload = await requestJson('https://api.anthropic.com/api/oauth/usage', {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+      'anthropic-beta': 'oauth-2025-04-20'
+    }
+  }, fetchImpl);
+  const windows = [
+    ['five_hour', '5-hour'],
+    ['seven_day', 'Weekly'],
+    ['seven_day_sonnet', 'Sonnet weekly'],
+    ['seven_day_opus', 'Opus weekly']
+  ].flatMap(([key, label]) => payload[key] ? [{
+    id: key,
+    label,
+    usedPercent: clampPercent(payload[key].utilization),
+    resetsAt: isoDate(payload[key].resets_at)
+  }] : []);
+
+  return {
+    provider: 'claude',
+    label: 'Claude Code',
+    source: 'oauth',
+    windows,
+    updatedAt: new Date().toISOString()
+  };
+}
+
 function minimaxServiceLabel(modelName) {
   return ({ general: 'Text', speech: 'Speech', image: 'Image', video: 'Video', music: 'Music' })[modelName] || modelName || 'Coding plan';
 }
@@ -153,11 +203,13 @@ async function fetchMiniMaxUsage({ apiKey, region = 'global', fetchImpl = fetch 
   };
 }
 
-async function fetchUsageOverview({ codex, minimax }) {
+async function fetchUsageOverview({ codex, claude, minimax }) {
   const providers = await Promise.all([
-    providerResult('codex', 'Codex', codex),
-    providerResult('minimax', 'MiniMax', minimax)
-  ]);
+    ['codex', 'Codex', codex],
+    ['claude', 'Claude Code', claude],
+    ['minimax', 'MiniMax', minimax]
+  ].filter(([, , fetcher]) => typeof fetcher === 'function')
+    .map(([provider, label, fetcher]) => providerResult(provider, label, fetcher)));
   return { providers, updatedAt: new Date().toISOString() };
 }
 
@@ -170,6 +222,7 @@ async function providerResult(provider, label, fetcher) {
 }
 
 module.exports = {
+  fetchClaudeUsage,
   fetchCodexUsage,
   fetchMiniMaxUsage,
   fetchUsageOverview

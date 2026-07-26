@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { fetchCodexUsage, fetchMiniMaxUsage, fetchUsageOverview } = require('../src/usage');
+const { fetchClaudeUsage, fetchCodexUsage, fetchMiniMaxUsage, fetchUsageOverview } = require('../src/usage');
 
 test('reads Codex rate limits from the local OAuth account without exposing identity', async () => {
   const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-codex-'));
@@ -64,13 +64,58 @@ test('reads MiniMax Coding Plan windows with bearer authentication', async () =>
   assert.deepEqual(result.services[0].windows.map((window) => window.usedPercent), [28, 39]);
 });
 
-test('usage overview keeps one provider available when the other fails', async () => {
+test('reads Claude Code limits from the local OAuth account without exposing identity', async () => {
+  const claudeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-claude-'));
+  fs.writeFileSync(path.join(claudeHome, '.credentials.json'), JSON.stringify({
+    claudeAiOauth: { accessToken: 'claude-secret-token' }
+  }));
+  const result = await fetchClaudeUsage({
+    claudeHome,
+    fetchImpl: async (url, options) => {
+      assert.equal(url, 'https://api.anthropic.com/api/oauth/usage');
+      assert.equal(options.headers.Authorization, 'Bearer claude-secret-token');
+      assert.equal(options.headers['anthropic-beta'], 'oauth-2025-04-20');
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          five_hour: { utilization: 21, resets_at: '2027-01-01T05:00:00Z' },
+          seven_day: { utilization: 34, resets_at: '2027-01-07T00:00:00Z' },
+          seven_day_sonnet: { utilization: 18, resets_at: '2027-01-07T00:00:00Z' },
+          account: { email: 'hidden@example.com' }
+        })
+      };
+    }
+  });
+
+  assert.equal(result.provider, 'claude');
+  assert.deepEqual(result.windows.map((window) => [window.label, window.usedPercent]), [
+    ['5-hour', 21],
+    ['Weekly', 34],
+    ['Sonnet weekly', 18]
+  ]);
+  assert.equal('account' in result, false);
+});
+
+test('usage overview keeps enabled providers available when another fails', async () => {
   const overview = await fetchUsageOverview({
     codex: () => Promise.resolve({ provider: 'codex', windows: [] }),
+    claude: () => Promise.resolve({ provider: 'claude', windows: [] }),
     minimax: () => Promise.reject(new Error('MiniMax API key is not configured.'))
   });
 
   assert.equal(overview.providers[0].provider, 'codex');
-  assert.equal(overview.providers[1].provider, 'minimax');
-  assert.equal(overview.providers[1].error, 'MiniMax API key is not configured.');
+  assert.equal(overview.providers[1].provider, 'claude');
+  assert.equal(overview.providers[2].provider, 'minimax');
+  assert.equal(overview.providers[2].error, 'MiniMax API key is not configured.');
+});
+
+test('usage overview omits disabled providers', async () => {
+  const overview = await fetchUsageOverview({
+    codex: null,
+    claude: () => Promise.resolve({ provider: 'claude', windows: [] }),
+    minimax: null
+  });
+
+  assert.deepEqual(overview.providers.map((provider) => provider.provider), ['claude']);
 });

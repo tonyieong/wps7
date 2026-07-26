@@ -57,3 +57,7 @@ bookmarks = []
 # MiniMax Coding Plan key. MINIMAX_CODING_API_KEY or MINIMAX_API_KEY takes precedence.
 minimax_api_key = ""
 minimax_region = "global"
+# Choose the provider cards shown in Usage panes.
+show_codex = true
+show_claude = true
+show_minimax = true

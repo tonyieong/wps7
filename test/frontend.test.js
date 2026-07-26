@@ -77,7 +77,7 @@ test('sidebar actions use shared icons for new PowerShell and new file', () => {
 });
 
 test('pane titles reuse the same pane-type icons as the sidebar', () => {
-  assert.match(appSource, /class="pane-kind-icon"[^>]*>\$\{fileActionIcon\(\(\{ files: 'file', notepad: 'notepad' \}\)\[pane\.type\] \|\| 'terminal'\)\}<\/span>/);
+  assert.match(appSource, /class="pane-kind-icon"[^>]*>\$\{fileActionIcon\(\(\{ files: 'file', notepad: 'notepad', usage: 'usage' \}\)\[pane\.type\] \|\| 'terminal'\)\}<\/span>/);
   assert.match(styles, /\.pane-kind-icon \.file-action-icon\s*\{[^}]*width:\s*14px[^}]*height:\s*14px/s);
   assert.match(styles, /\.pane-title::before\s*\{[^}]*content:\s*none/s);
 });
@@ -351,16 +351,23 @@ test('sidebar can be pinned or used as a dismissible floating panel', () => {
   assert.match(styles, /\.sidebar-brand-row\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto/s);
 });
 
-test('usage panel includes Codex and MiniMax with server-side refresh', () => {
+test('sidebar creates a persistent usage pane with configurable providers', () => {
   assert.match(mainSource, /app\.get\('\/api\/usage', requireAuth\(config\)/);
-  assert.match(appSource, /data-action="usage"[^>]+aria-label="Usage"/);
-  assert.match(appSource, /async function openUsage\(\)/);
+  assert.match(mainSource, /app\.post\('\/api\/panes\/:paneId\/usage'/);
+  assert.match(appSource, /data-action="usage"[^>]+aria-label="New usage pane"/);
+  assert.match(appSource, /async function openUsagePane\(\)/);
+  assert.match(appSource, /function renderUsagePane\(pane\)/);
   assert.match(appSource, /api\('\/api\/usage\?refresh=1'\)/);
   assert.match(appSource, /Codex/);
+  assert.match(appSource, /Claude Code/);
   assert.match(appSource, /MiniMax/);
+  assert.match(appSource, /name="usage\.show_codex"/);
+  assert.match(appSource, /name="usage\.show_claude"/);
+  assert.match(appSource, /name="usage\.show_minimax"/);
   assert.match(appSource, /name="usage\.minimax_api_key"/);
   assert.match(appSource, /name="usage\.minimax_region"/);
-  assert.match(styles, /\.usage-panel\s*\{/);
+  assert.match(styles, /\.usage-pane\s*\{/);
+  assert.doesNotMatch(appSource, /className = 'usage-overlay'/);
 });
 
 test('mobile terminal sends touch movement through the xterm scroll surface with a compact virtual key row', () => {

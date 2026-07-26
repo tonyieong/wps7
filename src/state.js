@@ -9,7 +9,7 @@ const DEFAULT_PANE_HEIGHT = 480;
 const PANE_CASCADE_STEP = GRID_UNIT;
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 4;
-const PANE_TYPES = new Set(['terminal', 'files', 'browser', 'notepad']);
+const PANE_TYPES = new Set(['terminal', 'files', 'browser', 'notepad', 'usage']);
 const NOTEPAD_ENCODINGS = new Set(['utf8', 'utf8-bom', 'utf16le', 'utf16be', 'latin1']);
 const MAX_NOTEPAD_CONTENT_LENGTH = 10 * 1024 * 1024;
 
@@ -452,6 +452,10 @@ class StateStore {
     return this.createUtilityPane(paneId, 'notepad', 'Notepad', pathValue, 'path');
   }
 
+  createUsagePane(paneId) {
+    return this.createUtilityPane(paneId, 'usage', 'Usage');
+  }
+
   createNotepadTab(paneId, pathValue = '') {
     const found = this.findPane(paneId);
     if (!found || found.pane.type !== 'notepad' || found.pane.notepadTabs.length >= 50) return null;
@@ -534,11 +538,13 @@ class StateStore {
       type,
       title: nextNumberedName(title, found.tab.panes.map((candidate) => candidate.title)),
       cwd: found.pane.cwd,
-      [property]: String(value || ''),
       split: type,
       layout,
       scrollback: []
     };
+    if (property) {
+      pane[property] = String(value || '');
+    }
     if (type === 'browser') {
       const tab = browserTab({ url: value, emulationMode });
       pane.browserTabs = [tab];
