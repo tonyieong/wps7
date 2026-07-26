@@ -337,7 +337,7 @@ textarea {
   gap: 4px;
   min-width: 0;
   height: var(--pane-toolbar-height);
-  padding: 2px 38px 0 8px;
+  padding: 2px 30px 0 8px;
   border-bottom: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface-soft) 82%, var(--terminal-bg));
   cursor: move;
@@ -404,11 +404,26 @@ textarea {
   border-radius: 3px;
   background: transparent;
   color: inherit;
-  font-size: 13px;
 }
 
 .pane-tab-close:hover {
   background: var(--surface-soft);
+}
+
+/* Tab and pane close buttons share the single-stroke icon set with the new-tab button. */
+.pane-tab-close .file-action-icon,
+.browser-tab-close .file-action-icon,
+.notepad-tab-close .file-action-icon {
+  width: 11px;
+  height: 11px;
+}
+
+.pane-close .file-action-icon,
+.pane-new-tab .file-action-icon,
+.browser-new-tab .file-action-icon,
+.notepad-new-tab .file-action-icon {
+  width: 13px;
+  height: 13px;
 }
 
 .pane-tab-rename-input {
@@ -4327,7 +4342,7 @@ a:focus-visible {
   min-width: 0;
   height: var(--pane-toolbar-height);
   padding: 2px 3px 0;
-  padding-right: 38px;
+  padding-right: 30px;
   border-bottom: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface-soft) 82%, var(--terminal-bg));
   cursor: move;
@@ -4704,7 +4719,7 @@ a:focus-visible {
   gap: 2px;
   min-width: 0;
   height: var(--pane-toolbar-height);
-  padding: 2px 38px 0 8px;
+  padding: 2px 30px 0 8px;
   border-bottom: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface-soft) 82%, var(--terminal-bg));
   color: var(--accent);

@@ -299,9 +299,16 @@ test('terminal panes persist multiple tabs and their active tab', () => {
   assert.equal(restoredPane.activeTerminalTabId, restoredPane.terminalTabs[0].id);
   assert.deepEqual(restoredPane.terminalTabs[0].scrollback, []);
 
-  assert.equal(restored.closeTerminalTab(pane.id, restoredPane.terminalTabs[1].id), true);
+  assert.equal(restored.closeTerminalTab(pane.id, restoredPane.terminalTabs[1].id).replacement, null);
   assert.equal(restoredPane.terminalTabs.length, 1);
-  assert.equal(restored.closeTerminalTab(pane.id, restoredPane.terminalTabs[0].id), false);
+
+  // Closing the last tab restarts the shell under a new tab id instead of emptying the pane.
+  const lastId = restoredPane.terminalTabs[0].id;
+  const { replacement } = restored.closeTerminalTab(pane.id, lastId);
+  assert.equal(restoredPane.terminalTabs.length, 1);
+  assert.notEqual(replacement.id, lastId);
+  assert.equal(restoredPane.activeTerminalTabId, replacement.id);
+  assert.equal(restored.closeTerminalTab(pane.id, 'missing-tab'), null);
 });
 
 test('files panes persist multiple tabs and follow the active tab path', () => {

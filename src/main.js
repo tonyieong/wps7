@@ -926,12 +926,17 @@ function main() {
   });
 
   app.delete('/api/panes/:paneId/terminal/tabs/:tabId', requireAuth(config), (req, res) => {
-    if (!store.closeTerminalTab(req.params.paneId, req.params.tabId)) {
-      res.status(400).json({ error: 'Unable to close the terminal tab.' });
+    const result = store.closeTerminalTab(req.params.paneId, req.params.tabId);
+    if (!result) {
+      res.status(404).json({ error: 'Terminal tab not found.' });
       return;
     }
     terminalManager.killTerminal(req.params.tabId);
-    res.json({ ok: true });
+    const { replacement } = result;
+    res.json({
+      ok: true,
+      tab: replacement ? { id: replacement.id, title: replacement.title, cwd: replacement.cwd } : null
+    });
   });
 
   app.post('/api/panes/:paneId/browser', requireAuth(config), (req, res) => {

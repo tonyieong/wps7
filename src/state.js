@@ -544,15 +544,25 @@ class StateStore {
 
   closeTerminalTab(paneId, tabId) {
     const found = this.findPane(paneId);
-    if (!found || found.pane.type !== 'terminal' || found.pane.terminalTabs.length <= 1) return false;
+    if (!found || found.pane.type !== 'terminal') return null;
     const index = found.pane.terminalTabs.findIndex((tab) => tab.id === tabId);
-    if (index === -1) return false;
-    found.pane.terminalTabs.splice(index, 1);
+    if (index === -1) return null;
+    // Closing the last tab restarts the shell instead of leaving the pane empty.
+    let replacement = null;
+    if (found.pane.terminalTabs.length === 1) {
+      replacement = {
+        ...terminalTab({ title: found.pane.terminalTabs[0].title, cwd: found.pane.cwd }),
+        scrollback: []
+      };
+      found.pane.terminalTabs[0] = replacement;
+    } else {
+      found.pane.terminalTabs.splice(index, 1);
+    }
     if (!found.pane.terminalTabs.some((tab) => tab.id === found.pane.activeTerminalTabId)) {
       found.pane.activeTerminalTabId = found.pane.terminalTabs[Math.min(index, found.pane.terminalTabs.length - 1)].id;
     }
     this.save();
-    return true;
+    return { replacement };
   }
 
   createBrowserPane(paneId, urlValue = '', emulationMode = 'desktop') {

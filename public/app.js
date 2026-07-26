@@ -605,7 +605,6 @@
   function renderPaneTabs(pane) {
     const tabs = paneTabs(pane);
     const activeId = activePaneTabId(pane);
-    const closable = pane.type === 'files' || tabs.length > 1;
     const uploadStatus = pane.type === 'files'
       ? `<span class="pane-upload-status" data-pane-upload-status="${pane.id}" aria-live="polite"></span>`
       : '';
@@ -617,7 +616,7 @@
           return `
           <div class="pane-tab ${tab.id === activeId ? 'active' : ''}" role="tab" tabindex="0" aria-selected="${tab.id === activeId}" data-pane-tab="${tab.id}" title="${escapeAttr(pane.type === 'files' ? (tab.path || 'This PC') : label)}">
             <span class="pane-tab-label">${escapeHtml(label)}</span>
-            ${closable ? `<button class="pane-tab-close" type="button" aria-label="Close ${escapeAttr(label)}" data-pane-close-tab="${tab.id}">×</button>` : ''}
+            <button class="pane-tab-close" type="button" aria-label="Close ${escapeAttr(label)}" data-pane-close-tab="${tab.id}">${fileActionIcon('close')}</button>
           </div>`;
         }).join('')}
       </div>
@@ -658,7 +657,7 @@
     return `
       <section class="pane ${pane.id === state.activePaneId ? 'active' : ''}" data-pane="${pane.id}" data-pane-type="${pane.type || 'terminal'}" style="${paneItemStyle(pane)}">
         ${header}
-        <button class="pane-close" data-close-pane="${pane.id}" title="Close pane">×</button>
+        <button class="pane-close" data-close-pane="${pane.id}" title="Close pane">${fileActionIcon('close')}</button>
         ${body}
         <div class="pane-resize pane-resize-n" data-pane-resize="${pane.id}" data-pane-resize-direction="n"></div>
         <div class="pane-resize pane-resize-ne" data-pane-resize="${pane.id}" data-pane-resize-direction="ne"></div>
@@ -694,6 +693,7 @@
 
   const fileActionIcons = {
     add: '<path d="M12 5v14M5 12h14"/>',
+    close: '<path d="M6 6l12 12M18 6 6 18"/>',
     'chevron-down': '<path d="m7 10 5 5 5-5"/>',
     terminal: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M12 15h5"/>',
     appearance: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
@@ -936,7 +936,7 @@
         ${(pane.browserTabs || [active]).map((tab) => `
           <div class="browser-tab ${tab.id === active.id ? 'active' : ''}" role="tab" tabindex="0" aria-selected="${tab.id === active.id}" data-browser-tab="${tab.id}" title="${escapeAttr(tab.title || tab.url || 'New tab')}">
             <span class="browser-tab-label">${escapeHtml(tab.title || 'New tab')}</span>
-            <button class="browser-tab-close" type="button" aria-label="Close ${escapeAttr(tab.title || 'tab')}" data-browser-close-tab="${tab.id}">×</button>
+            <button class="browser-tab-close" type="button" aria-label="Close ${escapeAttr(tab.title || 'tab')}" data-browser-close-tab="${tab.id}">${fileActionIcon('close')}</button>
           </div>`).join('')}
       </div>
       <button class="browser-new-tab" type="button" data-browser-new-tab aria-label="New tab" title="New tab">${fileActionIcon('add')}</button>`;
@@ -1066,7 +1066,7 @@
           return `
           <div class="notepad-tab ${tab.id === pane.activeNotepadTabId ? 'active' : ''}" role="tab" tabindex="0" aria-selected="${tab.id === pane.activeNotepadTabId}" data-notepad-tab="${tab.id}" title="${escapeAttr(tab.path || label)}">
             <span class="notepad-tab-label">${data.dirty ? '<span class="notepad-tab-modified">*</span>' : ''}${escapeHtml(label)}</span>
-            <button class="notepad-tab-close" type="button" aria-label="Close ${escapeAttr(label)}" data-notepad-close-tab="${tab.id}">×</button>
+            <button class="notepad-tab-close" type="button" aria-label="Close ${escapeAttr(label)}" data-notepad-close-tab="${tab.id}">${fileActionIcon('close')}</button>
           </div>`;
         }).join('')}
       </div>
@@ -2651,8 +2651,9 @@
   async function closePaneTabClient(paneId, tabId) {
     const found = findPaneState(paneId);
     if (!found) return;
+    let result;
     try {
-      await api(`/api/panes/${paneId}/${paneTabKind(found.pane)}/tabs/${tabId}`, { method: 'DELETE' });
+      result = await api(`/api/panes/${paneId}/${paneTabKind(found.pane)}/tabs/${tabId}`, { method: 'DELETE' });
     } catch (error) {
       showToast(error.message);
       return;
@@ -2674,12 +2675,23 @@
       await loadFilesPane(found.pane);
       return;
     }
-    tabs.splice(index, 1);
+    if (result.tab) {
+      tabs[index] = result.tab;
+    } else {
+      tabs.splice(index, 1);
+    }
     if (!tabs.some((tab) => tab.id === found.pane.activeTerminalTabId)) {
       found.pane.activeTerminalTabId = tabs[Math.min(index, tabs.length - 1)].id;
     }
     disposeTerminal(tabId);
-    document.getElementById(`terminal-${tabId}`)?.remove();
+    const surface = document.getElementById(`terminal-${tabId}`);
+    if (result.tab && surface) {
+      surface.id = `terminal-${result.tab.id}`;
+      surface.dataset.terminalTab = result.tab.id;
+      surface.innerHTML = '';
+    } else {
+      surface?.remove();
+    }
     updatePaneTabStrip(paneId);
     showActiveTerminalTab(paneId);
   }

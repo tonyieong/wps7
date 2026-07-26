@@ -233,9 +233,20 @@ test('browser tabs replace the browser pane title at the shared title height', (
   assert.match(appSource, /pane\.type === 'browser'[\s\S]*?class="browser-tab-strip"[\s\S]*?data-pane-title="\$\{pane\.id\}"[\s\S]*?fileActionIcon\('browser'\)/);
   assert.doesNotMatch(appSource, /function renderBrowserPane\(pane\)[\s\S]*?<div class="browser-tab-strip"/);
   assert.match(styles, /\.pane\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\)/s);
-  assert.match(styles, /\.browser-tab-strip\s*\{[^}]*height:\s*var\(--pane-toolbar-height\)[^}]*padding-right:\s*38px/s);
+  assert.match(styles, /\.browser-tab-strip\s*\{[^}]*height:\s*var\(--pane-toolbar-height\)[^}]*padding-right:\s*30px/s);
   assert.match(appSource, /data-browser-new-tab[^>]*>\$\{fileActionIcon\('add'\)\}<\/button>/);
   assert.match(appSource, /data-notepad-new-tab[^>]*>\$\{fileActionIcon\('add'\)\}<\/button>/);
+});
+
+test('close buttons use the same single-stroke icon family as the new-tab button', () => {
+  for (const attribute of ['data-pane-close-tab', 'data-browser-close-tab', 'data-notepad-close-tab']) {
+    assert.match(appSource, new RegExp(`${attribute}="\\$\\{tab\\.id\\}">\\$\\{fileActionIcon\\('close'\\)\\}</button>`));
+  }
+  assert.match(appSource, /data-close-pane="\$\{pane\.id\}" title="Close pane">\$\{fileActionIcon\('close'\)\}<\/button>/);
+  assert.doesNotMatch(appSource, /close-tab="\$\{tab\.id\}">×/);
+  assert.match(styles, /\.pane-tab-close \.file-action-icon,[\s\S]*?\.notepad-tab-close \.file-action-icon\s*\{[^}]*width:\s*11px/s);
+  // Every terminal tab keeps a close button; closing the last one restarts the shell.
+  assert.doesNotMatch(appSource, /const closable =/);
 });
 
 test('browser tab strip keeps its icon after tab updates and the surface fills the viewport', () => {
