@@ -1,8 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { EventEmitter } = require('node:events');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { PassThrough } = require('node:stream');
 const { fetchClaudeUsage, fetchCodexUsage, fetchMiniMaxUsage, fetchUsageOverview } = require('../src/usage');
 
 test('reads Codex rate limits from the local OAuth account without exposing identity', async () => {
@@ -34,6 +36,63 @@ test('reads Codex rate limits from the local OAuth account without exposing iden
   assert.equal(result.plan, 'plus');
   assert.deepEqual(result.windows.map((window) => [window.label, window.usedPercent]), [['5-hour', 25], ['Weekly', 40]]);
   assert.equal(result.credits.balance, 12.5);
+  assert.equal('email' in result, false);
+});
+
+test('uses Codex app-server to refresh subscription login and read rate limits', async () => {
+  const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-codex-'));
+  fs.writeFileSync(path.join(codexHome, 'auth.json'), JSON.stringify({
+    tokens: { access_token: 'expired-token', refresh_token: 'refresh-token' }
+  }));
+  const spawnImpl = (_command, _args, options) => {
+    assert.equal(options.env.CODEX_HOME, codexHome);
+    const child = new EventEmitter();
+    child.stdin = new PassThrough();
+    child.stdout = new PassThrough();
+    child.stderr = new PassThrough();
+    child.kill = () => child.emit('exit', 0);
+    let input = '';
+    child.stdin.on('data', (chunk) => {
+      input += chunk.toString();
+      while (input.includes('\n')) {
+        const end = input.indexOf('\n');
+        const message = JSON.parse(input.slice(0, end));
+        input = input.slice(end + 1);
+        if (message.method === 'initialize') {
+          child.stdout.write(`${JSON.stringify({ id: message.id, result: { userAgent: 'codex-test' } })}\n`);
+        } else if (message.method === 'account/read') {
+          assert.equal(message.params.refreshToken, true);
+          child.stdout.write(`${JSON.stringify({
+            id: message.id,
+            result: { account: { type: 'chatgpt', email: 'hidden@example.com', planType: 'plus' } }
+          })}\n`);
+        } else if (message.method === 'account/rateLimits/read') {
+          child.stdout.write(`${JSON.stringify({
+            id: message.id,
+            result: {
+              rateLimits: {
+                primary: { usedPercent: 26, windowDurationMins: 300, resetsAt: 1800000000 },
+                secondary: { usedPercent: 41, windowDurationMins: 10080, resetsAt: 1800600000 },
+                credits: { balance: 8, hasCredits: true, unlimited: false }
+              }
+            }
+          })}\n`);
+        }
+      }
+    });
+    return child;
+  };
+
+  const result = await fetchCodexUsage({
+    codexHome,
+    spawnImpl,
+    fetchImpl: async () => ({ ok: false, status: 401 })
+  });
+
+  assert.equal(result.source, 'oauth');
+  assert.equal(result.plan, 'plus');
+  assert.deepEqual(result.windows.map((window) => [window.label, window.usedPercent]), [['5-hour', 26], ['Weekly', 41]]);
+  assert.equal(result.credits.balance, 8);
   assert.equal('email' in result, false);
 });
 
@@ -95,6 +154,57 @@ test('reads Claude Code limits from the local OAuth account without exposing ide
     ['Sonnet weekly', 18]
   ]);
   assert.equal('account' in result, false);
+});
+
+test('refreshes an expired Claude subscription login through the CLI before retrying usage', async () => {
+  const claudeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-claude-'));
+  const credentialsPath = path.join(claudeHome, '.credentials.json');
+  fs.writeFileSync(credentialsPath, JSON.stringify({
+    claudeAiOauth: { accessToken: 'expired-token', refreshToken: 'refresh-token' }
+  }));
+  let requestCount = 0;
+  const ptyImpl = {
+    spawn(_command, _args, options) {
+      assert.equal(options.env.CLAUDE_CONFIG_DIR, claudeHome);
+      let dataHandler = () => {};
+      return {
+        onData(handler) {
+          dataHandler = handler;
+        },
+        onExit() {},
+        write(value) {
+          assert.equal(value, '/status\r');
+          fs.writeFileSync(credentialsPath, JSON.stringify({
+            claudeAiOauth: { accessToken: 'fresh-token', refreshToken: 'next-refresh-token' }
+          }));
+          dataHandler('Status');
+        },
+        kill() {}
+      };
+    }
+  };
+
+  const result = await fetchClaudeUsage({
+    claudeHome,
+    ptyImpl,
+    fetchImpl: async (_url, options) => {
+      requestCount += 1;
+      if (requestCount === 1) {
+        assert.equal(options.headers.Authorization, 'Bearer expired-token');
+        return { ok: false, status: 401 };
+      }
+      assert.equal(options.headers.Authorization, 'Bearer fresh-token');
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ five_hour: { utilization: 9, resets_at: '2027-01-01T05:00:00Z' } })
+      };
+    }
+  });
+
+  assert.equal(requestCount, 2);
+  assert.equal(result.source, 'oauth');
+  assert.deepEqual(result.windows.map((window) => window.usedPercent), [9]);
 });
 
 test('usage overview keeps enabled providers available when another fails', async () => {
