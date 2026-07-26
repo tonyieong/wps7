@@ -331,6 +331,118 @@ textarea {
   display: none;
 }
 
+.pane-tab-strip {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+  height: var(--pane-toolbar-height);
+  padding: 2px 38px 0 8px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-soft) 82%, var(--terminal-bg));
+  cursor: move;
+  user-select: none;
+}
+
+.pane-tab-strip .pane-kind-icon,
+.pane-tab-strip .pane-upload-status {
+  flex: 0 0 auto;
+  align-self: center;
+}
+
+.pane-tab-list {
+  display: flex;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.pane-tab-list::-webkit-scrollbar {
+  display: none;
+}
+
+.pane-tab {
+  display: grid;
+  grid-template-columns: minmax(24px, 1fr) 16px;
+  align-items: center;
+  gap: 3px;
+  flex: 0 1 150px;
+  min-width: 62px;
+  max-width: 180px;
+  height: 25px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 5px 5px 0 0;
+  background: transparent;
+  color: var(--muted);
+  font: 10px/1.2 "Cascadia Mono", Consolas, monospace;
+  cursor: default;
+}
+
+.pane-tab.active {
+  border-color: var(--line);
+  background: var(--terminal-bg);
+  color: var(--text);
+}
+
+.pane-tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pane-tab-close {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+}
+
+.pane-tab-close:hover {
+  background: var(--surface-soft);
+}
+
+.pane-tab-rename-input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  background: var(--terminal-bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.pane-new-tab {
+  flex: 0 0 24px;
+  width: 24px;
+  display: grid;
+  place-items: center;
+  align-self: center;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.pane-new-tab:hover {
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+.terminal[hidden] {
+  display: none;
+}
+
 .pane-close {
   position: absolute;
   top: 3px;
@@ -1133,7 +1245,8 @@ textarea {
     min-height: var(--pane-toolbar-height);
   }
 
-  .app.mode-auto .browser-tab-strip {
+  .app.mode-auto .browser-tab-strip,
+  .app.mode-auto .pane-tab-strip {
     min-height: var(--pane-toolbar-height);
     height: var(--pane-toolbar-height);
   }

@@ -857,6 +857,70 @@ function main() {
     res.json({ id: pane.id, path: pane.path });
   });
 
+  app.post('/api/panes/:paneId/files/tabs', requireFileAuth(config), (req, res) => {
+    const targetPath = req.body.path ? files.normalizeLocalPath(req.body.path) : '';
+    if (req.body.path && !targetPath) {
+      res.status(400).json({ error: 'Invalid local path.' });
+      return;
+    }
+    const tab = store.createFilesTab(req.params.paneId, targetPath);
+    if (!tab) {
+      res.status(404).json({ error: 'Files pane not found.' });
+      return;
+    }
+    res.status(201).json({ tab });
+  });
+
+  app.post('/api/panes/:paneId/files/tabs/:tabId/activate', requireFileAuth(config), (req, res) => {
+    if (!store.activateFilesTab(req.params.paneId, req.params.tabId)) {
+      res.status(404).json({ error: 'Files tab not found.' });
+      return;
+    }
+    res.json({ ok: true });
+  });
+
+  app.delete('/api/panes/:paneId/files/tabs/:tabId', requireFileAuth(config), (req, res) => {
+    if (!store.closeFilesTab(req.params.paneId, req.params.tabId)) {
+      res.status(404).json({ error: 'Files tab not found.' });
+      return;
+    }
+    res.json({ ok: true });
+  });
+
+  app.post('/api/panes/:paneId/terminal/tabs', requireAuth(config), (req, res) => {
+    const tab = store.createTerminalTab(req.params.paneId);
+    if (!tab) {
+      res.status(404).json({ error: 'Terminal pane not found.' });
+      return;
+    }
+    res.status(201).json({ tab: { id: tab.id, title: tab.title, cwd: tab.cwd } });
+  });
+
+  app.post('/api/panes/:paneId/terminal/tabs/:tabId/activate', requireAuth(config), (req, res) => {
+    if (!store.activateTerminalTab(req.params.paneId, req.params.tabId)) {
+      res.status(404).json({ error: 'Terminal tab not found.' });
+      return;
+    }
+    res.json({ ok: true });
+  });
+
+  app.patch('/api/panes/:paneId/terminal/tabs/:tabId', requireAuth(config), (req, res) => {
+    if (!store.renameTerminalTab(req.params.paneId, req.params.tabId, req.body.title)) {
+      res.status(404).json({ error: 'Terminal tab not found.' });
+      return;
+    }
+    res.json({ ok: true });
+  });
+
+  app.delete('/api/panes/:paneId/terminal/tabs/:tabId', requireAuth(config), (req, res) => {
+    if (!store.closeTerminalTab(req.params.paneId, req.params.tabId)) {
+      res.status(400).json({ error: 'Unable to close the terminal tab.' });
+      return;
+    }
+    terminalManager.killTerminal(req.params.tabId);
+    res.json({ ok: true });
+  });
+
   app.post('/api/panes/:paneId/browser', requireAuth(config), (req, res) => {
     const found = store.findPane(req.params.paneId);
     const url = normalizeWebsite(req.body.url);

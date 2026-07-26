@@ -70,25 +70,34 @@ class TerminalManager {
     this.shell = shell;
   }
 
-  getOrCreate(paneId) {
-    if (this.processes.has(paneId)) {
-      return this.processes.get(paneId);
+  findTarget(id) {
+    const terminalTab = this.store.findTerminalTab(id);
+    if (terminalTab) {
+      return { pane: terminalTab.pane, cwd: terminalTab.terminalTab.cwd, scrollback: terminalTab.terminalTab.scrollback };
+    }
+    const found = this.store.findPane(id);
+    if (!found || found.pane.type !== 'terminal') {
+      return null;
+    }
+    return { pane: found.pane, cwd: found.pane.cwd, scrollback: found.pane.scrollback };
+  }
+
+  getOrCreate(terminalId) {
+    if (this.processes.has(terminalId)) {
+      return this.processes.get(terminalId);
     }
 
-    const found = this.store.findPane(paneId);
-    if (!found) {
-      throw new Error(`Unknown pane: ${paneId}`);
-    }
-    if (found.pane.type !== 'terminal') {
-      throw new Error(`Pane is not a terminal: ${paneId}`);
+    const target = this.findTarget(terminalId);
+    if (!target) {
+      throw new Error(`Unknown terminal: ${terminalId}`);
     }
 
-    const runtime = this.createRuntime(paneId, found);
-    this.processes.set(paneId, runtime);
+    const runtime = this.createRuntime(terminalId, target);
+    this.processes.set(terminalId, runtime);
     return runtime;
   }
 
-  createRuntime(paneId, found) {
+  createRuntime(terminalId, target) {
     const scrollback = Math.max(0, Number(this.config.terminal?.reconnect_scrollback_lines) || 2000);
     const headless = new HeadlessTerminal({
       allowProposedApi: true,
@@ -99,6 +108,7 @@ class TerminalManager {
     const serializer = new SerializeAddon();
     headless.loadAddon(serializer);
     const runtime = {
+      paneId: target.pane.id,
       proc: null,
       headless,
       serializer,
@@ -117,7 +127,7 @@ class TerminalManager {
       buildPtySpawnOptions({
         cols: DEFAULT_COLS,
         rows: DEFAULT_ROWS,
-        cwd: normalizeCwd(found.pane.cwd, this.root),
+        cwd: normalizeCwd(target.cwd, this.root),
         env: {
           ...process.env,
           TERM: 'xterm-256color',
@@ -129,7 +139,7 @@ class TerminalManager {
     runtime.proc = proc;
 
     proc.onData((data) => {
-      this.store.appendScrollback(paneId, data);
+      this.store.appendScrollback(terminalId, data);
       runtime.hasOutput = true;
       runtime.writeChain = runtime.writeChain.then(() => writeHeadless(headless, data)).catch(() => {});
     });
@@ -138,29 +148,25 @@ class TerminalManager {
       runtime.status = 'exited';
       runtime.exitedAt = new Date().toISOString();
       runtime.headless.dispose();
-      this.processes.delete(paneId);
+      this.processes.delete(terminalId);
     });
 
     return runtime;
   }
 
-  attach(paneId, ws) {
-    const found = this.store.findPane(paneId);
-    if (!found) {
-      ws.close(1008, 'Unknown pane');
-      return;
-    }
-    if (found.pane.type !== 'terminal') {
-      ws.close(1008, 'Pane is not a terminal');
+  attach(terminalId, ws) {
+    const target = this.findTarget(terminalId);
+    if (!target) {
+      ws.close(1008, 'Unknown terminal');
       return;
     }
 
     if (this.config.terminal?.backend === 'xterm_pty') {
-      this.attachReplay(paneId, found, ws);
+      this.attachReplay(terminalId, target, ws);
       return;
     }
 
-    const runtime = this.getOrCreate(paneId);
+    const runtime = this.getOrCreate(terminalId);
     const sender = createOutputSender(ws);
     let snapshotSent = false;
     const sendSnapshot = async () => {
@@ -224,13 +230,13 @@ class TerminalManager {
     });
   }
 
-  attachReplay(paneId, found, ws) {
+  attachReplay(terminalId, target, ws) {
     const sender = createOutputSender(ws);
-    for (const chunk of found.pane.scrollback || []) {
+    for (const chunk of target.scrollback || []) {
       sender.send(chunk);
     }
 
-    const runtime = this.getOrCreate(paneId);
+    const runtime = this.getOrCreate(terminalId);
     const disposable = runtime.proc.onData((data) => {
       sender.send(data);
     });
@@ -269,7 +275,7 @@ class TerminalManager {
     if (!found || found.pane.type !== 'terminal') {
       return null;
     }
-    const runtime = this.processes.get(paneId);
+    const runtime = this.processes.get(found.pane.activeTerminalTabId) || this.processes.get(paneId);
     return {
       id: found.pane.id,
       status: runtime?.status || 'idle',
@@ -277,15 +283,24 @@ class TerminalManager {
     };
   }
 
-  killPane(paneId) {
-    const runtime = this.processes.get(paneId);
+  killTerminal(terminalId) {
+    const runtime = this.processes.get(terminalId);
     if (!runtime) {
       return;
     }
 
     runtime.proc.kill();
     runtime.headless.dispose();
-    this.processes.delete(paneId);
+    this.processes.delete(terminalId);
+  }
+
+  killPane(paneId) {
+    this.killTerminal(paneId);
+    for (const [terminalId, runtime] of [...this.processes.entries()]) {
+      if (runtime.paneId === paneId) {
+        this.killTerminal(terminalId);
+      }
+    }
   }
 
   killSession(session) {
@@ -297,8 +312,8 @@ class TerminalManager {
   }
 
   shutdown() {
-    for (const paneId of [...this.processes.keys()]) {
-      this.killPane(paneId);
+    for (const terminalId of [...this.processes.keys()]) {
+      this.killTerminal(terminalId);
     }
   }
 }

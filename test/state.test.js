@@ -273,6 +273,70 @@ test('browser and notepad panes persist their URL and file path', () => {
   assert.equal(panes.find((pane) => pane.id === notepad.id).path, 'C:\\updated.txt');
 });
 
+test('terminal panes persist multiple tabs and their active tab', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100);
+  store.load();
+  const pane = store.state.sessions[0].tabs[0].panes[0];
+
+  assert.equal(pane.terminalTabs.length, 1);
+  assert.equal(pane.activeTerminalTabId, pane.terminalTabs[0].id);
+
+  const secondTab = store.createTerminalTab(pane.id);
+  assert.equal(pane.terminalTabs.length, 2);
+  assert.equal(pane.activeTerminalTabId, secondTab.id);
+  assert.equal(secondTab.title, 'PowerShell 2');
+  assert.equal(secondTab.cwd, pane.cwd);
+  assert.equal(store.renameTerminalTab(pane.id, secondTab.id, 'Build'), true);
+  assert.equal(store.activateTerminalTab(pane.id, pane.terminalTabs[0].id), true);
+  store.save();
+
+  const restored = new StateStore(root, 100);
+  restored.load();
+  const restoredPane = restored.findPane(pane.id).pane;
+  assert.equal(restoredPane.terminalTabs.length, 2);
+  assert.equal(restoredPane.terminalTabs[1].title, 'Build');
+  assert.equal(restoredPane.activeTerminalTabId, restoredPane.terminalTabs[0].id);
+  assert.deepEqual(restoredPane.terminalTabs[0].scrollback, []);
+
+  assert.equal(restored.closeTerminalTab(pane.id, restoredPane.terminalTabs[1].id), true);
+  assert.equal(restoredPane.terminalTabs.length, 1);
+  assert.equal(restored.closeTerminalTab(pane.id, restoredPane.terminalTabs[0].id), false);
+});
+
+test('files panes persist multiple tabs and follow the active tab path', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100);
+  store.load();
+  const firstPane = store.state.sessions[0].tabs[0].panes[0];
+  const filesPane = store.createFilesPane(firstPane.id, 'C:\\');
+
+  assert.equal(filesPane.filesTabs.length, 1);
+  assert.equal(filesPane.filesTabs[0].path, 'C:\\');
+
+  const secondTab = store.createFilesTab(filesPane.id, 'C:\\Windows');
+  assert.equal(filesPane.activeFilesTabId, secondTab.id);
+  assert.equal(filesPane.path, 'C:\\Windows');
+
+  assert.equal(store.setFilesPanePath(filesPane.id, 'C:\\Users'), true);
+  assert.equal(secondTab.path, 'C:\\Users');
+
+  assert.equal(store.activateFilesTab(filesPane.id, filesPane.filesTabs[0].id), true);
+  assert.equal(filesPane.path, 'C:\\');
+  store.save();
+
+  const restored = new StateStore(root, 100);
+  restored.load();
+  const restoredPane = restored.findPane(filesPane.id).pane;
+  assert.equal(restoredPane.filesTabs.length, 2);
+  assert.equal(restoredPane.filesTabs[1].path, 'C:\\Users');
+  assert.equal(restoredPane.path, 'C:\\');
+
+  assert.equal(restored.closeFilesTab(filesPane.id, restoredPane.filesTabs[0].id), true);
+  assert.equal(restoredPane.filesTabs.length, 1);
+  assert.equal(restoredPane.path, 'C:\\Users');
+});
+
 test('browser panes persist multiple tabs and their active tab', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
   const store = new StateStore(root, 100, 4, 4);

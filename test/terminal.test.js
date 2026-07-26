@@ -19,7 +19,30 @@ test('terminal manager rejects files panes', () => {
     shell: { command: 'powershell.exe', args: [] }
   });
 
-  assert.throws(() => manager.getOrCreate(filesPane.id), /not a terminal/);
+  assert.throws(() => manager.getOrCreate(filesPane.id), /Unknown terminal/);
+});
+
+test('terminal manager resolves runtimes by terminal tab id', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'));
+  const store = new StateStore(root, 10);
+  store.load();
+  const pane = store.state.sessions[0].tabs[0].panes[0];
+  const secondTab = store.createTerminalTab(pane.id);
+  const manager = new TerminalManager({
+    config: {},
+    root,
+    store,
+    shell: { command: 'powershell.exe', args: [] }
+  });
+
+  const target = manager.findTarget(secondTab.id);
+  assert.equal(target.pane.id, pane.id);
+  assert.equal(target.cwd, pane.cwd);
+  assert.deepEqual(target.scrollback, []);
+
+  store.appendScrollback(secondTab.id, 'tab output');
+  assert.deepEqual(store.findTerminalTab(secondTab.id).terminalTab.scrollback, ['tab output']);
+  assert.deepEqual(pane.terminalTabs[0].scrollback, []);
 });
 
 test('terminal spawn options use the Windows system ConPTY', () => {

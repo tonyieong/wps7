@@ -51,6 +51,41 @@ function browserTabsForPane(pane) {
   return { tabs, activeBrowserTabId };
 }
 
+function terminalTab(value = {}, fallback = {}) {
+  return {
+    id: value.id || crypto.randomUUID(),
+    title: String(value.title || fallback.title || 'PowerShell').slice(0, 160),
+    cwd: String(value.cwd || fallback.cwd || '')
+  };
+}
+
+function terminalTabsForPane(pane, fallback) {
+  const tabs = Array.isArray(pane.terminalTabs) && pane.terminalTabs.length
+    ? pane.terminalTabs.slice(0, 50).map((tab) => terminalTab(tab, fallback))
+    : [terminalTab({}, fallback)];
+  const activeTerminalTabId = tabs.some((tab) => tab.id === pane.activeTerminalTabId)
+    ? pane.activeTerminalTabId
+    : tabs[0].id;
+  return { tabs, activeTerminalTabId };
+}
+
+function filesTab(value = {}, fallbackPath = '') {
+  return {
+    id: value.id || crypto.randomUUID(),
+    path: String(value.path || fallbackPath || '')
+  };
+}
+
+function filesTabsForPane(pane) {
+  const tabs = Array.isArray(pane.filesTabs) && pane.filesTabs.length
+    ? pane.filesTabs.slice(0, 50).map((tab) => filesTab(tab))
+    : [filesTab({ path: pane.path || '' })];
+  const activeFilesTabId = tabs.some((tab) => tab.id === pane.activeFilesTabId)
+    ? pane.activeFilesTabId
+    : tabs[0].id;
+  return { tabs, activeFilesTabId };
+}
+
 function notepadTab(value = {}) {
   const pathValue = String(value.path || '');
   return {
@@ -78,6 +113,7 @@ function notepadTabsForPane(pane) {
 
 function defaultSession(name = 'Workspace 1', paneTitle = 'PowerShell 1') {
   const paneId = crypto.randomUUID();
+  const firstTerminalTab = terminalTab({ title: paneTitle, cwd: process.cwd() });
   return {
     id: crypto.randomUUID(),
     name,
@@ -95,7 +131,9 @@ function defaultSession(name = 'Workspace 1', paneTitle = 'PowerShell 1') {
             cwd: process.cwd(),
             split: null,
             layout: { x: GRID_UNIT, y: GRID_UNIT, w: DEFAULT_PANE_WIDTH, h: DEFAULT_PANE_HEIGHT, z: 1 },
-            scrollback: []
+            scrollback: [],
+            terminalTabs: [{ ...firstTerminalTab, scrollback: [] }],
+            activeTerminalTabId: firstTerminalTab.id
           }
         ]
       }
@@ -159,6 +197,21 @@ class StateStore {
         layout: migrateLayout(pane.layout),
         scrollback: []
       };
+      if (nextPane.type === 'terminal') {
+        const terminalState = terminalTabsForPane(pane, { title: nextPane.title, cwd: nextPane.cwd });
+        nextPane.terminalTabs = terminalState.tabs.map((tab) => ({
+          ...tab,
+          cwd: normalizeCwd(tab.cwd, this.root),
+          scrollback: []
+        }));
+        nextPane.activeTerminalTabId = terminalState.activeTerminalTabId;
+      }
+      if (nextPane.type === 'files') {
+        const filesState = filesTabsForPane(pane);
+        nextPane.filesTabs = filesState.tabs;
+        nextPane.activeFilesTabId = filesState.activeFilesTabId;
+        nextPane.path = nextPane.filesTabs.find((tab) => tab.id === nextPane.activeFilesTabId)?.path || '';
+      }
       if (nextPane.type === 'browser') {
         const browserState = browserTabsForPane(pane);
         nextPane.browserTabs = browserState.tabs;
@@ -191,6 +244,10 @@ class StateStore {
             cwd: pane.cwd,
             path: pane.type === 'files' || pane.type === 'notepad' ? pane.path : undefined,
             url: pane.type === 'browser' ? pane.url : undefined,
+            terminalTabs: pane.type === 'terminal' ? pane.terminalTabs.map((tab) => terminalTab(tab)) : undefined,
+            activeTerminalTabId: pane.type === 'terminal' ? pane.activeTerminalTabId : undefined,
+            filesTabs: pane.type === 'files' ? pane.filesTabs.map((tab) => filesTab(tab)) : undefined,
+            activeFilesTabId: pane.type === 'files' ? pane.activeFilesTabId : undefined,
             browserTabs: pane.type === 'browser' ? pane.browserTabs.map((tab) => browserTab(tab)) : undefined,
             activeBrowserTabId: pane.type === 'browser' ? pane.activeBrowserTabId : undefined,
             notepadTabs: pane.type === 'notepad' ? pane.notepadTabs.map((tab) => notepadTab(tab)) : undefined,
@@ -219,6 +276,10 @@ class StateStore {
             cwd: pane.cwd,
             path: pane.type === 'files' || pane.type === 'notepad' ? pane.path : undefined,
             url: pane.type === 'browser' ? pane.url : undefined,
+            terminalTabs: pane.type === 'terminal' ? pane.terminalTabs.map((tab) => terminalTab(tab)) : undefined,
+            activeTerminalTabId: pane.type === 'terminal' ? pane.activeTerminalTabId : undefined,
+            filesTabs: pane.type === 'files' ? pane.filesTabs.map((tab) => filesTab(tab)) : undefined,
+            activeFilesTabId: pane.type === 'files' ? pane.activeFilesTabId : undefined,
             browserTabs: pane.type === 'browser' ? pane.browserTabs.map((tab) => browserTab(tab)) : undefined,
             activeBrowserTabId: pane.type === 'browser' ? pane.activeBrowserTabId : undefined,
             notepadTabs: pane.type === 'notepad' ? pane.notepadTabs.map((tab) => notepadTab(tab)) : undefined,
@@ -244,15 +305,29 @@ class StateStore {
     return null;
   }
 
-  appendScrollback(paneId, text) {
-    const found = this.findPane(paneId);
-    if (!found) {
+  findTerminalTab(tabId) {
+    for (const session of this.state.sessions) {
+      for (const tab of session.tabs) {
+        for (const pane of tab.panes) {
+          const terminalTabEntry = (pane.terminalTabs || []).find((candidate) => candidate.id === tabId);
+          if (terminalTabEntry) {
+            return { session, tab, pane, terminalTab: terminalTabEntry };
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  appendScrollback(id, text) {
+    const target = this.findTerminalTab(id)?.terminalTab || this.findPane(id)?.pane;
+    if (!target) {
       return;
     }
 
-    found.pane.scrollback.push(text);
-    if (found.pane.scrollback.length > this.scrollbackLimit) {
-      found.pane.scrollback = found.pane.scrollback.slice(-this.scrollbackLimit);
+    target.scrollback.push(text);
+    if (target.scrollback.length > this.scrollbackLimit) {
+      target.scrollback = target.scrollback.slice(-this.scrollbackLimit);
     }
   }
 
@@ -314,14 +389,18 @@ class StateStore {
     }
 
     const layout = cascadeLayout(found.tab.panes);
+    const title = nextNumberedName('PowerShell', found.tab.panes.map((candidate) => candidate.title));
+    const firstTab = { ...terminalTab({ title, cwd: found.pane.cwd }), scrollback: [] };
     const pane = {
       id: crypto.randomUUID(),
       type: 'terminal',
-      title: nextNumberedName('PowerShell', found.tab.panes.map((candidate) => candidate.title)),
+      title,
       cwd: found.pane.cwd,
       split: direction === 'vertical' ? 'vertical' : 'horizontal',
       layout,
-      scrollback: []
+      scrollback: [],
+      terminalTabs: [firstTab],
+      activeTerminalTabId: firstTab.id
     };
     if (!pane.layout) {
       return null;
@@ -339,6 +418,7 @@ class StateStore {
       return null;
     }
     const layout = cascadeLayout(found.tab.panes);
+    const firstTab = filesTab({ path: pathValue || '' });
     const pane = {
       id: crypto.randomUUID(),
       type: 'files',
@@ -347,7 +427,9 @@ class StateStore {
       path: pathValue || '',
       split: 'files',
       layout,
-      scrollback: []
+      scrollback: [],
+      filesTabs: [firstTab],
+      activeFilesTabId: firstTab.id
     };
     if (!pane.layout) {
       return null;
@@ -366,6 +448,101 @@ class StateStore {
       return false;
     }
     found.pane.path = String(pathValue || '');
+    const activeTab = found.pane.filesTabs?.find((tab) => tab.id === found.pane.activeFilesTabId);
+    if (activeTab) activeTab.path = found.pane.path;
+    this.save();
+    return true;
+  }
+
+  createFilesTab(paneId, pathValue = '') {
+    const found = this.findPane(paneId);
+    if (!found || found.pane.type !== 'files' || found.pane.filesTabs.length >= 50) return null;
+    const tab = filesTab({ path: pathValue });
+    found.pane.filesTabs.push(tab);
+    found.pane.activeFilesTabId = tab.id;
+    found.pane.path = tab.path;
+    this.save();
+    return tab;
+  }
+
+  activateFilesTab(paneId, tabId) {
+    const found = this.findPane(paneId);
+    const tab = found?.pane.type === 'files'
+      ? found.pane.filesTabs.find((candidate) => candidate.id === tabId)
+      : null;
+    if (!tab) return false;
+    found.pane.activeFilesTabId = tab.id;
+    found.pane.path = tab.path;
+    this.save();
+    return true;
+  }
+
+  closeFilesTab(paneId, tabId) {
+    const found = this.findPane(paneId);
+    if (!found || found.pane.type !== 'files') return false;
+    const index = found.pane.filesTabs.findIndex((tab) => tab.id === tabId);
+    if (index === -1) return false;
+    if (found.pane.filesTabs.length === 1) {
+      found.pane.filesTabs[0] = filesTab({ id: tabId });
+    } else {
+      found.pane.filesTabs.splice(index, 1);
+    }
+    if (!found.pane.filesTabs.some((tab) => tab.id === found.pane.activeFilesTabId)) {
+      found.pane.activeFilesTabId = found.pane.filesTabs[Math.min(index, found.pane.filesTabs.length - 1)].id;
+    }
+    found.pane.path = found.pane.filesTabs.find((tab) => tab.id === found.pane.activeFilesTabId)?.path || '';
+    this.save();
+    return true;
+  }
+
+  createTerminalTab(paneId) {
+    const found = this.findPane(paneId);
+    if (!found || found.pane.type !== 'terminal' || found.pane.terminalTabs.length >= 50) return null;
+    const tab = {
+      ...terminalTab({
+        title: nextNumberedName('PowerShell', found.pane.terminalTabs.map((candidate) => candidate.title)),
+        cwd: found.pane.cwd
+      }),
+      scrollback: []
+    };
+    found.pane.terminalTabs.push(tab);
+    found.pane.activeTerminalTabId = tab.id;
+    this.save();
+    return tab;
+  }
+
+  activateTerminalTab(paneId, tabId) {
+    const found = this.findPane(paneId);
+    const tab = found?.pane.type === 'terminal'
+      ? found.pane.terminalTabs.find((candidate) => candidate.id === tabId)
+      : null;
+    if (!tab) return false;
+    found.pane.activeTerminalTabId = tab.id;
+    this.save();
+    return true;
+  }
+
+  renameTerminalTab(paneId, tabId, title) {
+    const nextTitle = String(title || '').trim();
+    const found = this.findPane(paneId);
+    const tab = found?.pane.type === 'terminal'
+      ? found.pane.terminalTabs.find((candidate) => candidate.id === tabId)
+      : null;
+    if (!tab || !nextTitle) return false;
+    tab.title = nextTitle.slice(0, 160);
+    this.save();
+    return true;
+  }
+
+  closeTerminalTab(paneId, tabId) {
+    const found = this.findPane(paneId);
+    if (!found || found.pane.type !== 'terminal' || found.pane.terminalTabs.length <= 1) return false;
+    const index = found.pane.terminalTabs.findIndex((tab) => tab.id === tabId);
+    if (index === -1) return false;
+    found.pane.terminalTabs.splice(index, 1);
+    if (!found.pane.terminalTabs.some((tab) => tab.id === found.pane.activeTerminalTabId)) {
+      found.pane.activeTerminalTabId = found.pane.terminalTabs[Math.min(index, found.pane.terminalTabs.length - 1)].id;
+    }
     this.save();
     return true;
   }

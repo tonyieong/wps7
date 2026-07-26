@@ -311,30 +311,28 @@
     return true;
   }
 
-  function updatePaneTitleFromTerminal(paneId, title) {
+  function updatePaneTitleFromTerminal(paneId, terminalTabId, title) {
     const nextTitle = String(title || '').replace(/[\x00-\x1f\x7f]/g, '').trim().slice(0, 80);
     const found = findPaneState(paneId);
-    if (!nextTitle || !found || found.pane.title === nextTitle) {
+    const tab = found?.pane.terminalTabs?.find((candidate) => candidate.id === terminalTabId);
+    if (!nextTitle || !tab || tab.title === nextTitle) {
       return;
     }
-    window.clearTimeout(state.terminalTitleTimers.get(paneId));
-    state.terminalTitleTimers.set(paneId, window.setTimeout(async () => {
-      state.terminalTitleTimers.delete(paneId);
+    window.clearTimeout(state.terminalTitleTimers.get(terminalTabId));
+    state.terminalTitleTimers.set(terminalTabId, window.setTimeout(async () => {
+      state.terminalTitleTimers.delete(terminalTabId);
       try {
-        await api(`/api/panes/${paneId}`, {
+        await api(`/api/panes/${paneId}/terminal/tabs/${terminalTabId}`, {
           method: 'PATCH',
           body: JSON.stringify({ title: nextTitle })
         });
         const current = findPaneState(paneId);
-        if (!current) {
+        const currentTab = current?.pane.terminalTabs?.find((candidate) => candidate.id === terminalTabId);
+        if (!currentTab) {
           return;
         }
-        current.pane.title = nextTitle;
-        const paneLabel = document.querySelector(`[data-rename-pane="${paneId}"]`);
-        if (paneLabel) {
-          paneLabel.textContent = nextTitle;
-        }
-        updateSidebarLabels();
+        currentTab.title = nextTitle;
+        updatePaneTabStrip(paneId);
       } catch (error) {
         // A title sequence must not interrupt the terminal session.
       }
@@ -469,8 +467,7 @@
     }
     found.pane.fontSize = nextSize;
     paneElement.style.setProperty('--pane-font-size', `${nextSize}px`);
-    const terminal = state.terminals.get(paneId);
-    if (terminal) {
+    for (const terminal of paneTerminals(paneId)) {
       terminal.term.options.fontSize = nextSize;
       terminal.sendResize();
     }
@@ -529,7 +526,7 @@
     if (!state.config || !isMobileLayout()) {
       return;
     }
-    const terminal = state.terminals.get(state.activePaneId);
+    const terminal = paneTerminal(state.activePaneId);
     if (!terminal) {
       return;
     }
@@ -577,16 +574,70 @@
     `).join('')}${renderToolbarPageButton('next')}</div>`;
   }
 
+  function paneTabs(pane) {
+    return (pane.type === 'files' ? pane.filesTabs : pane.terminalTabs) || [];
+  }
+
+  function paneTerminal(paneId) {
+    const pane = findPaneState(paneId)?.pane;
+    return pane ? state.terminals.get(activePaneTabId(pane)) : undefined;
+  }
+
+  function paneTerminals(paneId) {
+    const pane = findPaneState(paneId)?.pane;
+    return pane ? paneTabs(pane).map((tab) => state.terminals.get(tab.id)).filter(Boolean) : [];
+  }
+
+  function activePaneTabId(pane) {
+    const tabs = paneTabs(pane);
+    const activeId = pane.type === 'files' ? pane.activeFilesTabId : pane.activeTerminalTabId;
+    return tabs.some((tab) => tab.id === activeId) ? activeId : tabs[0]?.id || '';
+  }
+
+  function paneTabLabel(pane, tab) {
+    if (pane.type !== 'files') {
+      return tab.title || 'PowerShell';
+    }
+    const trimmed = String(tab.path || '').replace(/[\\/]+$/, '');
+    return trimmed ? trimmed.split(/[\\/]/).pop() || trimmed : 'This PC';
+  }
+
+  function renderPaneTabs(pane) {
+    const tabs = paneTabs(pane);
+    const activeId = activePaneTabId(pane);
+    const closable = pane.type === 'files' || tabs.length > 1;
+    const uploadStatus = pane.type === 'files'
+      ? `<span class="pane-upload-status" data-pane-upload-status="${pane.id}" aria-live="polite"></span>`
+      : '';
+    return `
+      <span class="pane-kind-icon" aria-hidden="true">${fileActionIcon(pane.type === 'files' ? 'file' : 'terminal')}</span>
+      <div class="pane-tab-list" role="tablist">
+        ${tabs.map((tab) => {
+          const label = paneTabLabel(pane, tab);
+          return `
+          <div class="pane-tab ${tab.id === activeId ? 'active' : ''}" role="tab" tabindex="0" aria-selected="${tab.id === activeId}" data-pane-tab="${tab.id}" title="${escapeAttr(pane.type === 'files' ? (tab.path || 'This PC') : label)}">
+            <span class="pane-tab-label">${escapeHtml(label)}</span>
+            ${closable ? `<button class="pane-tab-close" type="button" aria-label="Close ${escapeAttr(label)}" data-pane-close-tab="${tab.id}">×</button>` : ''}
+          </div>`;
+        }).join('')}
+      </div>
+      ${uploadStatus}
+      <button class="pane-new-tab" type="button" data-pane-new-tab aria-label="New tab" title="New tab">${fileActionIcon('add')}</button>`;
+  }
+
+  function renderTerminalSurfaces(pane) {
+    const activeId = activePaneTabId(pane);
+    return paneTabs(pane).map((tab) => `
+      <div class="terminal" id="terminal-${tab.id}" data-terminal-tab="${tab.id}" ${tab.id === activeId ? '' : 'hidden'}></div>`).join('');
+  }
+
   function renderPane(pane) {
     const body = pane.type === 'files' ? renderFilesPane(pane)
       : pane.type === 'browser' ? renderBrowserPane(pane)
         : pane.type === 'notepad' ? renderNotepadPane(pane)
           : pane.type === 'usage' ? renderUsagePane(pane) : `
           ${renderMobileKeybar()}
-          <div class="terminal" id="terminal-${pane.id}"></div>`;
-    const uploadStatus = pane.type === 'files'
-      ? `<span class="pane-upload-status" data-pane-upload-status="${pane.id}" aria-live="polite"></span>`
-      : '';
+          ${renderTerminalSurfaces(pane)}`;
     const header = pane.type === 'browser'
       ? `<div class="browser-tab-strip" data-browser-tab-strip data-pane-title="${pane.id}">
           ${renderBrowserTabs(pane)}
@@ -596,11 +647,14 @@
           <span class="pane-kind-icon" aria-hidden="true">${fileActionIcon('notepad')}</span>
           ${renderNotepadTabs(pane)}
         </div>`
-        : `<div class="pane-title ${pane.type === 'files' ? 'file-pane-title' : ''}" data-pane-title="${pane.id}">
-          <span class="pane-kind-icon" aria-hidden="true">${fileActionIcon(({ files: 'file', notepad: 'notepad', usage: 'usage' })[pane.type] || 'terminal')}</span>
-          ${uploadStatus}
-          <span data-rename-pane="${pane.id}">${escapeHtml(pane.title)}</span>
-        </div>`;
+        : pane.type === 'usage'
+          ? `<div class="pane-title" data-pane-title="${pane.id}">
+            <span class="pane-kind-icon" aria-hidden="true">${fileActionIcon('usage')}</span>
+            <span data-rename-pane="${pane.id}">${escapeHtml(pane.title)}</span>
+          </div>`
+          : `<div class="pane-tab-strip" data-pane-tab-strip data-pane-title="${pane.id}">
+          ${renderPaneTabs(pane)}
+          </div>`;
     return `
       <section class="pane ${pane.id === state.activePaneId ? 'active' : ''}" data-pane="${pane.id}" data-pane-type="${pane.type || 'terminal'}" style="${paneItemStyle(pane)}">
         ${header}
@@ -1092,7 +1146,7 @@
   }
 
   function mountPaneContent(pane) {
-    if ((pane.type || 'terminal') === 'terminal') mountTerminal(pane.id);
+    if ((pane.type || 'terminal') === 'terminal') mountTerminal(pane.id, activePaneTabId(pane));
     else if (pane.type === 'browser') mountRemoteBrowser(pane.id);
     else if (pane.type === 'notepad') {
       const tab = notepadActiveTab(pane);
@@ -1282,6 +1336,7 @@
     wireFilesPane(app);
     wireBrowserPane(app);
     wireNotepadPane(app);
+    wirePaneTabStrips(app);
     renderLayoutPanel();
     app.querySelectorAll('[data-rename-session]').forEach((label) => {
       label.ondblclick = (event) => {
@@ -1417,7 +1472,9 @@
       } else if (event.key === 'F2') {
         event.preventDefault();
         const found = findPaneState(state.activePaneId);
-        if (found) {
+        if (found?.pane.type === 'terminal') {
+          renamePaneTab(found.pane.id, activePaneTabId(found.pane));
+        } else if (found) {
           renamePane(found.pane.id, found.pane.title);
         }
       } else if (event.key === '?' && !event.ctrlKey && !event.altKey && !event.metaKey) {
@@ -2515,6 +2572,190 @@
     paneElement.querySelector('[data-notepad-new-tab]')?.addEventListener('click', () => addNotepadTab(paneId, ''));
   }
 
+  function paneTabKind(pane) {
+    return pane.type === 'files' ? 'files' : 'terminal';
+  }
+
+  function updatePaneTabStrip(paneId) {
+    const found = findPaneState(paneId);
+    const strip = document.querySelector(`[data-pane="${paneId}"] [data-pane-tab-strip]`);
+    if (!found || !strip) return;
+    strip.innerHTML = renderPaneTabs(found.pane);
+    wirePaneTabs(strip, paneId);
+  }
+
+  function showActiveTerminalTab(paneId) {
+    const found = findPaneState(paneId);
+    const paneElement = document.querySelector(`[data-pane="${paneId}"]`);
+    if (!found || !paneElement) return;
+    const activeId = activePaneTabId(found.pane);
+    paneElement.querySelectorAll('[data-terminal-tab]').forEach((element) => {
+      element.hidden = element.dataset.terminalTab !== activeId;
+    });
+    mountTerminal(paneId, activeId);
+    const terminal = state.terminals.get(activeId);
+    terminal?.sendResize();
+    terminal?.term.focus();
+  }
+
+  async function activatePaneTabClient(paneId, tabId) {
+    const found = findPaneState(paneId);
+    if (!found || activePaneTabId(found.pane) === tabId) return;
+    try {
+      await api(`/api/panes/${paneId}/${paneTabKind(found.pane)}/tabs/${tabId}/activate`, { method: 'POST' });
+    } catch (error) {
+      showToast(error.message);
+      return;
+    }
+    if (found.pane.type === 'files') {
+      found.pane.activeFilesTabId = tabId;
+      found.pane.path = found.pane.filesTabs.find((tab) => tab.id === tabId)?.path || '';
+      updatePaneTabStrip(paneId);
+      await loadFilesPane(found.pane);
+    } else {
+      found.pane.activeTerminalTabId = tabId;
+      updatePaneTabStrip(paneId);
+      showActiveTerminalTab(paneId);
+    }
+  }
+
+  async function addPaneTab(paneId) {
+    const found = findPaneState(paneId);
+    if (!found) return;
+    let result;
+    try {
+      result = await api(`/api/panes/${paneId}/${paneTabKind(found.pane)}/tabs`, {
+        method: 'POST', body: JSON.stringify({})
+      });
+    } catch (error) {
+      showToast(error.message);
+      return;
+    }
+    if (found.pane.type === 'files') {
+      found.pane.filesTabs.push(result.tab);
+      found.pane.activeFilesTabId = result.tab.id;
+      found.pane.path = result.tab.path;
+      updatePaneTabStrip(paneId);
+      await loadFilesPane(found.pane);
+      return;
+    }
+    found.pane.terminalTabs.push(result.tab);
+    found.pane.activeTerminalTabId = result.tab.id;
+    const surfaces = document.querySelectorAll(`[data-pane="${paneId}"] [data-terminal-tab]`);
+    surfaces[surfaces.length - 1]?.insertAdjacentHTML('afterend', `<div class="terminal" id="terminal-${result.tab.id}" data-terminal-tab="${result.tab.id}" hidden></div>`);
+    updatePaneTabStrip(paneId);
+    showActiveTerminalTab(paneId);
+  }
+
+  async function closePaneTabClient(paneId, tabId) {
+    const found = findPaneState(paneId);
+    if (!found) return;
+    try {
+      await api(`/api/panes/${paneId}/${paneTabKind(found.pane)}/tabs/${tabId}`, { method: 'DELETE' });
+    } catch (error) {
+      showToast(error.message);
+      return;
+    }
+    const tabs = paneTabs(found.pane);
+    const index = tabs.findIndex((tab) => tab.id === tabId);
+    if (index === -1) return;
+    if (found.pane.type === 'files') {
+      if (tabs.length === 1) {
+        tabs[0] = { id: tabId, path: '' };
+      } else {
+        tabs.splice(index, 1);
+      }
+      if (!tabs.some((tab) => tab.id === found.pane.activeFilesTabId)) {
+        found.pane.activeFilesTabId = tabs[Math.min(index, tabs.length - 1)].id;
+      }
+      found.pane.path = tabs.find((tab) => tab.id === found.pane.activeFilesTabId)?.path || '';
+      updatePaneTabStrip(paneId);
+      await loadFilesPane(found.pane);
+      return;
+    }
+    tabs.splice(index, 1);
+    if (!tabs.some((tab) => tab.id === found.pane.activeTerminalTabId)) {
+      found.pane.activeTerminalTabId = tabs[Math.min(index, tabs.length - 1)].id;
+    }
+    disposeTerminal(tabId);
+    document.getElementById(`terminal-${tabId}`)?.remove();
+    updatePaneTabStrip(paneId);
+    showActiveTerminalTab(paneId);
+  }
+
+  function renamePaneTab(paneId, tabId) {
+    const found = findPaneState(paneId);
+    const tab = found?.pane.terminalTabs?.find((candidate) => candidate.id === tabId);
+    const tabElement = document.querySelector(`[data-pane="${paneId}"] [data-pane-tab="${tabId}"]`);
+    const label = tabElement?.querySelector('.pane-tab-label');
+    if (!label || !tab || tabElement.querySelector('input')) return;
+    const input = document.createElement('input');
+    input.className = 'pane-tab-rename-input';
+    input.setAttribute('aria-label', 'Terminal tab name');
+    input.value = tab.title;
+    label.replaceWith(input);
+    input.focus();
+    input.select();
+    input.addEventListener('click', (event) => event.stopPropagation());
+    let committed = false;
+    const commit = async () => {
+      if (committed) return;
+      committed = true;
+      const title = input.value.trim();
+      if (title && title !== tab.title) {
+        try {
+          await api(`/api/panes/${paneId}/terminal/tabs/${tabId}`, {
+            method: 'PATCH', body: JSON.stringify({ title })
+          });
+          tab.title = title;
+        } catch (error) {
+          showToast(error.message);
+        }
+      }
+      updatePaneTabStrip(paneId);
+    };
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        commit();
+      } else if (event.key === 'Escape') {
+        committed = true;
+        updatePaneTabStrip(paneId);
+      }
+    });
+    input.addEventListener('blur', commit);
+  }
+
+  function wirePaneTabs(root, paneId) {
+    root.querySelectorAll('[data-pane-tab]').forEach((tabElement) => {
+      tabElement.onclick = (event) => {
+        if (event.target.closest('[data-pane-close-tab]')) return;
+        activatePaneTabClient(paneId, tabElement.dataset.paneTab);
+      };
+      tabElement.onkeydown = (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          activatePaneTabClient(paneId, tabElement.dataset.paneTab);
+        }
+      };
+      tabElement.ondblclick = (event) => {
+        event.stopPropagation();
+        renamePaneTab(paneId, tabElement.dataset.paneTab);
+      };
+    });
+    root.querySelectorAll('[data-pane-close-tab]').forEach((button) => {
+      button.onclick = (event) => {
+        event.stopPropagation();
+        closePaneTabClient(paneId, button.dataset.paneCloseTab);
+      };
+    });
+    root.querySelector('[data-pane-new-tab]')?.addEventListener('click', () => addPaneTab(paneId));
+  }
+
+  function wirePaneTabStrips(root) {
+    findAll(root, '[data-pane-tab-strip]').forEach((strip) => wirePaneTabs(strip, strip.dataset.paneTitle));
+  }
+
   function localPathDirectory(filePath) {
     const value = String(filePath || '').replace(/[\\/]+$/, '');
     const separator = Math.max(value.lastIndexOf('\\'), value.lastIndexOf('/'));
@@ -3181,6 +3422,9 @@
         body: JSON.stringify({ path })
       });
       found.pane.path = result.path || '';
+      const activeTab = found.pane.filesTabs?.find((tab) => tab.id === found.pane.activeFilesTabId);
+      if (activeTab) activeTab.path = found.pane.path;
+      updatePaneTabStrip(paneId);
       state.selectedFiles[paneId] = [];
       filesPaneData(paneId).selectionAnchor = -1;
       await loadFilesPane(found.pane);
@@ -4453,7 +4697,7 @@
     const saved = await savePaneLayoutLocal(found.pane.id, normalized);
     if (saved) {
       applyPaneLayoutStyle(document.querySelector(`[data-pane="${found.pane.id}"]`), normalized);
-      state.terminals.get(found.pane.id)?.sendResize();
+      paneTerminal(found.pane.id)?.sendResize();
       renderLayoutPanel();
     }
   }
@@ -4498,7 +4742,7 @@
   }
 
   function startPaneSwipe(event) {
-    if (!event.touches || event.touches.length !== 1 || event.target.closest('button, [data-browser-tab], [data-notepad-tab]')) {
+    if (!event.touches || event.touches.length !== 1 || event.target.closest('button, [data-browser-tab], [data-notepad-tab], [data-pane-tab]')) {
       return;
     }
     const touch = event.touches[0];
@@ -4638,7 +4882,7 @@
     found.session.activePaneId = nextPane?.id || '';
     state.activePaneId = nextPane?.id || '';
 
-    disposeTerminal(paneId);
+    (found.pane.terminalTabs || []).forEach((tab) => disposeTerminal(tab.id));
     state.browserConnections.get(paneId)?.dispose();
     state.browserConnections.delete(paneId);
     delete state.filePaneData[paneId];
@@ -4650,7 +4894,7 @@
     document.querySelector(`[data-pane="${paneId}"]`)?.remove();
     document.querySelector(`[data-pane-link="${paneId}"]`)?.remove();
     updateActivePaneUi();
-    state.terminals.get(state.activePaneId)?.term.focus();
+    paneTerminal(state.activePaneId)?.term.focus();
   }
 
   function startSidebarResize(event) {
@@ -4794,7 +5038,7 @@
       showToast(error.message);
       return;
     }
-    const terminal = state.terminals.get(paneId);
+    const terminal = paneTerminal(paneId);
     if (terminal) {
       terminal.sendResize();
       terminal.term.focus();
@@ -4843,7 +5087,7 @@
 
   function sendMobileTerminalKey(button) {
     const pane = button.closest('[data-pane]');
-    const terminal = state.terminals.get(pane?.dataset.pane);
+    const terminal = paneTerminal(pane?.dataset.pane);
     if (!terminal) {
       return;
     }
@@ -5153,7 +5397,7 @@
       if (!saved) {
         applyPaneLayoutStyle(paneElement, startLayout);
       }
-      state.terminals.get(paneId)?.sendResize();
+      paneTerminal(paneId)?.sendResize();
     };
     handle.addEventListener('pointermove', onMove);
     handle.addEventListener('pointerup', onUp);
@@ -5161,7 +5405,7 @@
   }
 
   function startPaneMove(event) {
-    if (event.button !== 0 || event.target.closest('.pane-close, button, input, [data-browser-tab], [data-notepad-tab]')) {
+    if (event.button !== 0 || event.target.closest('.pane-close, button, input, [data-browser-tab], [data-notepad-tab], [data-pane-tab]')) {
       return;
     }
     event.preventDefault();
@@ -5265,7 +5509,7 @@
       pane.layout = next;
       applyPaneLayoutStyle(document.querySelector(`[data-pane="${pane.id}"]`), next);
       if (previous.w !== next.w || previous.h !== next.h) {
-        state.terminals.get(pane.id)?.sendResize();
+        paneTerminal(pane.id)?.sendResize();
       }
     }
   }
@@ -5287,6 +5531,7 @@
       wireFilesPane(paneElement);
       wireBrowserPane(paneElement);
       wireNotepadPane(paneElement);
+      wirePaneTabStrips(paneElement);
       wireMobileKeybarButtons(paneElement);
     }
     const sessionList = app.querySelector('.session-list');
@@ -5378,9 +5623,9 @@
     }, 400);
   }
 
-  function mountTerminal(paneId) {
-    const element = document.getElementById(`terminal-${paneId}`);
-    if (!element || state.terminals.has(paneId)) {
+  function mountTerminal(paneId, terminalTabId) {
+    const element = document.getElementById(`terminal-${terminalTabId}`);
+    if (!element || state.terminals.has(terminalTabId)) {
       return;
     }
 
@@ -5398,7 +5643,7 @@
     installMobileTerminalTouchScroll(element, term);
     fitTerminal(term, fit, true);
     element.addEventListener('click', () => term.focus());
-    term.onTitleChange((title) => updatePaneTitleFromTerminal(paneId, title));
+    term.onTitleChange((title) => updatePaneTitleFromTerminal(paneId, terminalTabId, title));
     term.onBell(() => showTerminalNotification(paneId));
     term.parser.registerOscHandler(9, (data) => handleTerminalOscNotification(paneId, 9, data));
     term.parser.registerOscHandler(99, (data) => handleTerminalOscNotification(paneId, 99, data));
@@ -5460,7 +5705,7 @@
       if (disposed) {
         return;
       }
-      const socket = new WebSocket(`${protocol}//${location.host}/ws?paneId=${encodeURIComponent(paneId)}&token=${encodeURIComponent(state.token)}`);
+      const socket = new WebSocket(`${protocol}//${location.host}/ws?paneId=${encodeURIComponent(terminalTabId)}&token=${encodeURIComponent(state.token)}`);
       ws = socket;
       socket.onopen = () => {
         reconnectDelay = 500;
@@ -5511,7 +5756,7 @@
     const resizeObserver = new ResizeObserver(scheduleResize);
     resizeObserver.observe(element);
     window.addEventListener('resize', scheduleResize);
-    state.terminals.set(paneId, {
+    state.terminals.set(terminalTabId, {
       term,
       fit,
       writer,
@@ -5747,15 +5992,15 @@
     state.terminalTitleTimers.clear();
   }
 
-  function disposeTerminal(paneId) {
-    window.clearTimeout(state.terminalTitleTimers.get(paneId));
-    state.terminalTitleTimers.delete(paneId);
-    const item = state.terminals.get(paneId);
+  function disposeTerminal(terminalTabId) {
+    window.clearTimeout(state.terminalTitleTimers.get(terminalTabId));
+    state.terminalTitleTimers.delete(terminalTabId);
+    const item = state.terminals.get(terminalTabId);
     if (!item) {
       return;
     }
     disposeTerminalItem(item);
-    state.terminals.delete(paneId);
+    state.terminals.delete(terminalTabId);
   }
 
   function disposeTerminalItem(item) {

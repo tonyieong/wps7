@@ -77,7 +77,8 @@ test('sidebar actions use shared icons for new PowerShell and new file', () => {
 });
 
 test('pane titles reuse the same pane-type icons as the sidebar', () => {
-  assert.match(appSource, /class="pane-kind-icon"[^>]*>\$\{fileActionIcon\(\(\{ files: 'file', notepad: 'notepad', usage: 'usage' \}\)\[pane\.type\] \|\| 'terminal'\)\}<\/span>/);
+  assert.match(appSource, /class="pane-kind-icon"[^>]*>\$\{fileActionIcon\('usage'\)\}<\/span>/);
+  assert.match(appSource, /class="pane-kind-icon"[^>]*>\$\{fileActionIcon\(pane\.type === 'files' \? 'file' : 'terminal'\)\}<\/span>/);
   assert.match(styles, /\.pane-kind-icon \.file-action-icon\s*\{[^}]*width:\s*14px[^}]*height:\s*14px/s);
   assert.match(styles, /\.pane-title::before\s*\{[^}]*content:\s*none/s);
 });
@@ -255,7 +256,7 @@ test('workspace exposes multi-tab notepad panes with line numbers and text-file 
   assert.match(appSource, /class="notepad-tab-strip" data-notepad-tab-strip/);
   assert.match(appSource, /function editNotepadTabPath\(paneId, tabId\)/);
   assert.match(appSource, /editNotepadTabPath\(paneId, tabElement\.dataset\.notepadTab\)/);
-  assert.match(appSource, /event\.target\.closest\('\.pane-close, button, input, \[data-browser-tab\], \[data-notepad-tab\]'\)/);
+  assert.match(appSource, /event\.target\.closest\('\.pane-close, button, input, \[data-browser-tab\], \[data-notepad-tab\], \[data-pane-tab\]'\)/);
   assert.match(appSource, /class="notepad-gutter"/);
   assert.match(appSource, /class="notepad-editor"/);
   assert.match(appSource, /event\.ctrlKey && key === 's'/);
@@ -265,6 +266,30 @@ test('workspace exposes multi-tab notepad panes with line numbers and text-file 
   assert.match(mainSource, /app\.post\('\/api\/panes\/:paneId\/notepad\/tabs'/);
   assert.match(mainSource, /app\.get\('\/api\/files\/text'/);
   assert.match(mainSource, /app\.put\('\/api\/files\/text'/);
+});
+
+test('files and PowerShell panes share a multi-tab strip like the browser pane', () => {
+  assert.match(appSource, /class="pane-tab-strip" data-pane-tab-strip data-pane-title="\$\{pane\.id\}"/);
+  assert.match(appSource, /function renderPaneTabs\(pane\)/);
+  assert.match(appSource, /class="pane-tab-list" role="tablist"/);
+  assert.match(appSource, /data-pane-tab="\$\{tab\.id\}"/);
+  assert.match(appSource, /data-pane-close-tab="\$\{tab\.id\}"/);
+  assert.match(appSource, /data-pane-new-tab/);
+  // Every terminal tab keeps its own surface so switching tabs never rebuilds xterm.
+  assert.match(appSource, /function renderTerminalSurfaces\(pane\)/);
+  assert.match(appSource, /function mountTerminal\(paneId, terminalTabId\)/);
+  assert.match(appSource, /paneId=\$\{encodeURIComponent\(terminalTabId\)\}/);
+  assert.match(appSource, /function showActiveTerminalTab\(paneId\)/);
+  assert.match(appSource, /function activatePaneTabClient\(paneId, tabId\)/);
+  assert.match(appSource, /function addPaneTab\(paneId\)/);
+  assert.match(appSource, /function closePaneTabClient\(paneId, tabId\)/);
+  assert.match(appSource, /function renamePaneTab\(paneId, tabId\)/);
+  assert.match(styles, /\.pane-tab-strip\s*\{[^}]*height:\s*var\(--pane-toolbar-height\)/s);
+  assert.match(styles, /\.terminal\[hidden\]\s*\{[^}]*display:\s*none/s);
+  assert.match(mainSource, /app\.post\('\/api\/panes\/:paneId\/terminal\/tabs'/);
+  assert.match(mainSource, /app\.delete\('\/api\/panes\/:paneId\/terminal\/tabs\/:tabId'/);
+  assert.match(mainSource, /app\.post\('\/api\/panes\/:paneId\/files\/tabs'/);
+  assert.match(mainSource, /app\.delete\('\/api\/panes\/:paneId\/files\/tabs\/:tabId'/);
 });
 
 test('adding panes updates the workspace incrementally without rebuilding existing terminals', () => {
@@ -533,7 +558,7 @@ test('file detail rows share the exact column boundaries of their header', () =>
 });
 
 test('terminal title and bell sequences update pane names and browser notifications', () => {
-  assert.match(appSource, /term\.onTitleChange\(\(title\) => updatePaneTitleFromTerminal\(paneId, title\)\)/);
+  assert.match(appSource, /term\.onTitleChange\(\(title\) => updatePaneTitleFromTerminal\(paneId, terminalTabId, title\)\)/);
   assert.match(appSource, /term\.onBell\(\(\) => showTerminalNotification\(paneId\)\)/);
   for (const code of [9, 99, 777]) {
     assert.match(appSource, new RegExp(`term\\.parser\\.registerOscHandler\\(${code},`));
@@ -743,7 +768,7 @@ test('all pane chrome shares a compact 28px toolbar language', () => {
 });
 
 test('PowerShell shortcut bar sits directly below the pane title', () => {
-  assert.match(appSource, /: `\s*\$\{renderMobileKeybar\(\)\}\s*<div class="terminal" id="terminal-\$\{pane\.id\}"><\/div>/s);
+  assert.match(appSource, /: `\s*\$\{renderMobileKeybar\(\)\}\s*\$\{renderTerminalSurfaces\(pane\)\}/s);
   assert.match(styles, /\.pane\[data-pane-type="terminal"\]\s*\{[^}]*grid-template-rows:\s*auto auto minmax\(0, 1fr\)/s);
 });
 
