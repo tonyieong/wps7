@@ -61,7 +61,6 @@
     filePaneData: {},
     filePathHistory: loadFilePathHistory(),
     notepadTabData: {},
-    layoutPanelOpen: false,
     displayMode: localStorage.getItem('wps7.displayMode') || 'auto',
     dismissedDesktopBanner: false,
     fileClipboard: null,
@@ -80,6 +79,7 @@
   document.addEventListener('pointerdown', closeNotepadPopoversFromOutside);
   window.visualViewport?.addEventListener('resize', updateVisualViewport);
   window.visualViewport?.addEventListener('scroll', updateVisualViewport);
+  window.addEventListener('resize', updateVisualViewport);
   updateVisualViewport();
 
   function saveToken(token, remember) {
@@ -348,7 +348,10 @@
 
   function renderLogin() {
     disposeTerminals();
-    document.querySelectorAll('.settings-overlay, .help-overlay, .layout-panel, .file-panel').forEach((element) => element.remove());
+    document.querySelectorAll('.settings-overlay, .help-overlay, .file-panel').forEach((element) => {
+      element._disposeModal?.();
+      element.remove();
+    });
     applyTheme();
     applyUiTypography();
     app.innerHTML = `
@@ -523,7 +526,14 @@
     document.documentElement.style.setProperty('--app-height', `${height}px`);
     app.querySelector('.app')?.classList.toggle('mobile-device', isMobileLayout());
     updateDesktopModeBanner();
-    if (!state.config || !isMobileLayout()) {
+    if (!state.config) {
+      return;
+    }
+    // Crossing the mobile breakpoint changes whether the camera applies at all,
+    // and a shrinking viewport can leave the active pane off screen.
+    applyCameraTransform();
+    ensureActivePaneVisible();
+    if (!isMobileLayout()) {
       return;
     }
     const terminal = paneTerminal(state.activePaneId);
@@ -1193,7 +1203,6 @@
               <span class="rail-icon" aria-hidden="true">${fileActionIcon('notepad')}</span><span class="rail-label">New notepad</span>
             </button>
             <button class="rail-button" data-action="usage" aria-label="New usage pane" title="New usage pane"><span class="rail-icon" aria-hidden="true">${fileActionIcon('usage')}</span><span class="rail-label">Usage pane</span></button>
-            <button class="rail-button" data-action="layout" aria-label="Layouts" title="Layouts"><span class="rail-icon">⊞</span><span class="rail-label">Layouts</span></button>
             <button class="rail-button" data-action="help" aria-label="Keyboard shortcuts" title="Keyboard shortcuts"><span class="rail-icon">?</span><span class="rail-label">Shortcuts</span></button>
             <button class="rail-button" data-action="settings" aria-label="Settings" title="Settings"><span class="rail-icon">⚙</span><span class="rail-label">Settings</span></button>
           </nav>
@@ -1238,6 +1247,7 @@
 
     wireControls();
     applyCameraTransform();
+    ensureActivePaneVisible();
     updateDesktopModeBanner();
     for (const pane of tab.panes) {
       mountPaneContent(pane);
@@ -1256,9 +1266,11 @@
     banner.hidden = !(state.displayMode === 'desktop' && narrowViewport() && !state.dismissedDesktopBanner);
   }
 
-  function setDisplayMode(mode) {
+  function setDisplayMode(mode, persist = true) {
     state.displayMode = mode;
-    localStorage.setItem('wps7.displayMode', mode);
+    if (persist) {
+      localStorage.setItem('wps7.displayMode', mode);
+    }
     state.dismissedDesktopBanner = false;
     const appElement = document.querySelector('.app');
     appElement?.classList.remove('mode-auto', 'mode-mobile', 'mode-desktop');
@@ -1266,6 +1278,17 @@
     updateVisualViewport();
     applyConfigLive();
     updateDesktopModeBanner();
+  }
+
+  function setTerminalDensity(density, persist = true) {
+    state.mobileTerminalDensity = density;
+    if (persist) {
+      localStorage.setItem('wps7.mobileTerminalDensity', density);
+    }
+    const appElement = document.querySelector('.app');
+    appElement?.classList.remove('density-readable', 'density-dense');
+    appElement?.classList.add(`density-${density}`);
+    applyConfigLive();
   }
 
   function wireControls() {
@@ -1282,7 +1305,6 @@
     app.querySelectorAll('[data-action="browser"]').forEach((button) => button.onclick = openBrowserPane);
     app.querySelectorAll('[data-action="notepad"]').forEach((button) => button.onclick = () => openNotepadPane());
     app.querySelectorAll('[data-action="usage"]').forEach((button) => button.onclick = openUsagePane);
-    app.querySelectorAll('[data-action="layout"]').forEach((button) => button.onclick = toggleLayoutPanel);
     app.querySelectorAll('[data-action="settings"]').forEach((button) => button.onclick = openSettings);
     app.querySelectorAll('[data-action="help"]').forEach((button) => button.onclick = openHelp);
     app.querySelector('[data-action="resize-sidebar"]').onpointerdown = startSidebarResize;
@@ -1337,7 +1359,6 @@
     wireBrowserPane(app);
     wireNotepadPane(app);
     wirePaneTabStrips(app);
-    renderLayoutPanel();
     app.querySelectorAll('[data-rename-session]').forEach((label) => {
       label.ondblclick = (event) => {
         cancelClick();
@@ -1484,14 +1505,70 @@
     });
   }
 
+  // Shared modal behaviour: labelled dialog semantics, Escape to close, focus
+  // moved into the panel and trapped there, focus restored to the opener.
+  // Returns the disposer the caller must run when it actually closes.
+  function wireModal(panel, requestClose, labelledBy) {
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+    if (labelledBy) {
+      panel.setAttribute('aria-labelledby', labelledBy);
+    }
+    const opener = document.activeElement;
+    const focusable = () => [...panel.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+      .filter((element) => element.offsetWidth || element.offsetHeight);
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        requestClose();
+        return;
+      }
+      if (event.key !== 'Tab') {
+        return;
+      }
+      const items = focusable();
+      if (!items.length) {
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !panel.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    requestAnimationFrame(() => focusable()[0]?.focus());
+    return () => {
+      document.removeEventListener('keydown', onKeyDown, true);
+      if (opener?.isConnected) {
+        opener.focus();
+      }
+    };
+  }
+
+  function discardOverlay(selector) {
+    const existing = document.querySelector(selector);
+    if (!existing) {
+      return;
+    }
+    existing._disposeModal?.();
+    existing.remove();
+  }
+
   function openHelp() {
-    document.querySelector('.help-overlay')?.remove();
+    discardOverlay('.help-overlay');
     const overlay = document.createElement('div');
     overlay.className = 'help-overlay';
     overlay.innerHTML = `
       <section class="help-panel">
         <header class="help-header">
-          <div class="settings-title">Shortcuts</div>
+          <div class="settings-title" id="help-dialog-title">Shortcuts</div>
           <button class="icon-button" type="button" data-help-close title="Close">×</button>
         </header>
         <div class="help-list">
@@ -1506,10 +1583,16 @@
       </section>
     `;
     document.body.appendChild(overlay);
-    overlay.querySelector('[data-help-close]').onclick = () => overlay.remove();
+    const closeHelp = () => {
+      disposeModal();
+      overlay.remove();
+    };
+    const disposeModal = wireModal(overlay.querySelector('.help-panel'), () => closeHelp(), 'help-dialog-title');
+    overlay._disposeModal = disposeModal;
+    overlay.querySelector('[data-help-close]').onclick = closeHelp;
     overlay.onclick = (event) => {
       if (event.target === overlay) {
-        overlay.remove();
+        closeHelp();
       }
     };
   }
@@ -4656,130 +4739,6 @@
     return `${Math.round(size / 1024 / 1024)} MB`;
   }
 
-  function renderMiniPanes(tab) {
-    if (!tab.panes.length) {
-      return '';
-    }
-    const layouts = tab.panes.map((pane) => normalizePaneLayout(pane.layout));
-    const minX = Math.min(...layouts.map((l) => l.x));
-    const minY = Math.min(...layouts.map((l) => l.y));
-    const spanX = Math.max(1, Math.max(...layouts.map((l) => l.x + l.w)) - minX);
-    const spanY = Math.max(1, Math.max(...layouts.map((l) => l.y + l.h)) - minY);
-    return tab.panes.map((pane, index) => {
-      const l = layouts[index];
-      const style = `left:${((l.x - minX) / spanX) * 100}%;top:${((l.y - minY) / spanY) * 100}%;width:${(l.w / spanX) * 100}%;height:${(l.h / spanY) * 100}%;`;
-      const label = ({ files: 'Files', browser: 'Web', notepad: 'Notes', usage: 'Usage' })[pane.type] || 'PS';
-      return `<button class="mini-pane ${pane.id === state.activePaneId ? 'active' : ''}" data-layout-pane="${pane.id}" style="${style}">${label}</button>`;
-    }).join('');
-  }
-
-  function toggleLayoutPanel() {
-    state.layoutPanelOpen = !state.layoutPanelOpen;
-    renderLayoutPanel();
-  }
-
-  function renderLayoutPanel() {
-    document.querySelector('.layout-panel')?.remove();
-    if (!state.layoutPanelOpen) {
-      return;
-    }
-    const session = activeSession();
-    const tab = activeTab(session);
-    if (!tab) {
-      return;
-    }
-    const panel = document.createElement('section');
-    panel.className = `layout-panel ${state.displayMode === 'mobile' ? 'mobile-sheet' : ''}`;
-    panel.innerHTML = `
-      <header class="layout-header">
-        <div class="brand">Layout</div>
-        <button class="icon-button" data-layout-close title="Close">×</button>
-      </header>
-      <div class="mode-switch">
-        ${['auto', 'mobile', 'desktop'].map((mode) => `
-          <button class="secondary ${state.displayMode === mode ? 'active' : ''}" data-display-mode="${mode}">${mode[0].toUpperCase()}${mode.slice(1)}</button>
-        `).join('')}
-        ${['readable', 'dense'].map((density) => `
-          <button class="secondary ${state.mobileTerminalDensity === density ? 'active' : ''}" data-terminal-density="${density}">${density === 'dense' ? 'Dense' : 'Readable'}</button>
-        `).join('')}
-      </div>
-      <div class="layout-controls">
-        <button class="secondary" data-layout-move="up" title="Move up">↑</button>
-        <button class="secondary" data-layout-move="left" title="Move left">←</button>
-        <button class="secondary" data-layout-move="right" title="Move right">→</button>
-        <button class="secondary" data-layout-move="down" title="Move down">↓</button>
-        <button class="secondary" data-layout-size="wide" title="Wider">W+</button>
-        <button class="secondary" data-layout-size="narrow" title="Narrower">W-</button>
-        <button class="secondary" data-layout-size="tall" title="Taller">H+</button>
-        <button class="secondary" data-layout-size="short" title="Shorter">H-</button>
-      </div>
-      <div class="mini-grid">
-        ${renderMiniPanes(tab)}
-      </div>
-      <div class="layout-list">
-        ${tab.panes.map((pane) => `
-          <button class="session-item ${pane.id === state.activePaneId ? 'active' : ''}" data-layout-pane="${pane.id}">
-            <span>${escapeHtml(pane.title)}</span>
-          </button>
-        `).join('')}
-      </div>
-    `;
-    document.body.appendChild(panel);
-    panel.querySelector('[data-layout-close]').onclick = () => {
-      state.layoutPanelOpen = false;
-      renderLayoutPanel();
-    };
-    panel.querySelectorAll('[data-display-mode]').forEach((button) => {
-      button.onclick = () => {
-        setDisplayMode(button.dataset.displayMode);
-        renderLayoutPanel();
-      };
-    });
-    panel.querySelectorAll('[data-terminal-density]').forEach((button) => {
-      button.onclick = () => {
-        state.mobileTerminalDensity = button.dataset.terminalDensity;
-        localStorage.setItem('wps7.mobileTerminalDensity', state.mobileTerminalDensity);
-        document.querySelector('.app')?.classList.remove('density-readable', 'density-dense');
-        document.querySelector('.app')?.classList.add(`density-${state.mobileTerminalDensity}`);
-        applyConfigLive();
-        renderLayoutPanel();
-      };
-    });
-    panel.querySelectorAll('[data-layout-pane]').forEach((button) => {
-      button.onclick = () => setActivePane(button.dataset.layoutPane).then(renderLayoutPanel);
-    });
-    panel.querySelectorAll('[data-layout-move]').forEach((button) => {
-      button.onclick = () => adjustActivePaneLayout(button.dataset.layoutMove);
-    });
-    panel.querySelectorAll('[data-layout-size]').forEach((button) => {
-      button.onclick = () => adjustActivePaneLayout(button.dataset.layoutSize);
-    });
-  }
-
-  async function adjustActivePaneLayout(action) {
-    const found = findPaneState(state.activePaneId);
-    if (!found) {
-      return;
-    }
-    const step = 40;
-    const next = normalizePaneLayout(found.pane.layout);
-    if (action === 'left') next.x -= step;
-    if (action === 'right') next.x += step;
-    if (action === 'up') next.y -= step;
-    if (action === 'down') next.y += step;
-    if (action === 'wide') next.w += step;
-    if (action === 'narrow') next.w -= step;
-    if (action === 'tall') next.h += step;
-    if (action === 'short') next.h -= step;
-    const normalized = normalizePaneLayout(next);
-    const saved = await savePaneLayoutLocal(found.pane.id, normalized);
-    if (saved) {
-      applyPaneLayoutStyle(document.querySelector(`[data-pane="${found.pane.id}"]`), normalized);
-      paneTerminal(found.pane.id)?.sendResize();
-      renderLayoutPanel();
-    }
-  }
-
   function wirePaneControls(root) {
     findAll(root, '[data-close-pane]').forEach((button) => {
       button.onclick = async (event) => {
@@ -5135,6 +5094,7 @@
     app.querySelectorAll('[data-pane-link]').forEach((button) => {
       button.classList.toggle('active', button.dataset.paneLink === state.activePaneId);
     });
+    ensureActivePaneVisible();
   }
 
   function setSidebarOpen(open) {
@@ -5667,15 +5627,61 @@
   function applyCameraTransform() {
     const cam = activeCamera();
     const canvas = app.querySelector('[data-pane-canvas]');
+    const grid = app.querySelector('.pane-grid');
+    if (isMobileLayout()) {
+      // Mobile shows the active pane filling the grid, so the camera must not
+      // offset the canvas: it would push that pane outside the viewport.
+      if (canvas) {
+        canvas.style.transform = '';
+      }
+      if (grid) {
+        grid.style.backgroundSize = '';
+        grid.style.backgroundPosition = '';
+      }
+      return;
+    }
     if (canvas) {
       canvas.style.transform = `translate(${cam.x}px, ${cam.y}px) scale(${cam.scale})`;
     }
-    const grid = app.querySelector('.pane-grid');
     if (grid) {
       const size = GRID_UNIT * cam.scale;
       grid.style.backgroundSize = `${size}px ${size}px`;
       grid.style.backgroundPosition = `${cam.x}px ${cam.y}px`;
     }
+  }
+
+  function ensureActivePaneVisible() {
+    if (isMobileLayout()) {
+      return; // the active pane already fills the grid
+    }
+    const found = findPaneState(state.activePaneId);
+    const grid = app.querySelector('.pane-grid');
+    if (!found || !grid || !grid.clientWidth || !grid.clientHeight) {
+      return;
+    }
+    const cam = activeCamera();
+    const layout = normalizePaneLayout(found.pane.layout);
+    const margin = 16;
+    // Smallest camera shift that brings the pane back on screen. Panes larger
+    // than the viewport align to their top-left corner instead of centering.
+    const nudge = (start, size, viewSize) => {
+      if (size + margin * 2 >= viewSize || start < margin) {
+        return margin - start;
+      }
+      if (start + size > viewSize - margin) {
+        return viewSize - margin - size - start;
+      }
+      return 0;
+    };
+    const dx = nudge(layout.x * cam.scale + cam.x, layout.w * cam.scale, grid.clientWidth);
+    const dy = nudge(layout.y * cam.scale + cam.y, layout.h * cam.scale, grid.clientHeight);
+    if (!dx && !dy) {
+      return;
+    }
+    cam.x += dx;
+    cam.y += dy;
+    applyCameraTransform();
+    saveCameraSoon();
   }
 
   function pointerToWorld(clientX, clientY, gridRect, cam) {
@@ -6496,13 +6502,12 @@
       return;
     }
 
-    const existing = document.querySelector('.settings-overlay');
-    if (existing) {
-      existing.remove();
-    }
+    discardOverlay('.settings-overlay');
 
     state.customThemeDraft = { ...customThemeDefaults, ...(settings.custom_theme || {}) };
     let savedTheme = state.theme;
+    let savedDisplayMode = state.displayMode;
+    let savedTerminalDensity = state.mobileTerminalDensity;
     const selectedLight = state.customThemeDraft.selected_light;
     const selectedDark = state.customThemeDraft.selected_dark;
     const notificationCapability = browserNotificationCapability();
@@ -6519,7 +6524,7 @@
     overlay.innerHTML = `
       <form class="settings-panel">
         <header class="settings-header">
-          <div class="product-mark"><span class="brand-mark">›_</span><div><div class="settings-title">WPS7 Settings</div><small>Workspace preferences</small></div></div>
+          <div class="product-mark"><span class="brand-mark">›_</span><div><div class="settings-title" id="settings-dialog-title">WPS7 Settings</div><small>Workspace preferences</small></div></div>
           <button class="icon-button" type="button" data-settings-close aria-label="Close settings" title="Close">×</button>
         </header>
         <div class="settings-shell">
@@ -6557,7 +6562,7 @@
           </nav>
           <div class="settings-body">
             <section class="settings-section appearance-section" id="settings-appearance">
-              <div class="section-heading"><div><h2>Appearance</h2><p>Changes apply immediately.</p></div><span class="live-badge">● Live settings</span></div>
+              <div class="section-heading"><div><h2>Appearance</h2><p>Previewed live — Cancel reverts, Save keeps it.</p></div><span class="live-badge">● Live preview</span></div>
               <input type="hidden" name="custom_theme.mode" value="${escapeAttr(state.customThemeDraft.mode)}">
               <input type="hidden" name="custom_theme.selected_light" value="${escapeAttr(selectedLight)}">
               <input type="hidden" name="custom_theme.selected_dark" value="${escapeAttr(selectedDark)}">
@@ -6615,6 +6620,20 @@
                   <label>Danger<input name="custom_theme.danger" type="color" value="${escapeAttr(state.customThemeDraft.danger)}"></label>
                   <label>Terminal background<input name="custom_theme.terminal_bg" type="color" value="${escapeAttr(state.customThemeDraft.terminal_bg)}"></label>
                   <label>Terminal text<input name="custom_theme.terminal_fg" type="color" value="${escapeAttr(state.customThemeDraft.terminal_fg)}"></label>
+                </div>
+              </div>
+              <div class="display-mode-setting">
+                <div class="theme-mode-heading"><span>Layout</span><small>Mobile shows one pane at a time. Auto follows the viewport width.</small></div>
+                <div class="segmented" role="group" aria-label="Display mode">
+                  ${['auto', 'mobile', 'desktop'].map((mode) => `
+                    <button type="button" class="segmented-option ${state.displayMode === mode ? 'active' : ''}" data-display-mode="${mode}" aria-pressed="${state.displayMode === mode}">${mode[0].toUpperCase()}${mode.slice(1)}</button>
+                  `).join('')}
+                </div>
+                <div class="theme-mode-heading"><span>Terminal density</span><small>Dense fits more rows on small screens.</small></div>
+                <div class="segmented" role="group" aria-label="Terminal density">
+                  ${['readable', 'dense'].map((density) => `
+                    <button type="button" class="segmented-option ${state.mobileTerminalDensity === density ? 'active' : ''}" data-terminal-density="${density}" aria-pressed="${state.mobileTerminalDensity === density}">${density === 'dense' ? 'Dense' : 'Readable'}</button>
+                  `).join('')}
                 </div>
               </div>
               <div class="settings-grid appearance-font-setting">
@@ -6713,16 +6732,16 @@
             <section class="settings-section" id="settings-security">
               <div class="section-heading"><div><h2>Security</h2><p>Set a new password for workspace access.</p></div></div>
               <div class="settings-grid">
-                <label class="settings-wide">New password<input name="auth.password" type="password" autocomplete="new-password" placeholder="12+ chars with upper, lower, number, symbol"></label>
+                <label class="settings-wide">New password<input name="auth.password" type="password" autocomplete="new-password" aria-describedby="settings-password-rule" placeholder="Leave blank to keep the current password"><small class="field-hint" id="settings-password-rule">At least 12 characters, including an upper case letter, a lower case letter, a number and a symbol.</small></label>
               </div>
             </section>
           </div>
         </div>
         <footer class="settings-footer">
           <span class="settings-status" data-settings-status></span>
-          <button type="button" class="secondary" data-settings-cancel>Cancel</button>
-          <button type="submit" class="secondary" data-settings-apply>Apply</button>
-          <button type="submit" class="primary" data-settings-save>Save</button>
+          <button type="button" class="secondary" data-settings-cancel title="Discard changes and close">Cancel</button>
+          <button type="submit" class="secondary" data-settings-apply title="Save and keep this dialog open">Apply</button>
+          <button type="submit" class="primary" data-settings-save title="Save and close">Save</button>
         </footer>
       </form>
     `;
@@ -6754,6 +6773,20 @@
       setActiveSettingsSection(current.id);
     }
 
+    // The last section is shorter than the viewport, so without trailing room it
+    // can never scroll to the top and clicking its nav entry looks like a no-op.
+    function syncSettingsScrollPadding() {
+      const last = settingsSections[settingsSections.length - 1];
+      if (!last) {
+        return;
+      }
+      const slack = settingsBody.clientHeight - last.offsetHeight - 24;
+      const next = `${Math.max(24, Math.round(slack))}px`;
+      if (settingsBody.style.paddingBottom !== next) {
+        settingsBody.style.paddingBottom = next;
+      }
+    }
+
     settingsLinks.forEach((link) => {
       link.onclick = (event) => {
         event.preventDefault();
@@ -6764,24 +6797,56 @@
       };
     });
     settingsBody.addEventListener('scroll', syncSettingsNav, { passive: true });
-    const settingsResizeObserver = new ResizeObserver(syncSettingsNav);
+    const settingsResizeObserver = new ResizeObserver(() => {
+      syncSettingsScrollPadding();
+      syncSettingsNav();
+    });
     settingsResizeObserver.observe(settingsBody);
     const closeSettings = (restoreTheme = true) => {
+      disposeModal();
       settingsResizeObserver.disconnect();
       overlay.remove();
       if (restoreTheme) {
         state.customThemeDraft = null;
         setThemeLive(savedTheme);
+        if (state.displayMode !== savedDisplayMode) {
+          setDisplayMode(savedDisplayMode, false);
+        }
+        if (state.mobileTerminalDensity !== savedTerminalDensity) {
+          setTerminalDensity(savedTerminalDensity, false);
+        }
       }
     };
+    const disposeModal = wireModal(overlay.querySelector('.settings-panel'), () => closeSettings(), 'settings-dialog-title');
+    overlay._disposeModal = disposeModal;
     const initialSection = settingsSections[0];
     setActiveSettingsSection(initialSection.id);
     requestAnimationFrame(() => {
+      syncSettingsScrollPadding();
       initialSection.scrollIntoView({ block: 'start' });
       syncSettingsNav();
     });
     overlay.querySelector('[data-settings-close]').onclick = closeSettings;
     overlay.querySelector('[data-settings-cancel]').onclick = closeSettings;
+    const syncSegmented = (group, activeButton) => {
+      group.querySelectorAll('.segmented-option').forEach((option) => {
+        const active = option === activeButton;
+        option.classList.toggle('active', active);
+        option.setAttribute('aria-pressed', String(active));
+      });
+    };
+    overlay.querySelectorAll('[data-display-mode]').forEach((button) => {
+      button.onclick = () => {
+        setDisplayMode(button.dataset.displayMode, false);
+        syncSegmented(button.closest('.segmented'), button);
+      };
+    });
+    overlay.querySelectorAll('[data-terminal-density]').forEach((button) => {
+      button.onclick = () => {
+        setTerminalDensity(button.dataset.terminalDensity, false);
+        syncSegmented(button.closest('.segmented'), button);
+      };
+    });
     overlay.querySelectorAll('[data-theme-choice]').forEach((button) => {
       button.onclick = () => {
         const mode = button.dataset.themeChoiceMode;
@@ -6856,6 +6921,11 @@
         savedTheme = selectedThemeForMode(state.config.custom_theme?.mode || themeMode());
         state.customThemeDraft = { ...customThemeDefaults, ...(state.config.custom_theme || {}) };
         applyTheme(savedTheme);
+        // Display mode and density live in localStorage, not the server config.
+        localStorage.setItem('wps7.displayMode', state.displayMode);
+        localStorage.setItem('wps7.mobileTerminalDensity', state.mobileTerminalDensity);
+        savedDisplayMode = state.displayMode;
+        savedTerminalDensity = state.mobileTerminalDensity;
         applyConfigLive();
         document.querySelectorAll('[data-pane-type="usage"]').forEach((pane) => loadUsagePane(pane.dataset.pane, true));
         if (state.config.restarting) {

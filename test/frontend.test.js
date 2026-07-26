@@ -44,9 +44,8 @@ test('browser terminal scrollback follows the configured workspace limit', () =>
   assert.match(appSource, /scrollback:\s*Number\(state\.config\.persistence\?\.scrollback_lines\)/);
 });
 
-test('workspace header keeps layout and shortcut controls in the sidebar only', () => {
+test('workspace header keeps shortcut controls in the sidebar only', () => {
   assert.doesNotMatch(appSource, /toolbar-button help-button/);
-  assert.doesNotMatch(appSource, /toolbar-button" data-action="layout"/);
 });
 
 test('workspace tabs and terminal grid use the compact edge-to-edge layout', () => {
@@ -345,10 +344,64 @@ test('mobile workspace keeps only the brand icon and closes the sidebar after an
   assert.match(appSource, /app\.querySelector\('\.sidebar'\)\.addEventListener\('click', closeMobileSidebarAfterAction\)/);
 });
 
-test('layout panel removes pane creation and keeps active panes readable in light mode', () => {
-  assert.doesNotMatch(appSource, /data-layout-add|＋ PS/);
-  assert.match(styles, /\[data-theme="light"\] \.mini-grid\s*\{[^}]*background:\s*var\(--surface-soft\)/s);
-  assert.match(styles, /\[data-theme="light"\] \.mini-pane\.active\s*\{[^}]*color:\s*var\(--accent\)/s);
+test('the layout panel is fully removed from script and styles', () => {
+  assert.doesNotMatch(appSource, /layoutPanelOpen|renderLayoutPanel|toggleLayoutPanel|renderMiniPanes|adjustActivePaneLayout|data-action="layout"|data-layout-/);
+  assert.doesNotMatch(styles, /\.layout-panel|\.layout-header|\.layout-controls|\.layout-list|\.mini-grid|\.mini-pane|\.mode-switch|\.mobile-sheet/);
+});
+
+test('mobile layout neutralises the canvas camera so the active pane fills the grid', () => {
+  const cameraSource = appSource.slice(appSource.indexOf('function applyCameraTransform'), appSource.indexOf('function ensureActivePaneVisible'));
+  assert.match(cameraSource, /if \(isMobileLayout\(\)\) \{/);
+  assert.match(cameraSource, /canvas\.style\.transform = '';/);
+  assert.match(styles, /\.app\.mode-mobile \.pane-canvas,\s*\.app\.mobile-device \.pane-canvas\s*\{[^}]*inset:\s*0[^}]*width:\s*100%[^}]*height:\s*100%/s);
+});
+
+test('the active pane is nudged back into the viewport', () => {
+  assert.match(appSource, /function ensureActivePaneVisible\(\)/);
+  const source = appSource.slice(appSource.indexOf('function ensureActivePaneVisible'), appSource.indexOf('function pointerToWorld'));
+  assert.match(source, /if \(isMobileLayout\(\)\) \{\s*return;/);
+  assert.match(source, /cam\.x \+= dx;\s*cam\.y \+= dy;/);
+  assert.match(appSource, /applyCameraTransform\(\);\s*ensureActivePaneVisible\(\);\s*updateDesktopModeBanner\(\)/);
+  assert.match(appSource, /button\.dataset\.paneLink === state\.activePaneId\);\s*\}\);\s*ensureActivePaneVisible\(\);/);
+  assert.match(appSource, /window\.addEventListener\('resize', updateVisualViewport\)/);
+});
+
+test('modal dialogs are labelled, escapable, and restore focus to the opener', () => {
+  assert.match(appSource, /function wireModal\(panel, requestClose, labelledBy\)/);
+  const modalSource = appSource.slice(appSource.indexOf('function wireModal'), appSource.indexOf('function discardOverlay'));
+  assert.match(modalSource, /panel\.setAttribute\('role', 'dialog'\)/);
+  assert.match(modalSource, /panel\.setAttribute\('aria-modal', 'true'\)/);
+  assert.match(modalSource, /event\.key === 'Escape'/);
+  assert.match(modalSource, /event\.key !== 'Tab'/);
+  assert.match(modalSource, /if \(opener\?\.isConnected\) \{\s*opener\.focus\(\);/);
+  assert.match(appSource, /wireModal\(overlay\.querySelector\('\.help-panel'\), \(\) => closeHelp\(\), 'help-dialog-title'\)/);
+  assert.match(appSource, /wireModal\(overlay\.querySelector\('\.settings-panel'\), \(\) => closeSettings\(\), 'settings-dialog-title'\)/);
+  assert.match(appSource, /id="help-dialog-title"/);
+  assert.match(appSource, /id="settings-dialog-title"/);
+});
+
+test('display mode and terminal density live in settings with preview semantics', () => {
+  assert.match(appSource, /function setTerminalDensity\(density, persist = true\)/);
+  assert.match(appSource, /data-display-mode="\$\{mode\}" aria-pressed=/);
+  assert.match(appSource, /data-terminal-density="\$\{density\}" aria-pressed=/);
+  assert.match(appSource, /setDisplayMode\(button\.dataset\.displayMode, false\)/);
+  assert.match(appSource, /setTerminalDensity\(button\.dataset\.terminalDensity, false\)/);
+  assert.match(appSource, /setDisplayMode\(savedDisplayMode, false\)/);
+  assert.match(appSource, /setTerminalDensity\(savedTerminalDensity, false\)/);
+  assert.match(appSource, /localStorage\.setItem\('wps7\.displayMode', state\.displayMode\)/);
+  assert.match(styles, /\.segmented-option\.active\s*\{[^}]*border-color:\s*var\(--accent\)[^}]*background:\s*var\(--accent-soft\)/s);
+});
+
+test('settings explain preview semantics and state password rules outside the placeholder', () => {
+  assert.match(appSource, /Previewed live — Cancel reverts, Save keeps it\./);
+  assert.match(appSource, /class="live-badge">● Live preview</);
+  assert.doesNotMatch(appSource, /placeholder="12\+ chars/);
+  assert.match(appSource, /aria-describedby="settings-password-rule"/);
+  assert.match(appSource, /class="field-hint" id="settings-password-rule">At least 12 characters/);
+});
+
+test('settings checkboxes are not styled as text inputs', () => {
+  assert.match(styles, /\.settings-check\s*\{[^}]*border:\s*0[^}]*background:\s*transparent/s);
 });
 
 test('login offers browser persistence without persisting ordinary sessions', () => {
@@ -910,7 +963,7 @@ test('settings navigation maps to real sections and follows the visible section'
   }
   assert.match(appSource, /function setActiveSettingsSection\(sectionId\)/);
   assert.match(appSource, /settingsBody\.addEventListener\('scroll', syncSettingsNav/);
-  assert.match(appSource, /new ResizeObserver\(syncSettingsNav\)/);
+  assert.match(appSource, /new ResizeObserver\(\(\) => \{\s*syncSettingsScrollPadding\(\);\s*syncSettingsNav\(\);\s*\}\)/);
   assert.match(appSource, /settingsResizeObserver\.disconnect\(\)/);
   assert.match(appSource, /link\.onclick = \(event\) =>/);
   assert.match(appSource, /requestAnimationFrame\(\(\) => setActiveSettingsSection\(section\.id\)\)/);
@@ -926,8 +979,8 @@ test('settings use the same compact density as the workspace', () => {
 });
 
 test('settings apply stays open while save closes the dialog', () => {
-  assert.match(appSource, /data-settings-apply>Apply<\/button>/);
-  assert.match(appSource, /data-settings-save>Save<\/button>/);
+  assert.match(appSource, /data-settings-apply title="Save and keep this dialog open">Apply<\/button>/);
+  assert.match(appSource, /data-settings-save title="Save and close">Save<\/button>/);
   assert.match(appSource, /const keepSettingsOpen = event\.submitter\?\.hasAttribute\('data-settings-apply'\) === true/);
   assert.match(appSource, /if \(!keepSettingsOpen\) \{\s*state\.customThemeDraft = null;\s*closeSettings\(false\);\s*\}/);
 });
@@ -1043,7 +1096,7 @@ test('narrow desktop mode surfaces a recovery banner that switches to mobile', (
   assert.match(appSource, /data-desktop-mode-banner role="status" hidden/);
   assert.match(appSource, /data-switch-mobile>Switch to Mobile/);
   assert.match(appSource, /function updateDesktopModeBanner\(\)/);
-  assert.match(appSource, /function setDisplayMode\(mode\)/);
+  assert.match(appSource, /function setDisplayMode\(mode, persist = true\)/);
   assert.match(appSource, /state\.displayMode === 'desktop' && narrowViewport\(\) && !state\.dismissedDesktopBanner/);
   assert.match(styles, /\.desktop-mode-banner\s*\{[^}]*background:\s*var\(--accent-soft\)/s);
 });
