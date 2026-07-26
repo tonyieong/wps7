@@ -4417,10 +4417,14 @@ a:focus-visible {
   color: var(--text);
 }
 
-.browser-new-tab .file-action-icon,
-.notepad-new-tab .file-action-icon {
+.browser-new-tab .file-action-icon {
   width: 14px;
   height: 14px;
+}
+
+.notepad-new-tab .file-action-icon {
+  width: 12px;
+  height: 12px;
 }
 
 .browser-toolbar {
@@ -4697,7 +4701,7 @@ a:focus-visible {
 .notepad-tab-strip {
   display: flex;
   align-items: stretch;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
   height: var(--pane-toolbar-height);
   padding: 2px 38px 0 8px;
@@ -4723,14 +4727,14 @@ a:focus-visible {
 
 .notepad-tab {
   display: grid;
-  grid-template-columns: minmax(24px, 1fr) 16px;
+  grid-template-columns: minmax(24px, 1fr) 14px;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   flex: 0 1 150px;
-  min-width: 62px;
+  min-width: 58px;
   max-width: 180px;
   height: 25px;
-  padding: 0 6px;
+  padding: 0 3px 0 6px;
   border: 1px solid transparent;
   border-bottom: 0;
   border-radius: 5px 5px 0 0;
@@ -4771,8 +4775,8 @@ a:focus-visible {
 .notepad-tab-close {
   display: grid;
   place-items: center;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   padding: 0;
   border: 0;
   border-radius: 3px;
@@ -4786,8 +4790,8 @@ a:focus-visible {
 }
 
 .notepad-new-tab {
-  flex: 0 0 24px;
-  width: 24px;
+  flex: 0 0 18px;
+  width: 18px;
   display: grid;
   place-items: center;
   padding: 0;

@@ -57,7 +57,10 @@ const defaultConfig = {
     terminal_font_size: 13,
     mobile_terminal_font_size: 12,
     file_pane_font_size: 13,
-    system_font_size: 13
+    system_font_size: 13,
+    notepad_word_wrap: false,
+    notepad_indent_guides: false,
+    notepad_autosave: false
   },
   file_manager: {
     enabled: true,
@@ -154,6 +157,10 @@ terminal_font_size = 13
 mobile_terminal_font_size = 12
 file_pane_font_size = 13
 system_font_size = 13
+# Defaults applied to newly opened Notepad tabs.
+notepad_word_wrap = false
+notepad_indent_guides = false
+notepad_autosave = false
 
 [file_manager]
 # File manager always requires a strong password before use.
@@ -270,6 +277,9 @@ terminal_font_size = ${defaultConfig.ui.terminal_font_size}
 mobile_terminal_font_size = ${defaultConfig.ui.mobile_terminal_font_size}
 file_pane_font_size = ${defaultConfig.ui.file_pane_font_size}
 system_font_size = ${defaultConfig.ui.system_font_size}
+notepad_word_wrap = ${defaultConfig.ui.notepad_word_wrap}
+notepad_indent_guides = ${defaultConfig.ui.notepad_indent_guides}
+notepad_autosave = ${defaultConfig.ui.notepad_autosave}
 `;
   }
 
@@ -279,6 +289,9 @@ system_font_size = ${defaultConfig.ui.system_font_size}
     nextText = ensureTomlKey(nextText, 'ui', 'mobile_terminal_font_size', defaultConfig.ui.mobile_terminal_font_size);
     nextText = ensureTomlKey(nextText, 'ui', 'file_pane_font_size', defaultConfig.ui.file_pane_font_size);
     nextText = ensureTomlKey(nextText, 'ui', 'system_font_size', defaultConfig.ui.system_font_size);
+    nextText = ensureTomlKey(nextText, 'ui', 'notepad_word_wrap', defaultConfig.ui.notepad_word_wrap);
+    nextText = ensureTomlKey(nextText, 'ui', 'notepad_indent_guides', defaultConfig.ui.notepad_indent_guides);
+    nextText = ensureTomlKey(nextText, 'ui', 'notepad_autosave', defaultConfig.ui.notepad_autosave);
   }
   if (!/^\[file_manager\]\s*$/m.test(nextText)) {
     nextText = `${nextText.trimEnd()}
@@ -402,7 +415,7 @@ function updateConfigFile(root, updates) {
     shell: ['preferred', 'fallback', 'args'],
     persistence: ['autosave_minutes', 'scrollback_lines'],
     terminal: ['backend', 'reconnect_scrollback_lines', 'resize_debounce_ms', 'auto_scroll_on_resize', 'cursor_blink', 'browser_notifications', 'mobile_keybar_buttons'],
-    ui: ['sidebar_width', 'max_pane_columns', 'max_pane_rows', 'terminal_font_family', 'terminal_font_size', 'mobile_terminal_font_size', 'file_pane_font_size', 'system_font_size'],
+    ui: ['sidebar_width', 'max_pane_columns', 'max_pane_rows', 'terminal_font_family', 'terminal_font_size', 'mobile_terminal_font_size', 'file_pane_font_size', 'system_font_size', 'notepad_word_wrap', 'notepad_indent_guides', 'notepad_autosave'],
     file_manager: ['enabled', 'root_mode', 'max_upload_bytes', 'show_hidden', 'bookmarks'],
     browser: ['bookmarks', 'history'],
     usage: ['minimax_api_key', 'minimax_region', 'show_codex', 'show_claude', 'show_minimax'],

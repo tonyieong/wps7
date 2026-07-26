@@ -101,6 +101,14 @@ function notepadTab(value = {}) {
   };
 }
 
+function notepadTabDefaults(defaults = {}) {
+  return {
+    wrap: Boolean(defaults.wrap),
+    indentGuides: Boolean(defaults.indentGuides),
+    autosave: Boolean(defaults.autosave)
+  };
+}
+
 function notepadTabsForPane(pane) {
   const tabs = Array.isArray(pane.notepadTabs) && pane.notepadTabs.length
     ? pane.notepadTabs.slice(0, 50).map(notepadTab)
@@ -625,18 +633,23 @@ class StateStore {
     return true;
   }
 
-  createNotepadPane(paneId, pathValue = '') {
-    return this.createUtilityPane(paneId, 'notepad', 'Notepad', pathValue, 'path');
+  createNotepadPane(paneId, pathValue = '', defaults = {}) {
+    const pane = this.createUtilityPane(paneId, 'notepad', 'Notepad', pathValue, 'path');
+    if (pane) {
+      Object.assign(pane.notepadTabs[0], notepadTabDefaults(defaults));
+      this.save();
+    }
+    return pane;
   }
 
   createUsagePane(paneId) {
     return this.createUtilityPane(paneId, 'usage', 'Usage');
   }
 
-  createNotepadTab(paneId, pathValue = '') {
+  createNotepadTab(paneId, pathValue = '', defaults = {}) {
     const found = this.findPane(paneId);
     if (!found || found.pane.type !== 'notepad' || found.pane.notepadTabs.length >= 50) return null;
-    const tab = notepadTab({ path: pathValue });
+    const tab = notepadTab({ path: pathValue, ...notepadTabDefaults(defaults) });
     found.pane.notepadTabs.push(tab);
     found.pane.activeNotepadTabId = tab.id;
     found.pane.path = tab.path;

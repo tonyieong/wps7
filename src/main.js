@@ -116,6 +116,14 @@ function requireFileAuth(config) {
   };
 }
 
+function notepadDefaults(config) {
+  return {
+    wrap: config.ui.notepad_word_wrap === true,
+    indentGuides: config.ui.notepad_indent_guides === true,
+    autosave: config.ui.notepad_autosave === true
+  };
+}
+
 function replaceObject(target, source) {
   for (const key of Object.keys(target)) {
     if (!(key in source)) {
@@ -348,6 +356,11 @@ function sanitizeSettingsUpdates(updates) {
     }
     if (positiveInteger(updates.ui.system_font_size, 0)) {
       next.ui.system_font_size = Number(updates.ui.system_font_size);
+    }
+    for (const key of ['notepad_word_wrap', 'notepad_indent_guides', 'notepad_autosave']) {
+      if (typeof updates.ui[key] === 'boolean') {
+        next.ui[key] = updates.ui[key];
+      }
     }
   }
   if (updates.file_manager) {
@@ -975,7 +988,7 @@ function main() {
       res.status(400).json({ error: 'Invalid local path.' });
       return;
     }
-    const pane = store.createNotepadPane(req.params.paneId, targetPath);
+    const pane = store.createNotepadPane(req.params.paneId, targetPath, notepadDefaults(config));
     if (!pane) {
       res.status(400).json({ error: 'Unable to create pane.' });
       return;
@@ -992,7 +1005,7 @@ function main() {
       res.status(400).json({ error: 'Invalid local path.' });
       return;
     }
-    const tab = store.createNotepadTab(req.params.paneId, targetPath);
+    const tab = store.createNotepadTab(req.params.paneId, targetPath, notepadDefaults(config));
     if (!tab) {
       res.status(404).json({ error: 'Notepad pane not found.' });
       return;

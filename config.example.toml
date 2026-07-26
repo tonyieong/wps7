@@ -43,6 +43,10 @@ terminal_font_size = 13
 mobile_terminal_font_size = 12
 file_pane_font_size = 13
 system_font_size = 13
+# Defaults applied to newly opened Notepad tabs.
+notepad_word_wrap = false
+notepad_indent_guides = false
+notepad_autosave = false
 
 [file_manager]
 # File manager always requires a strong password before use.

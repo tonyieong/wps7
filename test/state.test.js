@@ -363,6 +363,28 @@ test('browser panes persist multiple tabs and their active tab', () => {
   assert.equal(restoredBrowser.browserTabs[0].emulationMode, 'mobile');
 });
 
+test('new notepad panes and tabs adopt the configured editor defaults', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100, 4, 4);
+  store.load();
+  const firstPane = store.state.sessions[0].tabs[0].panes[0];
+  const defaults = { wrap: true, indentGuides: true, autosave: true };
+  const notepad = store.createNotepadPane(firstPane.id, 'C:\notes.txt', defaults);
+  const extraTab = store.createNotepadTab(notepad.id, 'C:\todo.txt', defaults);
+
+  assert.equal(notepad.notepadTabs[0].wrap, true);
+  assert.equal(notepad.notepadTabs[0].indentGuides, true);
+  assert.equal(notepad.notepadTabs[0].autosave, true);
+  assert.equal(extraTab.wrap, true);
+  assert.equal(extraTab.indentGuides, true);
+  assert.equal(extraTab.autosave, true);
+
+  const plain = store.createNotepadPane(firstPane.id, '');
+  assert.equal(plain.notepadTabs[0].wrap, false);
+  assert.equal(plain.notepadTabs[0].indentGuides, false);
+  assert.equal(plain.notepadTabs[0].autosave, false);
+});
+
 test('notepad panes persist multiple tabs and their active tab', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
   const store = new StateStore(root, 100, 4, 4);

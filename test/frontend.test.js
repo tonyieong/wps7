@@ -721,6 +721,53 @@ test('notepad find and replace popovers are draggable and closeable', () => {
   assert.match(styles, /\.notepad-popover-header \.notepad-popover-close\s*\{/);
 });
 
+test('notepad tab strip stays wired from the pane container with compact controls', () => {
+  assert.match(appSource, /wireNotepadTabs\(paneElement\.closest\('\.pane'\) \|\| paneElement, paneId\)/);
+  assert.match(appSource, /const newTabButton = paneElement\.querySelector\('\[data-notepad-new-tab\]'\);\s*\n\s*if \(newTabButton\) newTabButton\.onclick = \(\) => addNotepadTab\(paneId, ''\);/);
+  assert.doesNotMatch(appSource, /\[data-notepad-new-tab\]'\)\?\.addEventListener/);
+  assert.match(styles, /\.notepad-tab-close\s*\{[^}]*width:\s*14px[^}]*height:\s*14px/s);
+  assert.match(styles, /\.notepad-new-tab\s*\{[^}]*flex:\s*0 0 18px[^}]*width:\s*18px/s);
+  assert.match(styles, /\.notepad-new-tab \.file-action-icon\s*\{[^}]*width:\s*12px/s);
+});
+
+test('notepad toolbar handlers replace instead of stacking so font size steps by one', () => {
+  assert.match(appSource, /if \(fontSizeOutButton\) fontSizeOutButton\.onclick = \(\) => changePaneFontSize\(paneId, -1\);/);
+  assert.match(appSource, /if \(fontSizeInButton\) fontSizeInButton\.onclick = \(\) => changePaneFontSize\(paneId, 1\);/);
+  assert.doesNotMatch(appSource, /data-notepad-font-size-(?:in|out|reset)\]'\)\?\.addEventListener/);
+  assert.doesNotMatch(appSource, /data-notepad-(?:find|replace)-(?:prev|next|one|all)\]'\)\?\.addEventListener/);
+  assert.doesNotMatch(appSource, /data-notepad-popover-close\]'\)\?\.addEventListener/);
+  assert.match(appSource, /paneElement\._notepadResizeObserver\?\.disconnect\(\);/);
+});
+
+test('notepad find and replace popovers stay inside the editor area at any canvas zoom', () => {
+  assert.match(appSource, /function clampNotepadPopover\(popover, left, top\)/);
+  assert.match(appSource, /popover\.closest\('\.notepad-pane'\)\?\.querySelector\('\.notepad-editor-shell'\)/);
+  assert.match(appSource, /const scale = parentRect\.width \/ parent\.offsetWidth \|\| 1;/);
+  assert.match(appSource, /start\.left \+ \(moveEvent\.clientX - startX\) \/ start\.scale/);
+  assert.match(appSource, /start\.top \+ \(moveEvent\.clientY - startY\) \/ start\.scale/);
+  assert.match(appSource, /if \(candidateOpen && candidate\.querySelector\('\[data-notepad-popover-drag\]'\)\) \{\s*\n\s*placeNotepadPopover\(candidate\);/);
+});
+
+test('opening a file that is already open focuses its existing notepad tab', () => {
+  assert.match(appSource, /function findOpenNotepadTab\(tab, path\)/);
+  assert.match(appSource, /const opened = findOpenNotepadTab\(tab, path\);/);
+  assert.match(appSource, /await activateNotepadTabClient\(opened\.pane\.id, opened\.notepadTab\.id\);/);
+  assert.match(appSource, /function samePath\(left, right\)/);
+});
+
+test('notepad word wrap, indent guides, and auto save defaults come from settings', () => {
+  assert.match(appSource, /<section class="settings-section" id="settings-notepad">/);
+  assert.match(appSource, /name="ui\.notepad_word_wrap" type="checkbox"/);
+  assert.match(appSource, /name="ui\.notepad_indent_guides" type="checkbox"/);
+  assert.match(appSource, /name="ui\.notepad_autosave" type="checkbox"/);
+  assert.match(appSource, /notepad_word_wrap: form\.get\('ui\.notepad_word_wrap'\) === 'on'/);
+  assert.match(appSource, /notepad_indent_guides: form\.get\('ui\.notepad_indent_guides'\) === 'on'/);
+  assert.match(appSource, /notepad_autosave: form\.get\('ui\.notepad_autosave'\) === 'on'/);
+  assert.match(mainSource, /function notepadDefaults\(config\)/);
+  assert.match(mainSource, /store\.createNotepadPane\(req\.params\.paneId, targetPath, notepadDefaults\(config\)\)/);
+  assert.match(mainSource, /store\.createNotepadTab\(req\.params\.paneId, targetPath, notepadDefaults\(config\)\)/);
+});
+
 test('remote browser sizes its window so screencast frames fill the pane without distortion', () => {
   assert.match(browserSource, /async ensureWindowFits\(\)/);
   assert.match(browserSource, /async calibrateWindowInsets\(\)/);

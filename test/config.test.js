@@ -15,6 +15,9 @@ test('creates default config with localhost port 5000', () => {
   assert.equal(config.ui.mobile_terminal_font_size, 12);
   assert.equal(config.ui.file_pane_font_size, 13);
   assert.equal(config.ui.system_font_size, 13);
+  assert.equal(config.ui.notepad_word_wrap, false);
+  assert.equal(config.ui.notepad_indent_guides, false);
+  assert.equal(config.ui.notepad_autosave, false);
   assert.equal(config.file_manager.enabled, true);
   assert.equal(config.file_manager.root_mode, 'drives');
   assert.equal(config.file_manager.max_upload_bytes, 0);
@@ -114,7 +117,10 @@ test('updates known config values while preserving loadability', () => {
       mobile_terminal_font_size: 11,
       file_pane_font_size: 14,
       system_font_size: 15,
-      max_pane_columns: 4
+      max_pane_columns: 4,
+      notepad_word_wrap: true,
+      notepad_indent_guides: true,
+      notepad_autosave: true
     },
     shell: {
       args: ['-NoLogo', '-NoExit']
@@ -182,6 +188,9 @@ test('updates known config values while preserving loadability', () => {
   assert.equal(config.ui.file_pane_font_size, 14);
   assert.equal(config.ui.system_font_size, 15);
   assert.equal(config.ui.max_pane_columns, 4);
+  assert.equal(config.ui.notepad_word_wrap, true);
+  assert.equal(config.ui.notepad_indent_guides, true);
+  assert.equal(config.ui.notepad_autosave, true);
   assert.deepEqual(config.shell.args, ['-NoLogo', '-NoExit']);
   assert.equal(config.file_manager.enabled, false);
   assert.equal(config.file_manager.max_upload_bytes, 0);

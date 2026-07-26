@@ -2569,7 +2569,8 @@
         closeNotepadTabClient(paneId, button.dataset.notepadCloseTab);
       };
     });
-    paneElement.querySelector('[data-notepad-new-tab]')?.addEventListener('click', () => addNotepadTab(paneId, ''));
+    const newTabButton = paneElement.querySelector('[data-notepad-new-tab]');
+    if (newTabButton) newTabButton.onclick = () => addNotepadTab(paneId, '');
   }
 
   function paneTabKind(pane) {
@@ -3029,6 +3030,9 @@
       const candidateOpen = candidate === popover && open;
       candidate.hidden = !candidateOpen;
       candidate.parentElement.querySelector('[aria-expanded]')?.setAttribute('aria-expanded', String(candidateOpen));
+      if (candidateOpen && candidate.querySelector('[data-notepad-popover-drag]')) {
+        placeNotepadPopover(candidate);
+      }
     });
   }
 
@@ -3041,30 +3045,56 @@
     });
   }
 
+  function clampNotepadPopover(popover, left, top) {
+    const area = popover.closest('.notepad-pane')?.querySelector('.notepad-editor-shell');
+    if (!area) return { left, top };
+    const maxLeft = Math.max(area.offsetLeft, area.offsetLeft + area.offsetWidth - popover.offsetWidth);
+    const maxTop = Math.max(area.offsetTop, area.offsetTop + area.offsetHeight - popover.offsetHeight);
+    return {
+      left: Math.max(area.offsetLeft, Math.min(maxLeft, left)),
+      top: Math.max(area.offsetTop, Math.min(maxTop, top))
+    };
+  }
+
+  // The pane canvas is scaled, so client pixels must be divided by the zoom to become pane pixels.
+  function placeNotepadPopover(popover) {
+    const parent = popover.offsetParent;
+    if (!parent || popover.hidden) return null;
+    const parentRect = parent.getBoundingClientRect();
+    const rect = popover.getBoundingClientRect();
+    const scale = parentRect.width / parent.offsetWidth || 1;
+    const position = clampNotepadPopover(
+      popover,
+      (rect.left - parentRect.left) / scale,
+      (rect.top - parentRect.top) / scale
+    );
+    popover.style.transform = 'none';
+    popover.style.right = 'auto';
+    popover.style.left = `${position.left}px`;
+    popover.style.top = `${position.top}px`;
+    return { ...position, scale };
+  }
+
   function wireNotepadPopoverDrag(popover) {
     const handle = popover.querySelector('[data-notepad-popover-drag]');
     if (!handle) return;
-    handle.addEventListener('pointerdown', (event) => {
+    handle.onpointerdown = (event) => {
       if (event.button !== 0 || event.target.closest('[data-notepad-popover-close]')) return;
       event.preventDefault();
-      const parent = popover.offsetParent || document.body;
-      const parentRect = parent.getBoundingClientRect();
-      const rect = popover.getBoundingClientRect();
-      let left = rect.left - parentRect.left;
-      let top = rect.top - parentRect.top;
-      popover.style.transform = 'none';
-      popover.style.right = 'auto';
-      popover.style.left = `${left}px`;
-      popover.style.top = `${top}px`;
+      const start = placeNotepadPopover(popover);
+      if (!start) return;
       const startX = event.clientX;
       const startY = event.clientY;
-      const maxLeft = Math.max(0, parentRect.width - rect.width);
-      const maxTop = Math.max(0, parentRect.height - rect.height);
       handle.setPointerCapture(event.pointerId);
       const onMove = (moveEvent) => {
         if (!handle.hasPointerCapture(moveEvent.pointerId)) return;
-        popover.style.left = `${Math.max(0, Math.min(maxLeft, left + moveEvent.clientX - startX))}px`;
-        popover.style.top = `${Math.max(0, Math.min(maxTop, top + moveEvent.clientY - startY))}px`;
+        const position = clampNotepadPopover(
+          popover,
+          start.left + (moveEvent.clientX - startX) / start.scale,
+          start.top + (moveEvent.clientY - startY) / start.scale
+        );
+        popover.style.left = `${position.left}px`;
+        popover.style.top = `${position.top}px`;
       };
       const onUp = (upEvent) => {
         if (handle.hasPointerCapture(upEvent.pointerId)) handle.releasePointerCapture(upEvent.pointerId);
@@ -3073,7 +3103,7 @@
       };
       handle.addEventListener('pointermove', onMove);
       handle.addEventListener('pointerup', onUp);
-    });
+    };
   }
 
   function showNotepadFindPopover(paneElement, replace) {
@@ -3107,11 +3137,15 @@
         if (event.key === 'Escape') hideNotepadPopovers(paneElement, true);
       };
     }
-    paneElement.querySelector('[data-notepad-find-prev]')?.addEventListener('click', () => notepadFindNext(editor, findInput.value, true));
-    paneElement.querySelector('[data-notepad-find-next]')?.addEventListener('click', () => notepadFindNext(editor, findInput.value, false));
-    paneElement.querySelector('[data-notepad-replace-prev]')?.addEventListener('click', () => notepadFindNext(editor, replaceFindInput.value, true));
-    paneElement.querySelector('[data-notepad-replace-next]')?.addEventListener('click', () => notepadFindNext(editor, replaceFindInput.value, false));
-    paneElement.querySelector('[data-notepad-replace-one]')?.addEventListener('click', () => {
+    const onClick = (selector, handler) => {
+      const button = paneElement.querySelector(selector);
+      if (button) button.onclick = handler;
+    };
+    onClick('[data-notepad-find-prev]', () => notepadFindNext(editor, findInput.value, true));
+    onClick('[data-notepad-find-next]', () => notepadFindNext(editor, findInput.value, false));
+    onClick('[data-notepad-replace-prev]', () => notepadFindNext(editor, replaceFindInput.value, true));
+    onClick('[data-notepad-replace-next]', () => notepadFindNext(editor, replaceFindInput.value, false));
+    onClick('[data-notepad-replace-one]', () => {
       const query = replaceFindInput.value;
       if (query && editor.value.slice(editor.selectionStart, editor.selectionEnd) === query) {
         editor.setRangeText(replaceInput.value, editor.selectionStart, editor.selectionEnd, 'end');
@@ -3119,7 +3153,7 @@
       }
       notepadFindNext(editor, query, false);
     });
-    paneElement.querySelector('[data-notepad-replace-all]')?.addEventListener('click', () => {
+    onClick('[data-notepad-replace-all]', () => {
       const query = replaceFindInput.value;
       if (!query) return;
       editor.value = editor.value.split(query).join(replaceInput.value);
@@ -3215,10 +3249,13 @@
       };
       if (persistent) {
         wireNotepadPopoverDrag(popover);
-        popover.querySelector('[data-notepad-popover-close]')?.addEventListener('click', () => {
-          setNotepadPopoverOpen(paneElement, popover, false);
-          toggle.focus();
-        });
+        const closeButton = popover.querySelector('[data-notepad-popover-close]');
+        if (closeButton) {
+          closeButton.onclick = () => {
+            setNotepadPopoverOpen(paneElement, popover, false);
+            toggle.focus();
+          };
+        }
       }
     };
     wirePopover('[data-notepad-font-toggle]', '[data-notepad-font-popover]');
@@ -3239,14 +3276,19 @@
         setNotepadPopoverOpen(paneElement, paneElement.querySelector('[data-notepad-font-popover]'), false);
       };
     });
-    paneElement.querySelector('[data-notepad-font-size-out]')?.addEventListener('click', () => changePaneFontSize(paneId, -1));
-    paneElement.querySelector('[data-notepad-font-size-in]')?.addEventListener('click', () => changePaneFontSize(paneId, 1));
-    paneElement.querySelector('[data-notepad-font-size-reset]')?.addEventListener('click', () => {
-      changePaneFontSize(
-        paneId,
-        Math.round(terminalFontSize()) - Math.round(paneFontSize(findPaneState(paneId)?.pane))
-      );
-    });
+    const fontSizeOutButton = paneElement.querySelector('[data-notepad-font-size-out]');
+    const fontSizeInButton = paneElement.querySelector('[data-notepad-font-size-in]');
+    const fontSizeResetButton = paneElement.querySelector('[data-notepad-font-size-reset]');
+    if (fontSizeOutButton) fontSizeOutButton.onclick = () => changePaneFontSize(paneId, -1);
+    if (fontSizeInButton) fontSizeInButton.onclick = () => changePaneFontSize(paneId, 1);
+    if (fontSizeResetButton) {
+      fontSizeResetButton.onclick = () => {
+        changePaneFontSize(
+          paneId,
+          Math.round(terminalFontSize()) - Math.round(paneFontSize(findPaneState(paneId)?.pane))
+        );
+      };
+    }
     if (cutButton) cutButton.onclick = () => notepadCut(editor);
     if (copyButton) copyButton.onclick = () => notepadCopySelection(editor);
     if (pasteButton) pasteButton.onclick = () => notepadPaste(editor);
@@ -3328,16 +3370,40 @@
 
     wireNotepadFindPopovers(paneElement, editor);
     syncNotepadRows(paneElement, editor, gutter, guides);
+    paneElement._notepadResizeObserver?.disconnect();
     paneElement._notepadResizeObserver = new ResizeObserver(() => {
       syncNotepadRows(paneElement, editor, gutter, guides);
+      paneElement.querySelectorAll('.notepad-popover:not([hidden])').forEach((popover) => {
+        if (popover.querySelector('[data-notepad-popover-drag]')) placeNotepadPopover(popover);
+      });
     });
     paneElement._notepadResizeObserver.observe(editor);
-    wireNotepadTabs(paneElement, paneId);
+    wireNotepadTabs(paneElement.closest('.pane') || paneElement, paneId);
+  }
+
+  function samePath(left, right) {
+    const normalize = (value) => String(value || '').replace(/[\\/]+/g, '\\').replace(/\\+$/, '').toLowerCase();
+    return Boolean(normalize(left)) && normalize(left) === normalize(right);
+  }
+
+  function findOpenNotepadTab(tab, path) {
+    for (const pane of tab?.panes || []) {
+      if (pane.type !== 'notepad') continue;
+      const notepadTab = (pane.notepadTabs || []).find((candidate) => samePath(candidate.path, path));
+      if (notepadTab) return { pane, notepadTab };
+    }
+    return null;
   }
 
   async function openNotepadForFile(path) {
     const session = activeSession();
     const tab = activeTab(session);
+    const opened = findOpenNotepadTab(tab, path);
+    if (opened) {
+      await setActivePane(opened.pane.id, false);
+      await activateNotepadTabClient(opened.pane.id, opened.notepadTab.id);
+      return;
+    }
     const existing = tab?.panes.find((candidate) => candidate.type === 'notepad');
     if (existing) {
       await addNotepadTab(existing.id, path);
@@ -6464,6 +6530,9 @@
             <a aria-label="Files" href="#settings-files">
               <span class="settings-nav-icon" aria-hidden="true">${fileActionIcon('file')}</span><span class="settings-nav-label">Files</span>
             </a>
+            <a aria-label="Notepad" href="#settings-notepad">
+              <span class="settings-nav-icon" aria-hidden="true">${fileActionIcon('notepad')}</span><span class="settings-nav-label">Notepad</span>
+            </a>
             <a aria-label="Usage" href="#settings-usage">
               <span class="settings-nav-icon" aria-hidden="true">${fileActionIcon('usage')}</span><span class="settings-nav-label">Usage</span>
             </a>
@@ -6592,6 +6661,14 @@
               <div class="settings-grid">
                 <label>Upload limit bytes<input name="file_manager.max_upload_bytes" type="number" min="0" value="${escapeAttr(settings.file_manager?.max_upload_bytes ?? 0)}"></label>
                 <label>File pane font size<input name="ui.file_pane_font_size" type="number" min="10" max="24" value="${escapeAttr(settings.ui.file_pane_font_size ?? 13)}"></label>
+              </div>
+            </section>
+            <section class="settings-section" id="settings-notepad">
+              <div class="section-heading"><div><h2>Notepad</h2><p>Defaults applied to newly opened Notepad tabs.</p></div></div>
+              <div class="settings-grid">
+                <label class="settings-check"><input name="ui.notepad_word_wrap" type="checkbox" ${settings.ui.notepad_word_wrap ? 'checked' : ''}> Word wrap</label>
+                <label class="settings-check"><input name="ui.notepad_indent_guides" type="checkbox" ${settings.ui.notepad_indent_guides ? 'checked' : ''}> Indent guides</label>
+                <label class="settings-check"><input name="ui.notepad_autosave" type="checkbox" ${settings.ui.notepad_autosave ? 'checked' : ''}> Auto save</label>
               </div>
             </section>
             <section class="settings-section" id="settings-usage">
@@ -6828,7 +6905,10 @@
         terminal_font_size: numberOrUndefined(form.get('ui.terminal_font_size')),
         mobile_terminal_font_size: numberOrUndefined(form.get('ui.mobile_terminal_font_size')),
         file_pane_font_size: numberOrUndefined(form.get('ui.file_pane_font_size')),
-        system_font_size: numberOrUndefined(form.get('ui.system_font_size'))
+        system_font_size: numberOrUndefined(form.get('ui.system_font_size')),
+        notepad_word_wrap: form.get('ui.notepad_word_wrap') === 'on',
+        notepad_indent_guides: form.get('ui.notepad_indent_guides') === 'on',
+        notepad_autosave: form.get('ui.notepad_autosave') === 'on'
       },
       file_manager: {
         enabled: state.config.file_manager?.enabled !== false,
