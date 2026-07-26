@@ -6751,7 +6751,6 @@
         event.preventDefault();
         const section = overlay.querySelector(link.getAttribute('href'));
         section.scrollIntoView({ block: 'start' });
-        history.replaceState(null, '', link.getAttribute('href'));
         setActiveSettingsSection(section.id);
         requestAnimationFrame(() => setActiveSettingsSection(section.id));
       };
