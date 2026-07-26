@@ -22,15 +22,15 @@ function isoDate(value) {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-function windowLabel(seconds, fallback) {
+function windowInfo(seconds, fallbackLabel, fallbackKind) {
   const hours = Number(seconds) / 3600;
   if (hours > 0 && hours <= 6) {
-    return '5-hour';
+    return { label: '5-hour', kind: 'five_hour' };
   }
   if (hours >= 24 * 6 && hours <= 24 * 8) {
-    return 'Weekly';
+    return { label: 'Weekly', kind: 'weekly' };
   }
-  return fallback;
+  return { label: fallbackLabel, kind: fallbackKind };
 }
 
 async function requestJson(url, options, fetchImpl) {
@@ -55,21 +55,25 @@ async function requestJson(url, options, fetchImpl) {
   }
 }
 
-async function fetchCodexUsage({ codexHome, fetchImpl = fetch } = {}) {
-  const home = codexHome || process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
-  const authPath = path.join(home, 'auth.json');
-  if (!fs.existsSync(authPath)) {
-    throw new Error('Codex is not signed in on this server.');
-  }
-  let auth;
-  try {
-    auth = JSON.parse(fs.readFileSync(authPath, 'utf8'));
-  } catch (error) {
-    throw new Error('Codex auth.json could not be read.');
-  }
-  const accessToken = auth.tokens?.access_token || auth.access_token;
+async function fetchCodexUsage({ codexHome, apiKey, fetchImpl = fetch } = {}) {
+  const configuredKey = String(apiKey || '').trim();
+  let accessToken = configuredKey;
   if (!accessToken) {
-    throw new Error('Codex OAuth token is missing.');
+    const home = codexHome || process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
+    const authPath = path.join(home, 'auth.json');
+    if (!fs.existsSync(authPath)) {
+      throw new Error('Codex is not signed in on this server and no API key is configured.');
+    }
+    let auth;
+    try {
+      auth = JSON.parse(fs.readFileSync(authPath, 'utf8'));
+    } catch (error) {
+      throw new Error('Codex auth.json could not be read.');
+    }
+    accessToken = auth.tokens?.access_token || auth.access_token;
+    if (!accessToken) {
+      throw new Error('Codex OAuth token is missing.');
+    }
   }
 
   const payload = await requestJson('https://chatgpt.com/backend-api/wham/usage', {
@@ -77,11 +81,11 @@ async function fetchCodexUsage({ codexHome, fetchImpl = fetch } = {}) {
   }, fetchImpl);
   const rateLimit = payload.rate_limit || {};
   const windows = [
-    ['primary', rateLimit.primary_window, 'Session'],
-    ['secondary', rateLimit.secondary_window, 'Weekly']
-  ].flatMap(([id, window, fallback]) => window ? [{
+    ['primary', rateLimit.primary_window, 'Session', 'five_hour'],
+    ['secondary', rateLimit.secondary_window, 'Weekly', 'weekly']
+  ].flatMap(([id, window, fallbackLabel, fallbackKind]) => window ? [{
     id,
-    label: windowLabel(window.limit_window_seconds, fallback),
+    ...windowInfo(window.limit_window_seconds, fallbackLabel, fallbackKind),
     usedPercent: clampPercent(window.used_percent),
     resetsAt: resetDate(window.reset_at)
   }] : []);
@@ -89,7 +93,7 @@ async function fetchCodexUsage({ codexHome, fetchImpl = fetch } = {}) {
   return {
     provider: 'codex',
     label: 'Codex',
-    source: 'oauth',
+    source: configuredKey ? 'api' : 'oauth',
     plan: payload.plan_type || '',
     windows,
     credits: payload.credits ? {
@@ -101,21 +105,25 @@ async function fetchCodexUsage({ codexHome, fetchImpl = fetch } = {}) {
   };
 }
 
-async function fetchClaudeUsage({ claudeHome, fetchImpl = fetch } = {}) {
-  const home = claudeHome || process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
-  const credentialsPath = path.join(home, '.credentials.json');
-  if (!fs.existsSync(credentialsPath)) {
-    throw new Error('Claude Code is not signed in on this server.');
-  }
-  let credentials;
-  try {
-    credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
-  } catch (error) {
-    throw new Error('Claude Code credentials could not be read.');
-  }
-  const accessToken = credentials.claudeAiOauth?.accessToken || credentials.claude_ai_oauth?.access_token;
+async function fetchClaudeUsage({ claudeHome, apiKey, fetchImpl = fetch } = {}) {
+  const configuredKey = String(apiKey || '').trim();
+  let accessToken = configuredKey;
   if (!accessToken) {
-    throw new Error('Claude Code OAuth token is missing.');
+    const home = claudeHome || process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
+    const credentialsPath = path.join(home, '.credentials.json');
+    if (!fs.existsSync(credentialsPath)) {
+      throw new Error('Claude Code is not signed in on this server and no API key is configured.');
+    }
+    let credentials;
+    try {
+      credentials = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
+    } catch (error) {
+      throw new Error('Claude Code credentials could not be read.');
+    }
+    accessToken = credentials.claudeAiOauth?.accessToken || credentials.claude_ai_oauth?.access_token;
+    if (!accessToken) {
+      throw new Error('Claude Code OAuth token is missing.');
+    }
   }
 
   const payload = await requestJson('https://api.anthropic.com/api/oauth/usage', {
@@ -126,12 +134,13 @@ async function fetchClaudeUsage({ claudeHome, fetchImpl = fetch } = {}) {
     }
   }, fetchImpl);
   const windows = [
-    ['five_hour', '5-hour'],
-    ['seven_day', 'Weekly'],
-    ['seven_day_sonnet', 'Sonnet weekly'],
-    ['seven_day_opus', 'Opus weekly']
-  ].flatMap(([key, label]) => payload[key] ? [{
+    ['five_hour', '5-hour', 'five_hour'],
+    ['seven_day', 'Weekly', 'weekly'],
+    ['seven_day_sonnet', 'Sonnet weekly', 'model_weekly'],
+    ['seven_day_opus', 'Opus weekly', 'model_weekly']
+  ].flatMap(([key, label, kind]) => payload[key] ? [{
     id: key,
+    kind,
     label,
     usedPercent: clampPercent(payload[key].utilization),
     resetsAt: isoDate(payload[key].resets_at)
@@ -140,7 +149,7 @@ async function fetchClaudeUsage({ claudeHome, fetchImpl = fetch } = {}) {
   return {
     provider: 'claude',
     label: 'Claude Code',
-    source: 'oauth',
+    source: configuredKey ? 'api' : 'oauth',
     windows,
     updatedAt: new Date().toISOString()
   };
@@ -150,12 +159,13 @@ function minimaxServiceLabel(modelName) {
   return ({ general: 'Text', speech: 'Speech', image: 'Image', video: 'Video', music: 'Music' })[modelName] || modelName || 'Coding plan';
 }
 
-function minimaxWindow(label, remainingPercent, resetsAt) {
+function minimaxWindow(kind, label, remainingPercent, resetsAt) {
   const remaining = clampPercent(remainingPercent);
   if (remaining === null) {
     return null;
   }
   return {
+    kind,
     label,
     usedPercent: 100 - remaining,
     remainingPercent: remaining,
@@ -195,27 +205,45 @@ async function fetchMiniMaxUsage({ apiKey, region = 'global', fetchImpl = fetch 
       id: item.model_name || 'coding-plan',
       label: minimaxServiceLabel(item.model_name),
       windows: [
-        minimaxWindow('5-hour', item.current_interval_remaining_percent, item.end_time),
-        minimaxWindow('Weekly', item.current_weekly_remaining_percent, item.weekly_end_time)
+        minimaxWindow('five_hour', '5-hour', item.current_interval_remaining_percent, item.end_time),
+        minimaxWindow('weekly', 'Weekly', item.current_weekly_remaining_percent, item.weekly_end_time)
       ].filter(Boolean)
     })),
     updatedAt: new Date().toISOString()
   };
 }
 
-async function fetchUsageOverview({ codex, claude, minimax }) {
+async function fetchUsageOverview({ codex, claude, minimax, content }) {
   const providers = await Promise.all([
     ['codex', 'Codex', codex],
     ['claude', 'Claude Code', claude],
     ['minimax', 'MiniMax', minimax]
   ].filter(([, , fetcher]) => typeof fetcher === 'function')
-    .map(([provider, label, fetcher]) => providerResult(provider, label, fetcher)));
+    .map(([provider, label, fetcher]) => providerResult(provider, label, fetcher, content)));
   return { providers, updatedAt: new Date().toISOString() };
 }
 
-async function providerResult(provider, label, fetcher) {
+function filterContent(provider, content) {
+  if (!content) {
+    return provider;
+  }
+  const visible = (window) => content[window.kind] !== false;
+  const next = { ...provider };
+  if (Array.isArray(next.windows)) {
+    next.windows = next.windows.filter(visible);
+  }
+  if (Array.isArray(next.services)) {
+    next.services = next.services.map((service) => ({ ...service, windows: (service.windows || []).filter(visible) }));
+  }
+  if (next.credits && content.credits === false) {
+    next.credits = null;
+  }
+  return next;
+}
+
+async function providerResult(provider, label, fetcher, content) {
   try {
-    return await fetcher();
+    return filterContent(await fetcher(), content);
   } catch (error) {
     return { provider, label, error: error.message || 'Usage unavailable.' };
   }

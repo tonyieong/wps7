@@ -406,6 +406,26 @@ test('sidebar creates a persistent usage pane with configurable providers', () =
   assert.doesNotMatch(appSource, /className = 'usage-overlay'/);
 });
 
+test('usage settings configure provider API keys and the visible quota windows', () => {
+  assert.match(appSource, /name="usage\.codex_api_key"/);
+  assert.match(appSource, /name="usage\.claude_api_key"/);
+  assert.match(appSource, /name="usage\.clear_codex_api_key"/);
+  assert.match(appSource, /name="usage\.clear_claude_api_key"/);
+  for (const key of ['show_five_hour', 'show_weekly', 'show_model_weekly', 'show_credits']) {
+    assert.match(appSource, new RegExp(`name="usage\\.${key}"`));
+    assert.match(appSource, new RegExp(`${key}: form\\.get\\('usage\\.${key}'\\) === 'on'`));
+  }
+  assert.match(mainSource, /codex_configured: Boolean\(config\.usage\.codex_api_key\)/);
+  assert.match(mainSource, /claude_configured: Boolean\(config\.usage\.claude_api_key\)/);
+  assert.match(mainSource, /fetchCodexUsage\(\{ apiKey: config\.usage\.codex_api_key \}\)/);
+  assert.match(mainSource, /fetchClaudeUsage\(\{ apiKey: config\.usage\.claude_api_key \}\)/);
+  assert.doesNotMatch(mainSource, /codex_api_key: config\.usage/);
+});
+
+test('file pane shows modified timestamps in 24-hour time', () => {
+  assert.match(appSource, /function formatModified\(value\)[\s\S]*?hour12: false/);
+});
+
 test('mobile terminal sends touch movement through the xterm scroll surface with a compact virtual key row', () => {
   assert.match(appSource, /function installMobileTerminalTouchScroll\(element, term\)/);
   assert.match(appSource, /new WheelEvent\('wheel'/);

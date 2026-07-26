@@ -816,7 +816,7 @@
 
   function formatModified(value) {
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? '' : date.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' });
+    return Number.isNaN(date.getTime()) ? '' : date.toLocaleString([], { dateStyle: 'short', timeStyle: 'short', hour12: false });
   }
 
   function renderFilesPane(pane) {
@@ -6684,11 +6684,19 @@
               </div>
             </section>
             <section class="settings-section" id="settings-usage">
-              <div class="section-heading"><div><h2>Usage</h2><p>Choose the provider cards shown in Usage panes.</p></div></div>
+              <div class="section-heading"><div><h2>Usage</h2><p>Choose the provider cards and quota windows shown in Usage panes.</p></div></div>
               <div class="settings-grid">
                 <label class="settings-check"><input name="usage.show_codex" type="checkbox" ${settings.usage?.show_codex !== false ? 'checked' : ''}> Codex</label>
                 <label class="settings-check"><input name="usage.show_claude" type="checkbox" ${settings.usage?.show_claude !== false ? 'checked' : ''}> Claude Code</label>
                 <label class="settings-check"><input name="usage.show_minimax" type="checkbox" ${settings.usage?.show_minimax !== false ? 'checked' : ''}> MiniMax</label>
+                <label class="settings-check"><input name="usage.show_five_hour" type="checkbox" ${settings.usage?.show_five_hour !== false ? 'checked' : ''}> 5-hour window</label>
+                <label class="settings-check"><input name="usage.show_weekly" type="checkbox" ${settings.usage?.show_weekly !== false ? 'checked' : ''}> Weekly window</label>
+                <label class="settings-check"><input name="usage.show_model_weekly" type="checkbox" ${settings.usage?.show_model_weekly !== false ? 'checked' : ''}> Per-model weekly windows</label>
+                <label class="settings-check"><input name="usage.show_credits" type="checkbox" ${settings.usage?.show_credits !== false ? 'checked' : ''}> Credit balance</label>
+                <label class="settings-wide">Codex API key<input name="usage.codex_api_key" type="password" autocomplete="off" placeholder="${settings.usage?.codex_configured ? 'Saved — leave blank to keep' : 'Blank uses the signed-in Codex account'}"></label>
+                <label class="settings-check"><input name="usage.clear_codex_api_key" type="checkbox"> Clear saved Codex key</label>
+                <label class="settings-wide">Claude Code API key<input name="usage.claude_api_key" type="password" autocomplete="off" placeholder="${settings.usage?.claude_configured ? 'Saved — leave blank to keep' : 'Blank uses the signed-in Claude Code account'}"></label>
+                <label class="settings-check"><input name="usage.clear_claude_api_key" type="checkbox"> Clear saved Claude Code key</label>
                 <label class="settings-wide">MiniMax Coding Plan API key<input name="usage.minimax_api_key" type="password" autocomplete="off" placeholder="${settings.usage?.minimax_configured ? 'Saved — leave blank to keep' : 'sk-cp-…'}"></label>
                 <label>MiniMax region<select name="usage.minimax_region"><option value="global" ${settings.usage?.minimax_region !== 'china' ? 'selected' : ''}>Global</option><option value="china" ${settings.usage?.minimax_region === 'china' ? 'selected' : ''}>China mainland</option></select></label>
                 <label class="settings-check"><input name="usage.clear_minimax_api_key" type="checkbox"> Clear saved MiniMax key</label>
@@ -6930,15 +6938,21 @@
         minimax_region: form.get('usage.minimax_region'),
         show_codex: form.get('usage.show_codex') === 'on',
         show_claude: form.get('usage.show_claude') === 'on',
-        show_minimax: form.get('usage.show_minimax') === 'on'
+        show_minimax: form.get('usage.show_minimax') === 'on',
+        show_five_hour: form.get('usage.show_five_hour') === 'on',
+        show_weekly: form.get('usage.show_weekly') === 'on',
+        show_model_weekly: form.get('usage.show_model_weekly') === 'on',
+        show_credits: form.get('usage.show_credits') === 'on'
       },
       custom_theme: customThemeFromForm(form)
     };
-    const minimaxApiKey = String(form.get('usage.minimax_api_key') || '').trim();
-    if (form.get('usage.clear_minimax_api_key') === 'on') {
-      payload.usage.minimax_api_key = '';
-    } else if (minimaxApiKey) {
-      payload.usage.minimax_api_key = minimaxApiKey;
+    for (const provider of ['codex', 'claude', 'minimax']) {
+      const apiKey = String(form.get(`usage.${provider}_api_key`) || '').trim();
+      if (form.get(`usage.clear_${provider}_api_key`) === 'on') {
+        payload.usage[`${provider}_api_key`] = '';
+      } else if (apiKey) {
+        payload.usage[`${provider}_api_key`] = apiKey;
+      }
     }
     const password = String(form.get('auth.password') || '');
     if (password) {

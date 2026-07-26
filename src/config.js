@@ -74,11 +74,17 @@ const defaultConfig = {
     history: []
   },
   usage: {
+    codex_api_key: '',
+    claude_api_key: '',
     minimax_api_key: '',
     minimax_region: 'global',
     show_codex: true,
     show_claude: true,
-    show_minimax: true
+    show_minimax: true,
+    show_five_hour: true,
+    show_weekly: true,
+    show_model_weekly: true,
+    show_credits: true
   },
   custom_theme: {
     selected_light: 'wps-light',
@@ -176,12 +182,20 @@ bookmarks = []
 history = []
 
 [usage]
+# Optional API keys. Leave blank to use the Codex or Claude Code account signed in on this server.
+codex_api_key = ""
+claude_api_key = ""
 # MiniMax Coding Plan key. MINIMAX_CODING_API_KEY or MINIMAX_API_KEY takes precedence.
 minimax_api_key = ""
 minimax_region = "global"
 show_codex = true
 show_claude = true
 show_minimax = true
+# Quota windows and extras shown on every provider card.
+show_five_hour = true
+show_weekly = true
+show_model_weekly = true
+show_credits = true
 
 [custom_theme]
 selected_light = "wps-light"
@@ -319,11 +333,9 @@ bookmarks = []
   if (!/^\[usage\]\s*$/m.test(nextText)) {
     nextText = `${nextText.trimEnd()}\n\n[usage]\nminimax_api_key = ""\nminimax_region = "global"\n`;
   }
-  nextText = ensureTomlKey(nextText, 'usage', 'minimax_api_key', defaultConfig.usage.minimax_api_key);
-  nextText = ensureTomlKey(nextText, 'usage', 'minimax_region', defaultConfig.usage.minimax_region);
-  nextText = ensureTomlKey(nextText, 'usage', 'show_codex', defaultConfig.usage.show_codex);
-  nextText = ensureTomlKey(nextText, 'usage', 'show_claude', defaultConfig.usage.show_claude);
-  nextText = ensureTomlKey(nextText, 'usage', 'show_minimax', defaultConfig.usage.show_minimax);
+  for (const key of Object.keys(defaultConfig.usage)) {
+    nextText = ensureTomlKey(nextText, 'usage', key, defaultConfig.usage[key]);
+  }
   if (!/^\[terminal\]\s*$/m.test(nextText)) {
     nextText = `${nextText.trimEnd()}
 
@@ -418,7 +430,7 @@ function updateConfigFile(root, updates) {
     ui: ['sidebar_width', 'max_pane_columns', 'max_pane_rows', 'terminal_font_family', 'terminal_font_size', 'mobile_terminal_font_size', 'file_pane_font_size', 'system_font_size', 'notepad_word_wrap', 'notepad_indent_guides', 'notepad_autosave'],
     file_manager: ['enabled', 'root_mode', 'max_upload_bytes', 'show_hidden', 'bookmarks'],
     browser: ['bookmarks', 'history'],
-    usage: ['minimax_api_key', 'minimax_region', 'show_codex', 'show_claude', 'show_minimax'],
+    usage: Object.keys(defaultConfig.usage),
     custom_theme: ['selected_light', 'selected_dark', 'mode', 'ink', 'panel', 'rail', 'surface', 'line', 'text', 'muted', 'accent', 'warn', 'danger', 'terminal_bg', 'terminal_fg', 'light_ink', 'light_panel', 'light_rail', 'light_surface', 'light_line', 'light_text', 'light_muted', 'light_accent', 'light_warn', 'light_danger', 'light_terminal_bg', 'light_terminal_fg']
   };
 

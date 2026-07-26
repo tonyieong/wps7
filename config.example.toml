@@ -58,6 +58,9 @@ show_hidden = false
 bookmarks = []
 
 [usage]
+# Optional API keys. Leave blank to use the Codex or Claude Code account signed in on this server.
+codex_api_key = ""
+claude_api_key = ""
 # MiniMax Coding Plan key. MINIMAX_CODING_API_KEY or MINIMAX_API_KEY takes precedence.
 minimax_api_key = ""
 minimax_region = "global"
@@ -65,3 +68,8 @@ minimax_region = "global"
 show_codex = true
 show_claude = true
 show_minimax = true
+# Choose the quota windows and extras shown on every card.
+show_five_hour = true
+show_weekly = true
+show_model_weekly = true
+show_credits = true

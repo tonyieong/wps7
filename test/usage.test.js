@@ -110,6 +110,89 @@ test('usage overview keeps enabled providers available when another fails', asyn
   assert.equal(overview.providers[2].error, 'MiniMax API key is not configured.');
 });
 
+test('codex window kinds follow the reported window length, not the window slot', async () => {
+  const result = await fetchCodexUsage({
+    codexHome: fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-codex-')),
+    apiKey: 'codex-configured-key',
+    fetchImpl: async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        rate_limit: {
+          primary_window: { used_percent: 10, limit_window_seconds: 604800, reset_at: 1800000000 },
+          secondary_window: { used_percent: 20, limit_window_seconds: 18000, reset_at: 1800600000 }
+        }
+      })
+    })
+  });
+
+  assert.deepEqual(result.windows.map((window) => [window.label, window.kind]), [
+    ['Weekly', 'weekly'],
+    ['5-hour', 'five_hour']
+  ]);
+});
+
+test('uses the configured Codex API key instead of the local OAuth account', async () => {
+  const result = await fetchCodexUsage({
+    codexHome: path.join(os.tmpdir(), 'wps7-codex-missing'),
+    apiKey: 'codex-configured-key',
+    fetchImpl: async (_url, options) => {
+      assert.equal(options.headers.Authorization, 'Bearer codex-configured-key');
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          rate_limit: { primary_window: { used_percent: 10, limit_window_seconds: 18000, reset_at: 1800000000 } }
+        })
+      };
+    }
+  });
+
+  assert.equal(result.source, 'api');
+  assert.deepEqual(result.windows.map((window) => window.kind), ['five_hour']);
+});
+
+test('uses the configured Claude Code API key instead of the local OAuth account', async () => {
+  const result = await fetchClaudeUsage({
+    claudeHome: path.join(os.tmpdir(), 'wps7-claude-missing'),
+    apiKey: 'claude-configured-key',
+    fetchImpl: async (_url, options) => {
+      assert.equal(options.headers.Authorization, 'Bearer claude-configured-key');
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ five_hour: { utilization: 5, resets_at: '2027-01-01T05:00:00Z' } })
+      };
+    }
+  });
+
+  assert.equal(result.source, 'api');
+  assert.deepEqual(result.windows.map((window) => window.kind), ['five_hour']);
+});
+
+test('usage overview keeps only the window kinds and extras enabled in settings', async () => {
+  const overview = await fetchUsageOverview({
+    claude: () => Promise.resolve({
+      provider: 'claude',
+      windows: [
+        { kind: 'five_hour', label: '5-hour' },
+        { kind: 'weekly', label: 'Weekly' },
+        { kind: 'model_weekly', label: 'Opus weekly' }
+      ],
+      credits: { balance: 5, hasCredits: true, unlimited: false }
+    }),
+    minimax: () => Promise.resolve({
+      provider: 'minimax',
+      services: [{ id: 'general', windows: [{ kind: 'five_hour', label: '5-hour' }, { kind: 'weekly', label: 'Weekly' }] }]
+    }),
+    content: { five_hour: false, weekly: true, model_weekly: false, credits: false }
+  });
+
+  assert.deepEqual(overview.providers[0].windows.map((window) => window.label), ['Weekly']);
+  assert.equal(overview.providers[0].credits, null);
+  assert.deepEqual(overview.providers[1].services[0].windows.map((window) => window.label), ['Weekly']);
+});
+
 test('usage overview omits disabled providers', async () => {
   const overview = await fetchUsageOverview({
     codex: null,

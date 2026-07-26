@@ -154,11 +154,11 @@ function publicConfig(config, shell, restartRequired, reloadError) {
     file_manager: config.file_manager,
     browser: config.browser,
     usage: {
+      ...usageVisibility(config),
+      codex_configured: Boolean(config.usage.codex_api_key),
+      claude_configured: Boolean(config.usage.claude_api_key),
       minimax_configured: Boolean(process.env.MINIMAX_CODING_API_KEY || process.env.MINIMAX_API_KEY || config.usage.minimax_api_key),
-      minimax_region: config.usage.minimax_region,
-      show_codex: config.usage.show_codex !== false,
-      show_claude: config.usage.show_claude !== false,
-      show_minimax: config.usage.show_minimax !== false
+      minimax_region: config.usage.minimax_region
     },
     custom_theme: config.custom_theme,
     restartRequired,
@@ -212,14 +212,20 @@ function settingsConfig(config, runtimeConfig) {
       history: Array.isArray(config.browser.history) ? config.browser.history : []
     },
     usage: {
+      ...usageVisibility(config),
+      codex_configured: Boolean(config.usage.codex_api_key),
+      claude_configured: Boolean(config.usage.claude_api_key),
       minimax_configured: Boolean(process.env.MINIMAX_CODING_API_KEY || process.env.MINIMAX_API_KEY || config.usage.minimax_api_key),
-      minimax_region: config.usage.minimax_region === 'china' ? 'china' : 'global',
-      show_codex: config.usage.show_codex !== false,
-      show_claude: config.usage.show_claude !== false,
-      show_minimax: config.usage.show_minimax !== false
+      minimax_region: config.usage.minimax_region === 'china' ? 'china' : 'global'
     },
     custom_theme: config.custom_theme
   };
+}
+
+const usageVisibilityKeys = ['show_codex', 'show_claude', 'show_minimax', 'show_five_hour', 'show_weekly', 'show_model_weekly', 'show_credits'];
+
+function usageVisibility(config) {
+  return Object.fromEntries(usageVisibilityKeys.map((key) => [key, config.usage[key] !== false]));
 }
 
 function validPort(value) {
@@ -392,13 +398,15 @@ function sanitizeSettingsUpdates(updates) {
   }
   if (updates.usage) {
     next.usage = {};
-    if (Object.prototype.hasOwnProperty.call(updates.usage, 'minimax_api_key')) {
-      next.usage.minimax_api_key = String(updates.usage.minimax_api_key || '').trim();
+    for (const key of ['codex_api_key', 'claude_api_key', 'minimax_api_key']) {
+      if (Object.prototype.hasOwnProperty.call(updates.usage, key)) {
+        next.usage[key] = String(updates.usage[key] || '').trim();
+      }
     }
     if (updates.usage.minimax_region === 'global' || updates.usage.minimax_region === 'china') {
       next.usage.minimax_region = updates.usage.minimax_region;
     }
-    for (const key of ['show_codex', 'show_claude', 'show_minimax']) {
+    for (const key of usageVisibilityKeys) {
       if (typeof updates.usage[key] === 'boolean') {
         next.usage[key] = updates.usage[key];
       }
@@ -683,11 +691,17 @@ function main() {
       }
       const minimaxApiKey = process.env.MINIMAX_CODING_API_KEY || process.env.MINIMAX_API_KEY || config.usage.minimax_api_key;
       const value = await usage.fetchUsageOverview({
-        codex: config.usage.show_codex !== false ? () => usage.fetchCodexUsage() : null,
-        claude: config.usage.show_claude !== false ? () => usage.fetchClaudeUsage() : null,
+        codex: config.usage.show_codex !== false ? () => usage.fetchCodexUsage({ apiKey: config.usage.codex_api_key }) : null,
+        claude: config.usage.show_claude !== false ? () => usage.fetchClaudeUsage({ apiKey: config.usage.claude_api_key }) : null,
         minimax: config.usage.show_minimax !== false
           ? () => usage.fetchMiniMaxUsage({ apiKey: minimaxApiKey, region: config.usage.minimax_region })
-          : null
+          : null,
+        content: {
+          five_hour: config.usage.show_five_hour !== false,
+          weekly: config.usage.show_weekly !== false,
+          model_weekly: config.usage.show_model_weekly !== false,
+          credits: config.usage.show_credits !== false
+        }
       });
       usageCache = { createdAt: Date.now(), value };
       res.json(value);
