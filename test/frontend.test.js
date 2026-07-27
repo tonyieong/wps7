@@ -471,7 +471,7 @@ test('usage settings configure provider API keys and the visible quota windows',
   assert.match(mainSource, /codex_configured: Boolean\(config\.usage\.codex_api_key\)/);
   assert.match(mainSource, /claude_configured: Boolean\(config\.usage\.claude_api_key\)/);
   assert.match(mainSource, /fetchCodexUsage\(\{ apiKey: config\.usage\.codex_api_key \}\)/);
-  assert.match(mainSource, /fetchClaudeUsage\(\{ apiKey: config\.usage\.claude_api_key \}\)/);
+  assert.match(mainSource, /fetchClaudeUsage\(\{ apiKey: config\.usage\.claude_api_key, log: usageLog \}\)/);
   assert.doesNotMatch(mainSource, /codex_api_key: config\.usage/);
 });
 

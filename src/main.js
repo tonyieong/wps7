@@ -690,9 +690,10 @@ function main() {
         return;
       }
       const minimaxApiKey = process.env.MINIMAX_CODING_API_KEY || process.env.MINIMAX_API_KEY || config.usage.minimax_api_key;
+      const usageLog = (message) => appendRuntimeLog(root, `usage ${message}`);
       const value = await usage.fetchUsageOverview({
         codex: config.usage.show_codex !== false ? () => usage.fetchCodexUsage({ apiKey: config.usage.codex_api_key }) : null,
-        claude: config.usage.show_claude !== false ? () => usage.fetchClaudeUsage({ apiKey: config.usage.claude_api_key }) : null,
+        claude: config.usage.show_claude !== false ? () => usage.fetchClaudeUsage({ apiKey: config.usage.claude_api_key, log: usageLog }) : null,
         minimax: config.usage.show_minimax !== false
           ? () => usage.fetchMiniMaxUsage({ apiKey: minimaxApiKey, region: config.usage.minimax_region })
           : null,
@@ -703,6 +704,11 @@ function main() {
           credits: config.usage.show_credits !== false
         }
       });
+      for (const provider of value.providers || []) {
+        if (provider.error) {
+          usageLog(`${provider.provider} reported: ${provider.error}`);
+        }
+      }
       usageCache = { createdAt: Date.now(), value };
       res.json(value);
     } catch (error) {

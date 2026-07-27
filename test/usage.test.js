@@ -5,7 +5,33 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { PassThrough } = require('node:stream');
-const { fetchClaudeUsage, fetchCodexUsage, fetchMiniMaxUsage, fetchUsageOverview } = require('../src/usage');
+const { fetchClaudeUsage, fetchCodexUsage, fetchMiniMaxUsage, fetchUsageOverview, systemNodeFetch } = require('../src/usage');
+
+function fakeNodeSpawn(handler) {
+  const calls = [];
+  const spawnImpl = (command, args, options) => {
+    const child = new EventEmitter();
+    const stdout = new PassThrough();
+    let stdin = '';
+    child.stdout = stdout;
+    child.stdin = {
+      end(value) {
+        stdin = value;
+        const reply = handler({ command, args, options, stdin });
+        setImmediate(() => {
+          if (reply !== null) {
+            stdout.write(reply);
+          }
+          child.emit('close', 0);
+        });
+      }
+    };
+    child.kill = () => {};
+    calls.push({ command, args, options, get stdin() { return stdin; } });
+    return child;
+  };
+  return { spawnImpl, calls };
+}
 
 test('reads Codex rate limits from the local OAuth account without exposing identity', async () => {
   const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-codex-'));
@@ -205,6 +231,85 @@ test('refreshes an expired Claude subscription login through the CLI before retr
   assert.equal(requestCount, 2);
   assert.equal(result.source, 'oauth');
   assert.deepEqual(result.windows.map((window) => window.usedPercent), [9]);
+});
+
+test('sends usage lookups through the system Node binary without putting the token on the command line', async () => {
+  const { spawnImpl, calls } = fakeNodeSpawn(() => JSON.stringify({
+    status: 200,
+    body: JSON.stringify({ five_hour: { utilization: 12 } })
+  }));
+
+  const response = await systemNodeFetch('https://api.anthropic.com/api/oauth/usage', {
+    headers: { Authorization: 'Bearer sk-ant-oat01-supersecretvalue' }
+  }, spawnImpl);
+
+  assert.equal(response.ok, true);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { five_hour: { utilization: 12 } });
+
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].command, /node(\.exe)?$/);
+  assert.equal(calls[0].args[0], '-e');
+  // The token must travel over stdin only, never as an argument another process could read.
+  assert.doesNotMatch(calls[0].args.join(' '), /supersecretvalue/);
+  assert.match(calls[0].stdin, /supersecretvalue/);
+  assert.equal(JSON.parse(calls[0].stdin).url, 'https://api.anthropic.com/api/oauth/usage');
+});
+
+test('surfaces the upstream status when the system Node lookup is rejected', async () => {
+  const { spawnImpl } = fakeNodeSpawn(() => JSON.stringify({
+    status: 403,
+    body: '{"error":{"type":"forbidden","message":"Request not allowed"}}'
+  }));
+
+  const response = await systemNodeFetch('https://api.anthropic.com/api/oauth/usage', {}, spawnImpl);
+
+  assert.equal(response.ok, false);
+  assert.equal(response.status, 403);
+  assert.match(await response.text(), /Request not allowed/);
+});
+
+test('reports a clear error when the system Node lookup fails to run', async () => {
+  const { spawnImpl } = fakeNodeSpawn(() => JSON.stringify({ error: 'getaddrinfo ENOTFOUND' }));
+
+  await assert.rejects(
+    systemNodeFetch('https://api.anthropic.com/api/oauth/usage', {}, spawnImpl),
+    /getaddrinfo ENOTFOUND/
+  );
+});
+
+test('logs Claude usage diagnostics without exposing the access token', async () => {
+  const claudeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-claude-'));
+  fs.writeFileSync(path.join(claudeHome, '.credentials.json'), JSON.stringify({
+    claudeAiOauth: { accessToken: 'sk-ant-oat01-supersecretvalue', expiresAt: 1785087789090 }
+  }));
+  const messages = [];
+  const ptyImpl = {
+    spawn() {
+      throw new Error('pty unavailable');
+    }
+  };
+
+  await assert.rejects(fetchClaudeUsage({
+    claudeHome,
+    ptyImpl,
+    log: (message) => messages.push(message),
+    fetchImpl: async () => ({
+      ok: false,
+      status: 401,
+      text: async () => '{"error":{"type":"authentication_error"}}'
+    })
+  }), /Run \/login in Claude Code/);
+
+  const joined = messages.join('\n');
+  assert.match(joined, /claude home=/);
+  assert.match(joined, /expiresAt=2026-07-26T17:43:09\.090Z/);
+  assert.match(joined, /status=401/);
+  assert.match(joined, /authentication_error/);
+  assert.match(joined, /claude cli spawn failed: pty unavailable/);
+  assert.match(joined, /tokenLength=29/);
+  assert.doesNotMatch(joined, /sk-ant-oat01/);
+  assert.doesNotMatch(joined, /supersecretvalue/);
 });
 
 test('usage overview keeps enabled providers available when another fails', async () => {

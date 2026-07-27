@@ -37,6 +37,106 @@ function windowInfo(seconds, fallbackLabel, fallbackKind) {
   return { label: fallbackLabel, kind: fallbackKind };
 }
 
+// Runs in the system Node binary. Reads {url, headers} from stdin so tokens never
+// reach the command line, and writes back the raw status and body.
+const SYSTEM_NODE_FETCH_SCRIPT = `
+let input = '';
+process.stdin.on('data', (chunk) => { input += chunk; });
+process.stdin.on('end', async () => {
+  try {
+    const request = JSON.parse(input);
+    const response = await fetch(request.url, { headers: request.headers });
+    process.stdout.write(JSON.stringify({ status: response.status, body: await response.text() }));
+  } catch (error) {
+    process.stdout.write(JSON.stringify({ error: error.message }));
+  }
+});
+`;
+
+function systemNodePath() {
+  const binary = process.platform === 'win32' ? 'node.exe' : 'node';
+  for (const dir of String(process.env.PATH || '').split(path.delimiter)) {
+    if (!dir) {
+      continue;
+    }
+    const candidate = path.join(dir.replace(/^"|"$/g, ''), binary);
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return '';
+}
+
+// Proxy rules that route by process name match node.exe but not the packaged
+// wps7.exe, so usage lookups are sent through the system Node binary instead.
+function systemNodeFetch(url, options = {}, spawnImpl = spawn) {
+  return new Promise((resolve, reject) => {
+    const nodePath = systemNodePath();
+    if (!nodePath) {
+      reject(new Error('Node.js was not found on PATH to run the usage lookup.'));
+      return;
+    }
+    let child;
+    try {
+      child = spawnImpl(nodePath, ['-e', SYSTEM_NODE_FETCH_SCRIPT], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true
+      });
+    } catch (error) {
+      reject(new Error('Node.js could not run the usage lookup.'));
+      return;
+    }
+
+    let output = '';
+    let settled = false;
+    const finish = (error, value) => {
+      if (settled) return;
+      settled = true;
+      try {
+        child.kill();
+      } catch (killError) {}
+      if (error) reject(error);
+      else resolve(value);
+    };
+
+    if (options.signal) {
+      options.signal.addEventListener('abort', () => {
+        const error = new Error('The operation was aborted.');
+        error.name = 'AbortError';
+        finish(error);
+      });
+    }
+    child.stdout.on('data', (chunk) => {
+      output += chunk.toString();
+    });
+    child.on('error', () => finish(new Error('Node.js could not run the usage lookup.')));
+    child.on('close', () => {
+      let payload;
+      try {
+        payload = JSON.parse(output);
+      } catch (error) {
+        finish(new Error('The usage lookup returned an unreadable response.'));
+        return;
+      }
+      if (payload.error) {
+        finish(new Error(payload.error));
+        return;
+      }
+      finish(null, {
+        ok: payload.status >= 200 && payload.status < 300,
+        status: payload.status,
+        text: async () => payload.body,
+        json: async () => JSON.parse(payload.body)
+      });
+    });
+    child.stdin.end(JSON.stringify({ url, headers: options.headers || {} }));
+  });
+}
+
+function defaultFetch(url, options) {
+  return process.pkg ? systemNodeFetch(url, options) : fetch(url, options);
+}
+
 async function requestJson(url, options, fetchImpl) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -46,6 +146,12 @@ async function requestJson(url, options, fetchImpl) {
       if (response.status === 401 || response.status === 403) {
         const error = new Error('Provider authentication failed.');
         error.code = 'PROVIDER_AUTH';
+        error.status = response.status;
+        try {
+          error.body = (await response.text()).slice(0, 300);
+        } catch (bodyError) {
+          error.body = '';
+        }
         throw error;
       }
       throw new Error(`Provider request failed (${response.status}).`);
@@ -177,7 +283,7 @@ function codexUsageResult(payload) {
   };
 }
 
-async function fetchCodexUsage({ codexHome, apiKey, fetchImpl = fetch, spawnImpl = spawn } = {}) {
+async function fetchCodexUsage({ codexHome, apiKey, fetchImpl = defaultFetch, spawnImpl = spawn } = {}) {
   const configuredKey = String(apiKey || '').trim();
   let accessToken = configuredKey;
   let home = codexHome || process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
@@ -242,6 +348,15 @@ function claudeAccessToken(credentials) {
   return credentials.claudeAiOauth?.accessToken || credentials.claude_ai_oauth?.access_token || '';
 }
 
+function claudeExpiry(credentials) {
+  const value = Number(credentials.claudeAiOauth?.expiresAt || credentials.claude_ai_oauth?.expires_at);
+  return Number.isFinite(value) && value > 0 ? new Date(value).toISOString() : 'unknown';
+}
+
+function tokenLength(token) {
+  return String(token || '').length;
+}
+
 function readClaudeCredentials(credentialsPath) {
   try {
     return JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
@@ -250,12 +365,13 @@ function readClaudeCredentials(credentialsPath) {
   }
 }
 
-function refreshClaudeLogin({ claudeHome, credentialsPath, previousAccessToken, ptyImpl = pty }) {
+function refreshClaudeLogin({ claudeHome, credentialsPath, previousAccessToken, ptyImpl = pty, log = () => {} }) {
   return new Promise((resolve, reject) => {
     const command = process.platform === 'win32' ? (process.env.ComSpec || 'cmd.exe') : 'claude';
     const args = process.platform === 'win32' ? ['/d', '/s', '/c', 'claude'] : [];
     let proc;
     let settled = false;
+    let bytes = 0;
     const finish = (error, token) => {
       if (settled) return;
       settled = true;
@@ -275,9 +391,13 @@ function refreshClaudeLogin({ claudeHome, credentialsPath, previousAccessToken, 
         }
       } catch (error) {}
     };
-    const timer = setTimeout(() => finish(new Error('Claude Code CLI refresh timed out.')), CLI_TIMEOUT_MS);
+    const timer = setTimeout(() => {
+      log(`claude cli refresh timed out after ${CLI_TIMEOUT_MS}ms bytes=${bytes}`);
+      finish(new Error('Claude Code CLI refresh timed out.'));
+    }, CLI_TIMEOUT_MS);
     const poll = setInterval(checkCredentials, 200);
 
+    log(`claude cli spawn command=${command} args=${JSON.stringify(args)} home=${claudeHome}`);
     try {
       proc = ptyImpl.spawn(command, args, {
         name: 'xterm-256color',
@@ -288,11 +408,16 @@ function refreshClaudeLogin({ claudeHome, credentialsPath, previousAccessToken, 
         ...(process.platform === 'win32' ? { useConptyDll: false } : {})
       });
     } catch (error) {
+      log(`claude cli spawn failed: ${error.message}`);
       finish(new Error('Claude Code CLI is unavailable to the WPS7 service account.'));
       return;
     }
-    proc.onData(() => checkCredentials());
-    proc.onExit(() => {
+    proc.onData((chunk) => {
+      bytes += String(chunk).length;
+      checkCredentials();
+    });
+    proc.onExit((event) => {
+      log(`claude cli exited code=${event?.exitCode ?? 'unknown'} bytes=${bytes} settled=${settled}`);
       checkCredentials();
       if (!settled) {
         finish(new Error('Claude Code CLI could not refresh the subscription login.'));
@@ -303,19 +428,22 @@ function refreshClaudeLogin({ claudeHome, credentialsPath, previousAccessToken, 
   });
 }
 
-async function fetchClaudeUsage({ claudeHome, apiKey, fetchImpl = fetch, ptyImpl = pty } = {}) {
+async function fetchClaudeUsage({ claudeHome, apiKey, fetchImpl = defaultFetch, ptyImpl = pty, log = () => {} } = {}) {
   const configuredKey = String(apiKey || '').trim();
   let accessToken = configuredKey;
   const home = claudeHome || process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
   const credentialsPath = path.join(home, '.credentials.json');
+  log(`claude home=${home} homedir=${os.homedir()} configDirEnv=${process.env.CLAUDE_CONFIG_DIR || 'unset'} configuredKey=${Boolean(configuredKey)}`);
   if (!accessToken) {
     if (!fs.existsSync(credentialsPath)) {
       throw new Error('Claude Code is not signed in on this server and no API key is configured.');
     }
-    accessToken = claudeAccessToken(readClaudeCredentials(credentialsPath));
+    const credentials = readClaudeCredentials(credentialsPath);
+    accessToken = claudeAccessToken(credentials);
     if (!accessToken) {
       throw new Error('Claude Code OAuth token is missing.');
     }
+    log(`claude oauth tokenLength=${tokenLength(accessToken)} expiresAt=${claudeExpiry(credentials)} now=${new Date().toISOString()}`);
   }
 
   const fetchUsage = (token) => requestJson('https://api.anthropic.com/api/oauth/usage', {
@@ -329,14 +457,17 @@ async function fetchClaudeUsage({ claudeHome, apiKey, fetchImpl = fetch, ptyImpl
   try {
     payload = await fetchUsage(accessToken);
   } catch (error) {
+    log(`claude usage request failed status=${error.status ?? 'none'} code=${error.code || 'none'} message=${error.message} body=${error.body || 'none'}`);
     if (!configuredKey && error.code === 'PROVIDER_AUTH') {
       try {
         accessToken = await refreshClaudeLogin({
           claudeHome: home,
           credentialsPath,
           previousAccessToken: accessToken,
-          ptyImpl
+          ptyImpl,
+          log
         });
+        log(`claude refreshed tokenLength=${tokenLength(accessToken)}`);
       } catch (refreshError) {
         throw new Error(`${refreshError.message} Run /login in Claude Code as the WPS7 service account.`);
       }
@@ -360,6 +491,7 @@ async function fetchClaudeUsage({ claudeHome, apiKey, fetchImpl = fetch, ptyImpl
     resetsAt: isoDate(payload[key].resets_at)
   }] : []);
 
+  log(`claude usage ok source=${configuredKey ? 'api' : 'oauth'} windows=${windows.map((window) => window.id).join(',') || 'none'}`);
   return {
     provider: 'claude',
     label: 'Claude Code',
@@ -387,7 +519,7 @@ function minimaxWindow(kind, label, remainingPercent, resetsAt) {
   };
 }
 
-async function fetchMiniMaxUsage({ apiKey, region = 'global', fetchImpl = fetch } = {}) {
+async function fetchMiniMaxUsage({ apiKey, region = 'global', fetchImpl = defaultFetch } = {}) {
   const token = String(apiKey || '').trim();
   if (!token) {
     throw new Error('MiniMax API key is not configured.');
@@ -464,6 +596,7 @@ async function providerResult(provider, label, fetcher, content) {
 }
 
 module.exports = {
+  systemNodeFetch,
   fetchClaudeUsage,
   fetchCodexUsage,
   fetchMiniMaxUsage,
