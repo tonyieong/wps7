@@ -87,6 +87,31 @@ test('terminal manager clears the headless replay buffer for a live runtime', as
   manager.shutdown();
 });
 
+test('clearing a terminal clears the ConPTY screen buffer through the shell', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'));
+  const store = new StateStore(root, 10);
+  store.load();
+  const tabId = store.state.sessions[0].tabs[0].panes[0].activeTerminalTabId;
+  const manager = new TerminalManager({
+    config: {},
+    root,
+    store,
+    shell: { command: process.platform === 'win32' ? 'powershell.exe' : 'sh', args: [] }
+  });
+
+  const runtime = manager.getOrCreate(tabId);
+  const written = [];
+  runtime.proc.write = (data) => written.push(data);
+
+  manager.clearTerminal(tabId);
+
+  // Form feed: PSReadLine and readline both bind it to ClearScreen, which keeps
+  // the half-typed input line and stays out of the shell history.
+  assert.deepEqual(written, ['\f']);
+
+  manager.shutdown();
+});
+
 test('terminal spawn options use the Windows system ConPTY', () => {
   const options = buildPtySpawnOptions({
     cols: 100,

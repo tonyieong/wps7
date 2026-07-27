@@ -154,16 +154,19 @@ class TerminalManager {
     return runtime;
   }
 
-  // Clearing only the browser terminal would resurrect the old output from the
-  // replay buffer on the next reconnect, so drop the server copies too. ConPTY
-  // keeps its own screen buffer and repaints it on the reconnect resize, so one
-  // visible screen still comes back; the scrollback above it stays gone.
+  // Three buffers hold the same output: the browser terminal, the replay copies
+  // here, and the one ConPTY keeps for itself. Clearing fewer than all three
+  // lets the old output reappear, because ConPTY repaints its screen after a
+  // reconnect and that repaint refills the replay buffer. Form feed is what
+  // clears ConPTY: PSReadLine and readline bind it to ClearScreen, so it keeps
+  // a half-typed input line and never reaches the shell history.
   clearTerminal(terminalId) {
     this.store.clearScrollback(terminalId);
     const runtime = this.processes.get(terminalId);
     if (!runtime) {
       return;
     }
+    runtime.proc.write('\f');
     runtime.writeChain = runtime.writeChain.then(() => runtime.headless.clear()).catch(() => {});
   }
 
