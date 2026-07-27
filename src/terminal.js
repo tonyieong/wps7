@@ -154,6 +154,19 @@ class TerminalManager {
     return runtime;
   }
 
+  // Clearing only the browser terminal would resurrect the old output from the
+  // replay buffer on the next reconnect, so drop the server copies too. ConPTY
+  // keeps its own screen buffer and repaints it on the reconnect resize, so one
+  // visible screen still comes back; the scrollback above it stays gone.
+  clearTerminal(terminalId) {
+    this.store.clearScrollback(terminalId);
+    const runtime = this.processes.get(terminalId);
+    if (!runtime) {
+      return;
+    }
+    runtime.writeChain = runtime.writeChain.then(() => runtime.headless.clear()).catch(() => {});
+  }
+
   attach(terminalId, ws) {
     const target = this.findTarget(terminalId);
     if (!target) {
@@ -204,6 +217,9 @@ class TerminalManager {
       if (message.type === 'input') {
         runtime.proc.write(message.data);
       }
+      if (message.type === 'clear') {
+        this.clearTerminal(terminalId);
+      }
       if (message.type === 'resize') {
         const cols = Number(message.cols);
         const rows = Number(message.rows);
@@ -250,6 +266,9 @@ class TerminalManager {
       }
       if (message.type === 'input') {
         runtime.proc.write(message.data);
+      }
+      if (message.type === 'clear') {
+        this.clearTerminal(terminalId);
       }
       if (message.type === 'resize') {
         const cols = Number(message.cols);

@@ -5727,6 +5727,11 @@
     installMobileTerminalTouchScroll(element, term);
     fitTerminal(term, fit, true);
     element.addEventListener('click', () => term.focus());
+    element.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+      openTerminalContextMenu(terminalTabId, event.clientX, event.clientY);
+    });
+    term.attachCustomKeyEventHandler((event) => terminalShortcut(terminalTabId, event));
     term.onTitleChange((title) => updatePaneTitleFromTerminal(paneId, terminalTabId, title));
     term.onBell(() => showTerminalNotification(paneId));
     term.parser.registerOscHandler(9, (data) => handleTerminalOscNotification(paneId, 9, data));
@@ -5846,6 +5851,11 @@
       writer,
       resizeObserver,
       sendResize: scheduleResize,
+      sendClear: () => {
+        if (ws?.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'clear' }));
+        }
+      },
       disposeConnection: () => {
         disposed = true;
         window.clearTimeout(reconnectTimer);
@@ -5865,6 +5875,147 @@
     if (paneId === state.activePaneId) {
       term.focus();
     }
+  }
+
+  // Reading the xterm buffer instead of the DOM keeps wrapped lines joined and
+  // drops the padding spaces the renderer adds to fill each row.
+  function copyTerminalSelection(terminalTabId) {
+    const term = state.terminals.get(terminalTabId)?.term;
+    const text = term?.getSelection() || '';
+    if (!text) {
+      showToast('No text selected.');
+      return;
+    }
+    copyBrowserText(text);
+  }
+
+  function pasteTerminalText(terminalTabId) {
+    const terminal = state.terminals.get(terminalTabId);
+    if (!terminal) {
+      return;
+    }
+    const fallback = () => {
+      terminal.term.focus();
+      showToast('Clipboard access is unavailable. Press Ctrl+V to paste.');
+    };
+    if (!navigator.clipboard?.readText) {
+      fallback();
+      return;
+    }
+    navigator.clipboard.readText().then((text) => {
+      if (text) {
+        terminal.term.paste(text);
+      }
+    }, fallback);
+  }
+
+  function selectAllTerminal(terminalTabId) {
+    const terminal = state.terminals.get(terminalTabId);
+    terminal?.term.selectAll();
+    terminal?.term.focus();
+  }
+
+  function clearTerminal(terminalTabId) {
+    const terminal = state.terminals.get(terminalTabId);
+    if (!terminal) {
+      return;
+    }
+    terminal.term.clear();
+    terminal.sendClear();
+    terminal.term.focus();
+  }
+
+  // xterm hands every key here first; returning false keeps the shortcut out of
+  // the shell. Ctrl+C is left alone so it still interrupts the running command.
+  function terminalShortcut(terminalTabId, event) {
+    if (event.type !== 'keydown' || event.altKey || event.metaKey) {
+      return true;
+    }
+    const key = event.key.toLowerCase();
+    // Insert pairs work in plain browser tabs, where Chrome keeps Ctrl+Shift+C.
+    if (key === 'insert' && event.ctrlKey !== event.shiftKey) {
+      event.preventDefault();
+      if (event.ctrlKey) {
+        copyTerminalSelection(terminalTabId);
+      } else {
+        pasteTerminalText(terminalTabId);
+      }
+      return false;
+    }
+    if (!event.ctrlKey || !event.shiftKey || event.altKey || event.metaKey) {
+      return true;
+    }
+    switch (key) {
+      case 'c':
+        event.preventDefault();
+        copyTerminalSelection(terminalTabId);
+        return false;
+      case 'v':
+        event.preventDefault();
+        pasteTerminalText(terminalTabId);
+        return false;
+      case 'a':
+        event.preventDefault();
+        selectAllTerminal(terminalTabId);
+        return false;
+      case 'l':
+        event.preventDefault();
+        clearTerminal(terminalTabId);
+        return false;
+      default:
+        return true;
+    }
+  }
+
+  function closeTerminalContextMenu() {
+    document.querySelector('.terminal-context-menu')?.remove();
+    document.removeEventListener('pointerdown', handleTerminalMenuOutside, true);
+    document.removeEventListener('keydown', handleTerminalMenuKey, true);
+  }
+
+  function handleTerminalMenuOutside(event) {
+    if (!event.target.closest('.terminal-context-menu')) {
+      closeTerminalContextMenu();
+    }
+  }
+
+  function handleTerminalMenuKey(event) {
+    if (event.key === 'Escape') {
+      closeTerminalContextMenu();
+    }
+  }
+
+  function openTerminalContextMenu(terminalTabId, clientX, clientY) {
+    closeTerminalContextMenu();
+    const term = state.terminals.get(terminalTabId)?.term;
+    if (!term) {
+      return;
+    }
+    const items = [
+      { label: 'Copy', shortcut: 'Ctrl+Shift+C', disabled: !term.hasSelection(), action: () => copyTerminalSelection(terminalTabId) },
+      { label: 'Paste', shortcut: 'Ctrl+Shift+V', action: () => pasteTerminalText(terminalTabId) },
+      { label: 'Select All', shortcut: 'Ctrl+Shift+A', action: () => selectAllTerminal(terminalTabId) },
+      { label: 'Clear', shortcut: 'Ctrl+Shift+L', action: () => clearTerminal(terminalTabId) }
+    ];
+    const menu = document.createElement('div');
+    menu.className = 'terminal-context-menu';
+    menu.setAttribute('role', 'menu');
+    menu.innerHTML = items.map((item, index) => `
+      <button type="button" role="menuitem" class="terminal-context-item" data-terminal-context-index="${index}" ${item.disabled ? 'disabled' : ''}>${escapeHtml(item.label)}<span class="terminal-context-shortcut">${escapeHtml(item.shortcut)}</span></button>
+    `).join('');
+    document.body.appendChild(menu);
+    menu.style.left = `${Math.min(clientX, window.innerWidth - menu.offsetWidth - 6)}px`;
+    menu.style.top = `${Math.min(clientY, window.innerHeight - menu.offsetHeight - 6)}px`;
+    menu.querySelectorAll('[data-terminal-context-index]').forEach((button) => {
+      button.onclick = () => {
+        const item = items[Number(button.dataset.terminalContextIndex)];
+        closeTerminalContextMenu();
+        item.action();
+      };
+    });
+    menu.querySelector('button:not([disabled])')?.focus();
+    document.addEventListener('pointerdown', handleTerminalMenuOutside, true);
+    document.addEventListener('keydown', handleTerminalMenuKey, true);
   }
 
   function terminalCellAtTouch(element, term, touch) {

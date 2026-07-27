@@ -3709,6 +3709,53 @@ textarea:focus-visible {
   cursor: default;
 }
 
+.terminal-context-menu {
+  position: fixed;
+  z-index: 95;
+  min-width: 196px;
+  padding: 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel);
+  box-shadow: 0 14px 34px var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.terminal-context-item {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text);
+  font: 13px/1 "Segoe UI", system-ui, sans-serif;
+  text-align: left;
+  cursor: pointer;
+}
+
+.terminal-context-item:hover,
+.terminal-context-item:focus-visible {
+  background: var(--accent-soft);
+  color: var(--accent);
+  outline: none;
+}
+
+.terminal-context-item:disabled {
+  opacity: .4;
+  cursor: default;
+}
+
+.terminal-context-shortcut {
+  margin-left: auto;
+  color: var(--muted);
+  font: 11px/1 "Cascadia Mono", Consolas, monospace;
+}
+
 .file-column-header {
   width: max(100%, var(--file-table-width));
   min-width: var(--file-table-width);

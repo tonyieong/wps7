@@ -339,6 +339,13 @@ class StateStore {
     }
   }
 
+  clearScrollback(id) {
+    const target = this.findTerminalTab(id)?.terminalTab || this.findPane(id)?.pane;
+    if (target) {
+      target.scrollback = [];
+    }
+  }
+
   createSession(name) {
     const sessionName = String(name || '').trim() ||
       nextNumberedName('Workspace', this.state.sessions.map((session) => session.name));

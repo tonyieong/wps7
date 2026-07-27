@@ -1114,6 +1114,33 @@ test('files pane exposes a context menu with cut, paste and keyboard shortcuts w
   assert.match(styles, /\.file-context-menu\s*\{[^}]*position:\s*fixed/s);
 });
 
+test('terminal pane exposes copy, paste, select all and clear without copy-on-select', () => {
+  assert.match(appSource, /function openTerminalContextMenu\(terminalTabId, clientX, clientY\)/);
+  assert.match(appSource, /element\.addEventListener\('contextmenu'[\s\S]*?openTerminalContextMenu\(terminalTabId, event\.clientX, event\.clientY\)/);
+  // Copy reads the xterm buffer, so wrapped lines and row padding never reach the clipboard.
+  assert.match(appSource, /function copyTerminalSelection\(terminalTabId\)[\s\S]*?term\?\.getSelection\(\)/);
+  assert.match(appSource, /function pasteTerminalText\(terminalTabId\)[\s\S]*?navigator\.clipboard\.readText\(\)/);
+  assert.match(appSource, /function selectAllTerminal\(terminalTabId\)[\s\S]*?term\.selectAll\(\)/);
+  assert.match(appSource, /function clearTerminal\(terminalTabId\)[\s\S]*?term\.clear\(\)/);
+  assert.match(styles, /\.terminal-context-menu\s*\{[^}]*position:\s*fixed/s);
+  assert.doesNotMatch(appSource, /copyOnSelect|onSelectionChange/);
+});
+
+test('terminal shortcuts use Ctrl+Shift so Ctrl+C still interrupts the shell', () => {
+  assert.match(appSource, /term\.attachCustomKeyEventHandler\(\(event\) => terminalShortcut\(terminalTabId, event\)\)/);
+  assert.match(appSource, /function terminalShortcut\(terminalTabId, event\)/);
+  assert.match(appSource, /if \(!event\.ctrlKey \|\| !event\.shiftKey \|\| event\.altKey \|\| event\.metaKey\)/);
+  for (const [key, handler] of [['c', 'copyTerminalSelection'], ['v', 'pasteTerminalText'], ['a', 'selectAllTerminal'], ['l', 'clearTerminal']]) {
+    assert.match(appSource, new RegExp(`case '${key}':[\\s\\S]{0,80}?${handler}\\(terminalTabId\\)`));
+  }
+  // Ctrl/Shift+Insert stays usable in plain browser tabs that keep Ctrl+Shift+C.
+  assert.match(appSource, /key === 'insert' && event\.ctrlKey !== event\.shiftKey/);
+});
+
+test('clearing a terminal also tells the server to drop its replay buffer', () => {
+  assert.match(appSource, /ws\.send\(JSON\.stringify\(\{ type: 'clear' \}\)\)/);
+});
+
 test('files pane can filter entries by name', () => {
   assert.match(appSource, /data-file-filter-toggle/);
   assert.match(appSource, /data-file-filter\b/);

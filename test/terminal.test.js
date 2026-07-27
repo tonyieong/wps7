@@ -45,6 +45,48 @@ test('terminal manager resolves runtimes by terminal tab id', () => {
   assert.deepEqual(pane.terminalTabs[0].scrollback, []);
 });
 
+test('clearing a terminal drops the stored replay scrollback', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'));
+  const store = new StateStore(root, 10);
+  store.load();
+  const pane = store.state.sessions[0].tabs[0].panes[0];
+  const tabId = pane.activeTerminalTabId;
+
+  store.appendScrollback(tabId, 'old output');
+  assert.deepEqual(store.findTerminalTab(tabId).terminalTab.scrollback, ['old output']);
+
+  store.clearScrollback(tabId);
+  assert.deepEqual(store.findTerminalTab(tabId).terminalTab.scrollback, []);
+});
+
+test('terminal manager clears the headless replay buffer for a live runtime', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'));
+  const store = new StateStore(root, 10);
+  store.load();
+  const tabId = store.state.sessions[0].tabs[0].panes[0].activeTerminalTabId;
+  const manager = new TerminalManager({
+    config: {},
+    root,
+    store,
+    shell: { command: process.platform === 'win32' ? 'powershell.exe' : 'sh', args: [] }
+  });
+
+  const runtime = manager.getOrCreate(tabId);
+  store.appendScrollback(tabId, 'old output');
+  runtime.writeChain = runtime.writeChain.then(() => new Promise((resolve) => {
+    runtime.headless.write('old output\r\n', resolve);
+  }));
+  await runtime.writeChain;
+  assert.match(runtime.serializer.serialize(), /old output/);
+
+  manager.clearTerminal(tabId);
+  await runtime.writeChain;
+  assert.doesNotMatch(runtime.serializer.serialize(), /old output/);
+  assert.deepEqual(store.findTerminalTab(tabId).terminalTab.scrollback, []);
+
+  manager.shutdown();
+});
+
 test('terminal spawn options use the Windows system ConPTY', () => {
   const options = buildPtySpawnOptions({
     cols: 100,
