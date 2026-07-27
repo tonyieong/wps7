@@ -58,12 +58,12 @@ show_hidden = false
 bookmarks = []
 
 [usage]
-# Optional API keys. Leave blank to use the Codex or Claude Code account signed in on this server.
-codex_api_key = ""
-claude_api_key = ""
+# Codex and Claude Code usage always come from the account signed in on this server.
 # MiniMax Coding Plan key. MINIMAX_CODING_API_KEY or MINIMAX_API_KEY takes precedence.
 minimax_api_key = ""
 minimax_region = "global"
+# Usage pane auto-refresh in minutes, 0-999. 0 turns auto-refresh off.
+refresh_minutes = 10
 # Choose the provider cards shown in Usage panes.
 show_codex = true
 show_claude = true

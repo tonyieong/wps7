@@ -3,8 +3,22 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { Terminal: HeadlessTerminal } = require('@xterm/headless');
+const { SerializeAddon } = require('@xterm/addon-serialize');
 const { StateStore } = require('../src/state');
 const { buildPtySpawnOptions, createOutputSender, TerminalManager } = require('../src/terminal');
+
+function createHeadlessRuntime() {
+  const headless = new HeadlessTerminal({ allowProposedApi: true, cols: 100, rows: 30, scrollback: 2000 });
+  const serializer = new SerializeAddon();
+  headless.loadAddon(serializer);
+  return {
+    proc: { write() {}, kill() {} },
+    headless,
+    serializer,
+    writeChain: Promise.resolve()
+  };
+}
 
 test('terminal manager rejects files panes', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'));
@@ -71,7 +85,8 @@ test('terminal manager clears the headless replay buffer for a live runtime', as
     shell: { command: process.platform === 'win32' ? 'powershell.exe' : 'sh', args: [] }
   });
 
-  const runtime = manager.getOrCreate(tabId);
+  const runtime = createHeadlessRuntime();
+  manager.processes.set(tabId, runtime);
   store.appendScrollback(tabId, 'old output');
   runtime.writeChain = runtime.writeChain.then(() => new Promise((resolve) => {
     runtime.headless.write('old output\r\n', resolve);
@@ -99,7 +114,8 @@ test('clearing a terminal clears the ConPTY screen buffer through the shell', ()
     shell: { command: process.platform === 'win32' ? 'powershell.exe' : 'sh', args: [] }
   });
 
-  const runtime = manager.getOrCreate(tabId);
+  const runtime = createHeadlessRuntime();
+  manager.processes.set(tabId, runtime);
   const written = [];
   runtime.proc.write = (data) => written.push(data);
 

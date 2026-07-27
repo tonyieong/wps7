@@ -155,8 +155,7 @@ function publicConfig(config, shell, restartRequired, reloadError) {
     browser: config.browser,
     usage: {
       ...usageVisibility(config),
-      codex_configured: Boolean(config.usage.codex_api_key),
-      claude_configured: Boolean(config.usage.claude_api_key),
+      refresh_minutes: usageRefreshMinutes(config),
       minimax_configured: Boolean(process.env.MINIMAX_CODING_API_KEY || process.env.MINIMAX_API_KEY || config.usage.minimax_api_key),
       minimax_region: config.usage.minimax_region
     },
@@ -213,8 +212,7 @@ function settingsConfig(config, runtimeConfig) {
     },
     usage: {
       ...usageVisibility(config),
-      codex_configured: Boolean(config.usage.codex_api_key),
-      claude_configured: Boolean(config.usage.claude_api_key),
+      refresh_minutes: usageRefreshMinutes(config),
       minimax_configured: Boolean(process.env.MINIMAX_CODING_API_KEY || process.env.MINIMAX_API_KEY || config.usage.minimax_api_key),
       minimax_region: config.usage.minimax_region === 'china' ? 'china' : 'global'
     },
@@ -226,6 +224,12 @@ const usageVisibilityKeys = ['show_codex', 'show_claude', 'show_minimax', 'show_
 
 function usageVisibility(config) {
   return Object.fromEntries(usageVisibilityKeys.map((key) => [key, config.usage[key] !== false]));
+}
+
+// Usage pane auto-refresh interval in minutes. 0 turns auto-refresh off.
+function usageRefreshMinutes(config) {
+  const minutes = Number(config.usage.refresh_minutes);
+  return Number.isInteger(minutes) && minutes >= 0 && minutes <= 999 ? minutes : 10;
 }
 
 function validPort(value) {
@@ -398,13 +402,17 @@ function sanitizeSettingsUpdates(updates) {
   }
   if (updates.usage) {
     next.usage = {};
-    for (const key of ['codex_api_key', 'claude_api_key', 'minimax_api_key']) {
+    for (const key of ['minimax_api_key']) {
       if (Object.prototype.hasOwnProperty.call(updates.usage, key)) {
         next.usage[key] = String(updates.usage[key] || '').trim();
       }
     }
     if (updates.usage.minimax_region === 'global' || updates.usage.minimax_region === 'china') {
       next.usage.minimax_region = updates.usage.minimax_region;
+    }
+    const refreshMinutes = Number(updates.usage.refresh_minutes);
+    if (Number.isInteger(refreshMinutes) && refreshMinutes >= 0 && refreshMinutes <= 999) {
+      next.usage.refresh_minutes = refreshMinutes;
     }
     for (const key of usageVisibilityKeys) {
       if (typeof updates.usage[key] === 'boolean') {
@@ -692,8 +700,8 @@ function main() {
       const minimaxApiKey = process.env.MINIMAX_CODING_API_KEY || process.env.MINIMAX_API_KEY || config.usage.minimax_api_key;
       const usageLog = (message) => appendRuntimeLog(root, `usage ${message}`);
       const value = await usage.fetchUsageOverview({
-        codex: config.usage.show_codex !== false ? () => usage.fetchCodexUsage({ apiKey: config.usage.codex_api_key }) : null,
-        claude: config.usage.show_claude !== false ? () => usage.fetchClaudeUsage({ apiKey: config.usage.claude_api_key, log: usageLog }) : null,
+        codex: config.usage.show_codex !== false ? () => usage.fetchCodexUsage() : null,
+        claude: config.usage.show_claude !== false ? () => usage.fetchClaudeUsage({ log: usageLog }) : null,
         minimax: config.usage.show_minimax !== false
           ? () => usage.fetchMiniMaxUsage({ apiKey: minimaxApiKey, region: config.usage.minimax_region })
           : null,

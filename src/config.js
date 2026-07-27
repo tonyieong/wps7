@@ -74,10 +74,9 @@ const defaultConfig = {
     history: []
   },
   usage: {
-    codex_api_key: '',
-    claude_api_key: '',
     minimax_api_key: '',
     minimax_region: 'global',
+    refresh_minutes: 10,
     show_codex: true,
     show_claude: true,
     show_minimax: true,
@@ -182,12 +181,12 @@ bookmarks = []
 history = []
 
 [usage]
-# Optional API keys. Leave blank to use the Codex or Claude Code account signed in on this server.
-codex_api_key = ""
-claude_api_key = ""
+# Codex and Claude Code usage always come from the account signed in on this server.
 # MiniMax Coding Plan key. MINIMAX_CODING_API_KEY or MINIMAX_API_KEY takes precedence.
 minimax_api_key = ""
 minimax_region = "global"
+# Usage pane auto-refresh in minutes, 0-999. 0 turns auto-refresh off.
+refresh_minutes = 10
 show_codex = true
 show_claude = true
 show_minimax = true

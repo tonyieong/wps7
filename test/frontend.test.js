@@ -83,11 +83,11 @@ test('pane titles reuse the same pane-type icons as the sidebar', () => {
 });
 
 test('long pane titles keep the close button visible immediately while resizing', () => {
-  assert.match(appSource, /\$\{header\}\s*<button class="pane-close" data-close-pane="\$\{pane\.id\}"/);
+  assert.match(appSource, /\$\{header\}\s*\$\{pane\.type === 'usage'[\s\S]*?\}\s*<button class="pane-close" data-close-pane="\$\{pane\.id\}"/);
   assert.match(styles, /\.pane-title\s*\{[^}]*padding:\s*0 38px 0 10px/s);
   assert.match(styles, /\.pane-title\s*\{[^}]*width:\s*100%[^}]*max-width:\s*100%[^}]*contain:\s*inline-size[^}]*transition:\s*none/s);
   assert.match(styles, /\.pane-title \[data-rename-pane\]\s*\{[^}]*width:\s*100%/s);
-  assert.match(styles, /\.pane-close\s*\{[^}]*position:\s*absolute[^}]*top:\s*3px[^}]*right:\s*6px[^}]*z-index:\s*6/s);
+  assert.match(styles, /\.pane-close,\s*\.pane-usage-refresh\s*\{[^}]*position:\s*absolute[^}]*top:\s*3px[^}]*right:\s*6px[^}]*z-index:\s*6/s);
   assert.match(appSource, /function syncPaneTitleWidth\(paneElement\)/);
   assert.match(appSource, /paneElement\.clientWidth[\s\S]*?label\.style\.maxWidth/);
   assert.match(appSource, /function applyPaneLayoutStyle[\s\S]*?syncPaneTitleWidth\(paneElement\)/);
@@ -459,24 +459,51 @@ test('sidebar creates a persistent usage pane with configurable providers', () =
   assert.doesNotMatch(appSource, /className = 'usage-overlay'/);
 });
 
-test('usage settings configure provider API keys and the visible quota windows', () => {
-  assert.match(appSource, /name="usage\.codex_api_key"/);
-  assert.match(appSource, /name="usage\.claude_api_key"/);
-  assert.match(appSource, /name="usage\.clear_codex_api_key"/);
-  assert.match(appSource, /name="usage\.clear_claude_api_key"/);
+test('usage settings configure the MiniMax key and the visible quota windows', () => {
+  assert.match(appSource, /name="usage\.minimax_api_key"/);
+  assert.match(appSource, /name="usage\.clear_minimax_api_key"/);
   for (const key of ['show_five_hour', 'show_weekly', 'show_model_weekly', 'show_credits']) {
     assert.match(appSource, new RegExp(`name="usage\\.${key}"`));
     assert.match(appSource, new RegExp(`${key}: form\\.get\\('usage\\.${key}'\\) === 'on'`));
   }
-  assert.match(mainSource, /codex_configured: Boolean\(config\.usage\.codex_api_key\)/);
-  assert.match(mainSource, /claude_configured: Boolean\(config\.usage\.claude_api_key\)/);
-  assert.match(mainSource, /fetchCodexUsage\(\{ apiKey: config\.usage\.codex_api_key \}\)/);
-  assert.match(mainSource, /fetchClaudeUsage\(\{ apiKey: config\.usage\.claude_api_key, log: usageLog \}\)/);
-  assert.doesNotMatch(mainSource, /codex_api_key: config\.usage/);
+  assert.match(mainSource, /fetchCodexUsage\(\)/);
+  assert.match(mainSource, /fetchClaudeUsage\(\{ log: usageLog \}\)/);
+});
+
+// Codex and Claude Code usage come from the signed-in CLI accounts; an API key cannot
+// read subscription quotas, and storing one used to disable the working OAuth path.
+test('usage settings expose no Codex or Claude Code API key fields', () => {
+  for (const name of ['codex_api_key', 'claude_api_key', 'clear_codex_api_key', 'clear_claude_api_key']) {
+    assert.doesNotMatch(appSource, new RegExp(`usage\\.${name}`));
+  }
+  assert.doesNotMatch(mainSource, /codex_api_key|claude_api_key/);
 });
 
 test('file pane shows modified timestamps in 24-hour time', () => {
   assert.match(appSource, /function formatModified\(value\)[\s\S]*?hour12: false/);
+});
+
+test('usage pane shows quota reset times in 24-hour time', () => {
+  assert.match(appSource, /function usageWindowMarkup\(window\)[\s\S]*?hour12: false/);
+});
+
+test('usage pane puts the refresh button beside the pane close button instead of a toolbar row', () => {
+  assert.match(appSource, /class="pane-usage-refresh"[^>]*data-usage-refresh/);
+  assert.match(styles, /\.pane-usage-refresh\s*\{[^}]*right:\s*32px/s);
+  // The toolbar row and its "AI provider quota windows" caption are gone.
+  assert.doesNotMatch(appSource, /usage-pane-toolbar|AI provider quota windows/);
+  assert.doesNotMatch(styles, /usage-pane-toolbar/);
+});
+
+test('usage panes auto-refresh on the configured interval and stop when set to zero', () => {
+  assert.match(appSource, /name="usage\.refresh_minutes"[^>]*type="number"[^>]*min="0"[^>]*max="999"/);
+  assert.match(appSource, /refresh_minutes: numberOrUndefined\(form\.get\('usage\.refresh_minutes'\)\)/);
+  // 0 (and any non-positive value) must leave no timer scheduled.
+  assert.match(appSource, /function scheduleUsageRefresh\(paneId\)[\s\S]*?if \(!Number\.isFinite\(minutes\) \|\| minutes <= 0\) return;/);
+  assert.match(appSource, /setTimeout\(\(\) => loadUsagePane\(paneId, true\), minutes \* 60000\)/);
+  // Closing a pane must not leave its timer running.
+  assert.match(appSource, /clearUsageRefresh\(paneId\);\s*const index = found\.tab\.panes\.findIndex/);
+  assert.match(mainSource, /function usageRefreshMinutes\(config\)[\s\S]*?minutes >= 0 && minutes <= 999 \? minutes : 10/);
 });
 
 test('mobile terminal sends touch movement through the xterm scroll surface with a compact virtual key row', () => {

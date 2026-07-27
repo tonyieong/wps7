@@ -667,6 +667,7 @@
     return `
       <section class="pane ${pane.id === state.activePaneId ? 'active' : ''}" data-pane="${pane.id}" data-pane-type="${pane.type || 'terminal'}" style="${paneItemStyle(pane)}">
         ${header}
+        ${pane.type === 'usage' ? `<button class="pane-usage-refresh" type="button" data-usage-refresh aria-label="Refresh usage" title="Refresh usage">${fileActionIcon('refresh')}</button>` : ''}
         <button class="pane-close" data-close-pane="${pane.id}" title="Close pane">${fileActionIcon('close')}</button>
         ${body}
         <div class="pane-resize pane-resize-n" data-pane-resize="${pane.id}" data-pane-resize-direction="n"></div>
@@ -4912,6 +4913,7 @@
       return;
     }
 
+    clearUsageRefresh(paneId);
     const index = found.tab.panes.findIndex((pane) => pane.id === paneId);
     found.tab.panes.splice(index, 1);
     const nextPane = found.tab.panes[Math.max(0, index - 1)] || found.tab.panes[0];
@@ -6275,7 +6277,7 @@
 
   function usageWindowMarkup(window) {
     const used = Math.max(0, Math.min(100, Number(window.usedPercent) || 0));
-    const reset = window.resetsAt ? new Date(window.resetsAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'Reset time unavailable';
+    const reset = window.resetsAt ? new Date(window.resetsAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short', hour12: false }) : 'Reset time unavailable';
     return `
       <div class="usage-window">
         <div class="usage-window-heading"><span>${escapeHtml(window.label)}</span><strong>${Math.round(used)}%</strong></div>
@@ -6314,20 +6316,34 @@
   function renderUsagePane(pane) {
     return `
       <div class="usage-pane" data-usage-pane="${pane.id}">
-        <div class="usage-pane-toolbar">
-          <span>AI provider quota windows</span>
-          <button class="file-command-button" type="button" data-usage-refresh aria-label="Refresh usage" title="Refresh usage">${fileActionIcon('refresh')}</button>
-        </div>
         <div class="usage-content" data-usage-content><div class="usage-loading">Reading provider usage…</div></div>
       </div>
     `;
+  }
+
+  const usageRefreshTimers = new Map();
+
+  function clearUsageRefresh(paneId) {
+    clearTimeout(usageRefreshTimers.get(paneId));
+    usageRefreshTimers.delete(paneId);
+  }
+
+  // Re-runs the lookup on the configured interval. 0 minutes turns auto-refresh off.
+  function scheduleUsageRefresh(paneId) {
+    clearUsageRefresh(paneId);
+    const minutes = Number(state.config?.usage?.refresh_minutes);
+    if (!Number.isFinite(minutes) || minutes <= 0) return;
+    usageRefreshTimers.set(paneId, setTimeout(() => loadUsagePane(paneId, true), minutes * 60000));
   }
 
   async function loadUsagePane(paneId, refresh = false) {
     const pane = document.querySelector(`[data-pane="${paneId}"]`);
     const content = pane?.querySelector('[data-usage-content]');
     const refreshButton = pane?.querySelector('[data-usage-refresh]');
-    if (!content) return;
+    if (!content) {
+      clearUsageRefresh(paneId);
+      return;
+    }
     refreshButton.onclick = () => loadUsagePane(paneId, true);
     refreshButton.disabled = true;
     content.innerHTML = '<div class="usage-loading">Reading provider usage…</div>';
@@ -6342,6 +6358,7 @@
       content.innerHTML = `<div class="usage-loading error">${escapeHtml(error.message)}</div>`;
     } finally {
       refreshButton.disabled = false;
+      scheduleUsageRefresh(paneId);
     }
   }
 
@@ -6856,6 +6873,7 @@
             <section class="settings-section" id="settings-usage">
               <div class="section-heading"><div><h2>Usage</h2><p>Choose the provider cards and quota windows shown in Usage panes.</p></div></div>
               <div class="settings-grid">
+                <label>Auto-refresh minutes<input name="usage.refresh_minutes" type="number" min="0" max="999" step="1" value="${escapeAttr(settings.usage?.refresh_minutes ?? 10)}" title="0 turns auto-refresh off"></label>
                 <label class="settings-check"><input name="usage.show_codex" type="checkbox" ${settings.usage?.show_codex !== false ? 'checked' : ''}> Codex</label>
                 <label class="settings-check"><input name="usage.show_claude" type="checkbox" ${settings.usage?.show_claude !== false ? 'checked' : ''}> Claude Code</label>
                 <label class="settings-check"><input name="usage.show_minimax" type="checkbox" ${settings.usage?.show_minimax !== false ? 'checked' : ''}> MiniMax</label>
@@ -6863,10 +6881,6 @@
                 <label class="settings-check"><input name="usage.show_weekly" type="checkbox" ${settings.usage?.show_weekly !== false ? 'checked' : ''}> Weekly window</label>
                 <label class="settings-check"><input name="usage.show_model_weekly" type="checkbox" ${settings.usage?.show_model_weekly !== false ? 'checked' : ''}> Per-model weekly windows</label>
                 <label class="settings-check"><input name="usage.show_credits" type="checkbox" ${settings.usage?.show_credits !== false ? 'checked' : ''}> Credit balance</label>
-                <label class="settings-wide">Codex API key<input name="usage.codex_api_key" type="password" autocomplete="off" placeholder="${settings.usage?.codex_configured ? 'Saved — leave blank to keep' : 'Blank uses the signed-in Codex account'}"></label>
-                <label class="settings-check"><input name="usage.clear_codex_api_key" type="checkbox"> Clear saved Codex key</label>
-                <label class="settings-wide">Claude Code API key<input name="usage.claude_api_key" type="password" autocomplete="off" placeholder="${settings.usage?.claude_configured ? 'Saved — leave blank to keep' : 'Blank uses the signed-in Claude Code account'}"></label>
-                <label class="settings-check"><input name="usage.clear_claude_api_key" type="checkbox"> Clear saved Claude Code key</label>
                 <label class="settings-wide">MiniMax Coding Plan API key<input name="usage.minimax_api_key" type="password" autocomplete="off" placeholder="${settings.usage?.minimax_configured ? 'Saved — leave blank to keep' : 'sk-cp-…'}"></label>
                 <label>MiniMax region<select name="usage.minimax_region"><option value="global" ${settings.usage?.minimax_region !== 'china' ? 'selected' : ''}>Global</option><option value="china" ${settings.usage?.minimax_region === 'china' ? 'selected' : ''}>China mainland</option></select></label>
                 <label class="settings-check"><input name="usage.clear_minimax_api_key" type="checkbox"> Clear saved MiniMax key</label>
@@ -7157,6 +7171,7 @@
       },
       usage: {
         minimax_region: form.get('usage.minimax_region'),
+        refresh_minutes: numberOrUndefined(form.get('usage.refresh_minutes')),
         show_codex: form.get('usage.show_codex') === 'on',
         show_claude: form.get('usage.show_claude') === 'on',
         show_minimax: form.get('usage.show_minimax') === 'on',
@@ -7167,13 +7182,11 @@
       },
       custom_theme: customThemeFromForm(form)
     };
-    for (const provider of ['codex', 'claude', 'minimax']) {
-      const apiKey = String(form.get(`usage.${provider}_api_key`) || '').trim();
-      if (form.get(`usage.clear_${provider}_api_key`) === 'on') {
-        payload.usage[`${provider}_api_key`] = '';
-      } else if (apiKey) {
-        payload.usage[`${provider}_api_key`] = apiKey;
-      }
+    const minimaxApiKey = String(form.get('usage.minimax_api_key') || '').trim();
+    if (form.get('usage.clear_minimax_api_key') === 'on') {
+      payload.usage.minimax_api_key = '';
+    } else if (minimaxApiKey) {
+      payload.usage.minimax_api_key = minimaxApiKey;
     }
     const password = String(form.get('auth.password') || '');
     if (password) {

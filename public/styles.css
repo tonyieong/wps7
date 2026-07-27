@@ -419,6 +419,7 @@ textarea {
 }
 
 .pane-close .file-action-icon,
+.pane-usage-refresh .file-action-icon,
 .pane-new-tab .file-action-icon,
 .browser-new-tab .file-action-icon,
 .notepad-new-tab .file-action-icon {
@@ -458,7 +459,8 @@ textarea {
   display: none;
 }
 
-.pane-close {
+.pane-close,
+.pane-usage-refresh {
   position: absolute;
   top: 3px;
   right: 6px;
@@ -481,10 +483,22 @@ textarea {
 }
 
 .pane-close:hover,
-.pane-close:focus-visible {
+.pane-close:focus-visible,
+.pane-usage-refresh:hover,
+.pane-usage-refresh:focus-visible {
   background: #2a303b;
   color: var(--text);
   outline: none;
+}
+
+/* Sits immediately left of the pane close button. */
+.pane-usage-refresh {
+  right: 32px;
+}
+
+.pane-usage-refresh[disabled] {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .pane-resize {
@@ -4003,18 +4017,6 @@ textarea:focus-visible {
   background: var(--terminal-bg);
 }
 
-.usage-pane-toolbar {
-  height: var(--pane-toolbar-height);
-  padding: 0 4px 0 8px;
-  border-bottom: 1px solid var(--line);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  color: var(--muted);
-  font: 11px "Cascadia Mono", Consolas, monospace;
-}
-
 .usage-card h3,
 .usage-card h4,
 .usage-card p {
@@ -4025,11 +4027,6 @@ textarea:focus-visible {
 .usage-card p {
   color: var(--muted);
   font-size: 11px;
-}
-
-.usage-pane-toolbar .file-action-icon {
-  width: 16px;
-  height: 16px;
 }
 
 .usage-content {

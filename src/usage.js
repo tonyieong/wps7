@@ -283,25 +283,21 @@ function codexUsageResult(payload) {
   };
 }
 
-async function fetchCodexUsage({ codexHome, apiKey, fetchImpl = defaultFetch, spawnImpl = spawn } = {}) {
-  const configuredKey = String(apiKey || '').trim();
-  let accessToken = configuredKey;
-  let home = codexHome || process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
+async function fetchCodexUsage({ codexHome, fetchImpl = defaultFetch, spawnImpl = spawn } = {}) {
+  const home = codexHome || process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
+  const authPath = path.join(home, 'auth.json');
+  if (!fs.existsSync(authPath)) {
+    throw new Error('Codex is not signed in on this server.');
+  }
+  let auth;
+  try {
+    auth = JSON.parse(fs.readFileSync(authPath, 'utf8'));
+  } catch (error) {
+    throw new Error('Codex auth.json could not be read.');
+  }
+  const accessToken = auth.tokens?.access_token || auth.access_token;
   if (!accessToken) {
-    const authPath = path.join(home, 'auth.json');
-    if (!fs.existsSync(authPath)) {
-      throw new Error('Codex is not signed in on this server and no API key is configured.');
-    }
-    let auth;
-    try {
-      auth = JSON.parse(fs.readFileSync(authPath, 'utf8'));
-    } catch (error) {
-      throw new Error('Codex auth.json could not be read.');
-    }
-    accessToken = auth.tokens?.access_token || auth.access_token;
-    if (!accessToken) {
-      throw new Error('Codex OAuth token is missing.');
-    }
+    throw new Error('Codex OAuth token is missing.');
   }
 
   let payload;
@@ -310,11 +306,8 @@ async function fetchCodexUsage({ codexHome, apiKey, fetchImpl = defaultFetch, sp
       headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/json' }
     }, fetchImpl);
   } catch (error) {
-    if (!configuredKey && error.code === 'PROVIDER_AUTH') {
+    if (error.code === 'PROVIDER_AUTH') {
       return codexUsageResult(await fetchCodexCliUsage({ codexHome: home, spawnImpl }));
-    }
-    if (configuredKey && error.code === 'PROVIDER_AUTH') {
-      throw new Error('The configured Codex API key cannot read ChatGPT subscription usage. Clear it to use the signed-in Codex account.');
     }
     throw error;
   }
@@ -332,7 +325,7 @@ async function fetchCodexUsage({ codexHome, apiKey, fetchImpl = defaultFetch, sp
   return {
     provider: 'codex',
     label: 'Codex',
-    source: configuredKey ? 'api' : 'oauth',
+    source: 'oauth',
     plan: payload.plan_type || '',
     windows,
     credits: payload.credits ? {
@@ -428,23 +421,19 @@ function refreshClaudeLogin({ claudeHome, credentialsPath, previousAccessToken, 
   });
 }
 
-async function fetchClaudeUsage({ claudeHome, apiKey, fetchImpl = defaultFetch, ptyImpl = pty, log = () => {} } = {}) {
-  const configuredKey = String(apiKey || '').trim();
-  let accessToken = configuredKey;
+async function fetchClaudeUsage({ claudeHome, fetchImpl = defaultFetch, ptyImpl = pty, log = () => {} } = {}) {
   const home = claudeHome || process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
   const credentialsPath = path.join(home, '.credentials.json');
-  log(`claude home=${home} homedir=${os.homedir()} configDirEnv=${process.env.CLAUDE_CONFIG_DIR || 'unset'} configuredKey=${Boolean(configuredKey)}`);
-  if (!accessToken) {
-    if (!fs.existsSync(credentialsPath)) {
-      throw new Error('Claude Code is not signed in on this server and no API key is configured.');
-    }
-    const credentials = readClaudeCredentials(credentialsPath);
-    accessToken = claudeAccessToken(credentials);
-    if (!accessToken) {
-      throw new Error('Claude Code OAuth token is missing.');
-    }
-    log(`claude oauth tokenLength=${tokenLength(accessToken)} expiresAt=${claudeExpiry(credentials)} now=${new Date().toISOString()}`);
+  log(`claude home=${home} homedir=${os.homedir()} configDirEnv=${process.env.CLAUDE_CONFIG_DIR || 'unset'}`);
+  if (!fs.existsSync(credentialsPath)) {
+    throw new Error('Claude Code is not signed in on this server.');
   }
+  const credentials = readClaudeCredentials(credentialsPath);
+  let accessToken = claudeAccessToken(credentials);
+  if (!accessToken) {
+    throw new Error('Claude Code OAuth token is missing.');
+  }
+  log(`claude oauth tokenLength=${tokenLength(accessToken)} expiresAt=${claudeExpiry(credentials)} now=${new Date().toISOString()}`);
 
   const fetchUsage = (token) => requestJson('https://api.anthropic.com/api/oauth/usage', {
     headers: {
@@ -458,7 +447,7 @@ async function fetchClaudeUsage({ claudeHome, apiKey, fetchImpl = defaultFetch, 
     payload = await fetchUsage(accessToken);
   } catch (error) {
     log(`claude usage request failed status=${error.status ?? 'none'} code=${error.code || 'none'} message=${error.message} body=${error.body || 'none'}`);
-    if (!configuredKey && error.code === 'PROVIDER_AUTH') {
+    if (error.code === 'PROVIDER_AUTH') {
       try {
         accessToken = await refreshClaudeLogin({
           claudeHome: home,
@@ -472,8 +461,6 @@ async function fetchClaudeUsage({ claudeHome, apiKey, fetchImpl = defaultFetch, 
         throw new Error(`${refreshError.message} Run /login in Claude Code as the WPS7 service account.`);
       }
       payload = await fetchUsage(accessToken);
-    } else if (configuredKey && error.code === 'PROVIDER_AUTH') {
-      throw new Error('The configured Claude Code API key cannot read subscription usage. Clear it to use the signed-in Claude Code account.');
     } else {
       throw error;
     }
@@ -491,11 +478,11 @@ async function fetchClaudeUsage({ claudeHome, apiKey, fetchImpl = defaultFetch, 
     resetsAt: isoDate(payload[key].resets_at)
   }] : []);
 
-  log(`claude usage ok source=${configuredKey ? 'api' : 'oauth'} windows=${windows.map((window) => window.id).join(',') || 'none'}`);
+  log(`claude usage ok windows=${windows.map((window) => window.id).join(',') || 'none'}`);
   return {
     provider: 'claude',
     label: 'Claude Code',
-    source: configuredKey ? 'api' : 'oauth',
+    source: 'oauth',
     windows,
     updatedAt: new Date().toISOString()
   };

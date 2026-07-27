@@ -326,9 +326,12 @@ test('usage overview keeps enabled providers available when another fails', asyn
 });
 
 test('codex window kinds follow the reported window length, not the window slot', async () => {
+  const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-codex-'));
+  fs.writeFileSync(path.join(codexHome, 'auth.json'), JSON.stringify({
+    tokens: { access_token: 'codex-token' }
+  }));
   const result = await fetchCodexUsage({
-    codexHome: fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-codex-')),
-    apiKey: 'codex-configured-key',
+    codexHome,
     fetchImpl: async () => ({
       ok: true,
       status: 200,
@@ -347,42 +350,17 @@ test('codex window kinds follow the reported window length, not the window slot'
   ]);
 });
 
-test('uses the configured Codex API key instead of the local OAuth account', async () => {
-  const result = await fetchCodexUsage({
-    codexHome: path.join(os.tmpdir(), 'wps7-codex-missing'),
-    apiKey: 'codex-configured-key',
-    fetchImpl: async (_url, options) => {
-      assert.equal(options.headers.Authorization, 'Bearer codex-configured-key');
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({
-          rate_limit: { primary_window: { used_percent: 10, limit_window_seconds: 18000, reset_at: 1800000000 } }
-        })
-      };
-    }
-  });
-
-  assert.equal(result.source, 'api');
-  assert.deepEqual(result.windows.map((window) => window.kind), ['five_hour']);
-});
-
-test('uses the configured Claude Code API key instead of the local OAuth account', async () => {
-  const result = await fetchClaudeUsage({
-    claudeHome: path.join(os.tmpdir(), 'wps7-claude-missing'),
-    apiKey: 'claude-configured-key',
-    fetchImpl: async (_url, options) => {
-      assert.equal(options.headers.Authorization, 'Bearer claude-configured-key');
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ five_hour: { utilization: 5, resets_at: '2027-01-01T05:00:00Z' } })
-      };
-    }
-  });
-
-  assert.equal(result.source, 'api');
-  assert.deepEqual(result.windows.map((window) => window.kind), ['five_hour']);
+// An API key cannot read subscription quotas, so the signed-in CLI account is the
+// only source and the error must not suggest configuring a key.
+test('reports a missing CLI sign-in without mentioning an API key', async () => {
+  await assert.rejects(
+    fetchCodexUsage({ codexHome: path.join(os.tmpdir(), 'wps7-codex-missing') }),
+    (error) => error.message === 'Codex is not signed in on this server.'
+  );
+  await assert.rejects(
+    fetchClaudeUsage({ claudeHome: path.join(os.tmpdir(), 'wps7-claude-missing') }),
+    (error) => error.message === 'Claude Code is not signed in on this server.'
+  );
 });
 
 test('usage overview keeps only the window kinds and extras enabled in settings', async () => {

@@ -41,11 +41,13 @@ test('creates default config with localhost port 5000', () => {
   assert.equal(config.custom_theme.light_accent, '#159d83');
   assert.equal(config.usage.minimax_api_key, '');
   assert.equal(config.usage.minimax_region, 'global');
+  assert.equal(config.usage.refresh_minutes, 10);
   assert.equal(config.usage.show_codex, true);
   assert.equal(config.usage.show_claude, true);
   assert.equal(config.usage.show_minimax, true);
-  assert.equal(config.usage.codex_api_key, '');
-  assert.equal(config.usage.claude_api_key, '');
+  // Codex and Claude Code usage always come from the signed-in CLI accounts.
+  assert.equal('codex_api_key' in config.usage, false);
+  assert.equal('claude_api_key' in config.usage, false);
   assert.equal(config.usage.show_five_hour, true);
   assert.equal(config.usage.show_weekly, true);
   assert.equal(config.usage.show_model_weekly, true);
@@ -149,8 +151,6 @@ test('updates known config values while preserving loadability', () => {
       ]
     },
     usage: {
-      codex_api_key: 'codex-key-test',
-      claude_api_key: 'claude-key-test',
       minimax_api_key: 'sk-cp-test',
       minimax_region: 'china',
       show_codex: false,
@@ -222,8 +222,6 @@ test('updates known config values while preserving loadability', () => {
   assert.equal(config.usage.show_codex, false);
   assert.equal(config.usage.show_claude, true);
   assert.equal(config.usage.show_minimax, false);
-  assert.equal(config.usage.codex_api_key, 'codex-key-test');
-  assert.equal(config.usage.claude_api_key, 'claude-key-test');
   assert.equal(config.usage.show_five_hour, false);
   assert.equal(config.usage.show_weekly, true);
   assert.equal(config.usage.show_model_weekly, false);
