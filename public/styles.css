@@ -3053,18 +3053,32 @@ textarea:focus-visible {
   grid-template-rows: 44px minmax(0, 1fr);
 }
 
+/* Solid squares are 120px; each holds a 4 x 4 block of 30px dashed cells. The
+   conic gradients paint one dash per minor cell: the quadrant left of and above
+   the gradient centre is the only painted part of each tile. */
 .pane-grid {
   height: 100%;
   margin: 0;
   border: 0;
   border-radius: 0;
+  --grid-dash-length: 2px;
+  --grid-solid: color-mix(in srgb, var(--line) 45%, transparent);
+  --grid-dashed: color-mix(in srgb, var(--line) 32%, transparent);
   background-color: var(--terminal-bg);
   background-image:
-    linear-gradient(to right, color-mix(in srgb, var(--line) 45%, transparent) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in srgb, var(--line) 45%, transparent) 1px, transparent 1px);
+    linear-gradient(to right, var(--grid-solid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-solid) 1px, transparent 1px),
+    conic-gradient(at 1px var(--grid-dash-length), transparent 0deg 270deg, var(--grid-dashed) 270deg 360deg),
+    conic-gradient(at var(--grid-dash-length) 1px, transparent 0deg 270deg, var(--grid-dashed) 270deg 360deg);
   background-repeat: repeat;
-  background-size: 120px 120px;
+  background-size: 120px 120px, 120px 120px, 30px 6px, 6px 30px;
   background-position: 0 0;
+}
+
+.pane-grid.minor-grid-hidden {
+  background-image:
+    linear-gradient(to right, var(--grid-solid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-solid) 1px, transparent 1px);
 }
 
 .terminal {
@@ -5125,4 +5139,127 @@ a:focus-visible {
 
 .notepad-editor:focus-visible {
   outline: none;
+}
+
+/* Whiteboard drawing tools. */
+.draw-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.draw-tool {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.draw-tool:hover,
+.draw-tool:focus-visible {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.draw-tool.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.draw-tool .file-action-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.draw-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.pane-grid:not([data-draw-tool="selection"]) .draw-layer {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
+.pane-grid[data-draw-tool="hand"] .draw-layer {
+  cursor: grab;
+}
+
+.pane-grid[data-draw-tool="text"] .draw-layer {
+  cursor: text;
+}
+
+.pane-grid[data-draw-tool="eraser"] .draw-layer {
+  cursor: cell;
+}
+
+.draw-shape {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+text.draw-shape {
+  fill: var(--text);
+  stroke: none;
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+/* Invisible fat stroke so thin shapes stay easy to pick and erase. */
+.draw-hit {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14;
+  vector-effect: non-scaling-stroke;
+  pointer-events: stroke;
+}
+
+.pane-grid[data-draw-tool="selection"] .draw-hit {
+  cursor: move;
+}
+
+.draw-element.selected .draw-shape {
+  stroke: var(--accent);
+}
+
+.draw-element.selected text.draw-shape {
+  fill: var(--accent);
+}
+
+.draw-text-input {
+  position: absolute;
+  z-index: 3;
+  min-width: 140px;
+  padding: 0;
+  border: 0;
+  outline: 1px dashed var(--accent);
+  background: transparent;
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, sans-serif;
+  overflow: hidden;
+  resize: none;
+  white-space: pre;
+}
+
+.app.mobile-device .draw-toolbar,
+.app.mode-mobile .draw-toolbar,
+.app.mobile-device .draw-layer,
+.app.mode-mobile .draw-layer {
+  display: none;
 }

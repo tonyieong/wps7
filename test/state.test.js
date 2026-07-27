@@ -117,9 +117,13 @@ test('resizePane saves free world coordinates and allows overlap', () => {
   assert.equal(store.resizePane(paneId, { x: 1200, y: 840, w: 480, h: 360, z: 5 }), true);
   assert.deepEqual(store.findPane(paneId).pane.layout, { x: 1200, y: 840, w: 480, h: 360, z: 5 });
 
-  // off-grid input snaps to the nearest grid unit (120)
+  // off-grid input snaps to the nearest dashed grid cell (30), which includes every solid line (120)
   assert.equal(store.resizePane(secondPane.id, { x: 610, y: 130, w: 500, h: 300, z: 6 }), true);
-  assert.deepEqual(store.findPane(secondPane.id).pane.layout, { x: 600, y: 120, w: 480, h: 360, z: 6 });
+  assert.deepEqual(store.findPane(secondPane.id).pane.layout, { x: 600, y: 120, w: 510, h: 300, z: 6 });
+
+  // a pane may rest on a dashed line that is not a solid grid line
+  assert.equal(store.resizePane(secondPane.id, { x: 147, y: 152, w: 480, h: 360, z: 6 }), true);
+  assert.deepEqual(store.findPane(secondPane.id).pane.layout, { x: 150, y: 150, w: 480, h: 360, z: 6 });
 
   // overlapping another pane is allowed on the whiteboard
   assert.equal(store.resizePane(secondPane.id, { x: 1200, y: 840, w: 480, h: 360, z: 7 }), true);
@@ -541,4 +545,27 @@ test('camera state persists per tab and clamps invalid zoom', () => {
   // out-of-range zoom falls back to 1
   assert.equal(store.setCamera(tabId, { x: 0, y: 0, scale: 99 }), true);
   assert.equal(store.state.sessions[0].tabs[0].camera.scale, 1);
+});
+
+test('drawings persist per tab and drop unknown shapes', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100);
+  store.load();
+  const tabId = store.state.sessions[0].tabs[0].id;
+
+  assert.equal(store.setDrawings(tabId, [
+    { id: 'a', type: 'rectangle', x: 120, y: 150, w: 240, h: 90 },
+    { id: 'b', type: 'draw', x: 30, y: 30, w: 0, h: 0, points: [[0, 0], [12, 18]] },
+    { id: 'c', type: 'text', x: 60, y: 60, w: 0, h: 0, text: 'note' },
+    { id: 'd', type: 'sticker', x: 0, y: 0, w: 10, h: 10 }
+  ]), true);
+
+  const restored = new StateStore(root, 100);
+  restored.load();
+  const drawings = restored.state.sessions[0].tabs[0].drawings;
+  assert.deepEqual(drawings.map((element) => element.id), ['a', 'b', 'c']);
+  assert.deepEqual(drawings[0], { id: 'a', type: 'rectangle', x: 120, y: 150, w: 240, h: 90 });
+  assert.deepEqual(drawings[1].points, [[0, 0], [12, 18]]);
+  assert.equal(drawings[2].text, 'note');
+  assert.equal(store.setDrawings('missing-tab', []), false);
 });

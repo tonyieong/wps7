@@ -4,11 +4,16 @@ const crypto = require('crypto');
 const { normalizeCwd } = require('./shell');
 
 const GRID_UNIT = 120;
+const GRID_MINOR_UNIT = 30;
 const DEFAULT_PANE_WIDTH = 720;
 const DEFAULT_PANE_HEIGHT = 480;
 const PANE_CASCADE_STEP = GRID_UNIT;
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 4;
+const DRAW_TYPES = new Set(['rectangle', 'diamond', 'ellipse', 'arrow', 'line', 'draw', 'text']);
+const MAX_DRAW_ELEMENTS = 2000;
+const MAX_DRAW_POINTS = 4000;
+const MAX_DRAW_TEXT_LENGTH = 2000;
 const PANE_TYPES = new Set(['terminal', 'files', 'browser', 'notepad', 'usage']);
 const NOTEPAD_ENCODINGS = new Set(['utf8', 'utf8-bom', 'utf16le', 'utf16be', 'latin1']);
 const MAX_NOTEPAD_CONTENT_LENGTH = 10 * 1024 * 1024;
@@ -131,6 +136,7 @@ function defaultSession(name = 'Workspace 1', paneTitle = 'PowerShell 1') {
         id: crypto.randomUUID(),
         name: 'Main',
         activePaneId: paneId,
+        drawings: [],
         panes: [
           {
             id: paneId,
@@ -234,7 +240,7 @@ class StateStore {
       }
       panes.push(nextPane);
     }
-    return { ...tab, panes, camera: sanitizeCamera(tab.camera) };
+    return { ...tab, panes, camera: sanitizeCamera(tab.camera), drawings: sanitizeDrawings(tab.drawings) };
   }
 
   getPersistedState() {
@@ -245,6 +251,7 @@ class StateStore {
         tabs: session.tabs.map((tab) => ({
           ...tab,
           camera: sanitizeCamera(tab.camera),
+          drawings: sanitizeDrawings(tab.drawings),
           panes: tab.panes.map((pane) => ({
             id: pane.id,
             type: paneType(pane.type),
@@ -277,6 +284,7 @@ class StateStore {
         tabs: session.tabs.map((tab) => ({
           ...tab,
           camera: sanitizeCamera(tab.camera),
+          drawings: sanitizeDrawings(tab.drawings),
           panes: tab.panes.map((pane) => ({
             id: pane.id,
             type: paneType(pane.type),
@@ -867,6 +875,18 @@ class StateStore {
     }
     return false;
   }
+
+  setDrawings(tabId, drawings) {
+    for (const session of this.state.sessions) {
+      const tab = session.tabs.find((candidate) => candidate.id === tabId);
+      if (tab) {
+        tab.drawings = sanitizeDrawings(drawings);
+        this.save();
+        return true;
+      }
+    }
+    return false;
+  }
 }
 
 module.exports = {
@@ -875,8 +895,9 @@ module.exports = {
   nextNumberedName
 };
 
+// Panes snap to the dashed minor grid, which also covers every solid grid line.
 function snapUnit(value) {
-  return Math.round(value / GRID_UNIT) * GRID_UNIT;
+  return Math.round(value / GRID_MINOR_UNIT) * GRID_MINOR_UNIT;
 }
 
 function sanitizeLayout(layout) {
@@ -903,6 +924,36 @@ function migrateLayout(layout) {
     h: rows * DEFAULT_PANE_HEIGHT,
     z: 0
   });
+}
+
+function drawElement(value) {
+  if (!DRAW_TYPES.has(value?.type)) {
+    return null;
+  }
+  const element = {
+    id: String(value.id || crypto.randomUUID()).slice(0, 64),
+    type: value.type,
+    x: Math.round(Number(value.x)) || 0,
+    y: Math.round(Number(value.y)) || 0,
+    w: Math.round(Number(value.w)) || 0,
+    h: Math.round(Number(value.h)) || 0
+  };
+  if (value.type === 'draw') {
+    element.points = (Array.isArray(value.points) ? value.points : [])
+      .slice(0, MAX_DRAW_POINTS)
+      .map((point) => [Math.round(Number(point?.[0])) || 0, Math.round(Number(point?.[1])) || 0]);
+  }
+  if (value.type === 'text') {
+    element.text = String(value.text || '').slice(0, MAX_DRAW_TEXT_LENGTH);
+  }
+  return element;
+}
+
+function sanitizeDrawings(drawings) {
+  return (Array.isArray(drawings) ? drawings : [])
+    .slice(0, MAX_DRAW_ELEMENTS)
+    .map(drawElement)
+    .filter(Boolean);
 }
 
 function sanitizeCamera(camera) {

@@ -71,7 +71,9 @@
     lastSessionTap: null,
     suppressSessionClickUntil: 0,
     theme: ({ dark: 'wps-dark', light: 'wps-light', custom: 'custom-dark' })[localStorage.getItem('wps7.theme')] || localStorage.getItem('wps7.theme') || 'wps-dark',
-    customThemeDraft: null
+    customThemeDraft: null,
+    drawTool: 'selection',
+    drawSelectionId: ''
   };
 
   const app = document.getElementById('app');
@@ -754,8 +756,31 @@
     wrap: '<path d="M4 7h16M4 12h11a3 3 0 1 1 0 6h-3M4 17h5"/><path d="m14 15 3 3-3 3"/>',
     indent: '<path d="M4 4v16M9 4v16M4 8h5M4 16h5"/>',
     autosave: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/>',
-    font: '<path d="M6 20 11 4h2l5 16M8 14h8"/>'
+    font: '<path d="M6 20 11 4h2l5 16M8 14h8"/>',
+    hand: '<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12"/><path d="M11 12V4.5a1.5 1.5 0 0 1 3 0V12"/><path d="M14 12V6.5a1.5 1.5 0 0 1 3 0V13"/><path d="M17 11a1.5 1.5 0 0 1 3 0v4a6 6 0 0 1-6 6h-2a6 6 0 0 1-6-6v-2a1.5 1.5 0 0 1 3 0"/>',
+    pointer: '<path d="M5 3.5 12 19l2.2-6 6-2.2z"/>',
+    rectangle: '<rect x="4" y="6" width="16" height="12"/>',
+    diamond: '<path d="M12 3 21 12 12 21 3 12z"/>',
+    ellipse: '<ellipse cx="12" cy="12" rx="9" ry="7"/>',
+    arrow: '<path d="M4 20 19 5"/><path d="M12 5h7v7"/>',
+    line: '<path d="M4 20 20 4"/>',
+    pencil: '<path d="m4 20 1-4L16.4 4.6a2.2 2.2 0 0 1 3 3L8 19z"/><path d="m14.5 6.5 3 3"/>',
+    text: '<path d="M5 7V4h14v3M12 4v16M9 20h6"/>',
+    eraser: '<path d="m14 4 6 6-8 8H7l-3.5-3.5z"/><path d="M9.5 8.5 15 14"/><path d="M10 20h10"/>'
   };
+
+  const drawTools = [
+    { id: 'hand', label: 'Hand', icon: 'hand' },
+    { id: 'selection', label: 'Selection', icon: 'pointer' },
+    { id: 'rectangle', label: 'Rectangle', icon: 'rectangle' },
+    { id: 'diamond', label: 'Diamond', icon: 'diamond' },
+    { id: 'ellipse', label: 'Ellipse', icon: 'ellipse' },
+    { id: 'arrow', label: 'Arrow', icon: 'arrow' },
+    { id: 'line', label: 'Line', icon: 'line' },
+    { id: 'draw', label: 'Draw', icon: 'pencil' },
+    { id: 'text', label: 'Text', icon: 'text' },
+    { id: 'eraser', label: 'Eraser', icon: 'eraser' }
+  ];
 
   function fileActionIcon(name) {
     return `<svg class="file-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${fileActionIcons[name] || ''}</svg>`;
@@ -1191,6 +1216,11 @@
               <button class="rail-button sidebar-brand" data-action="toggle" aria-label="Toggle sidebar" aria-expanded="${state.sidebarOpen}" title="${state.sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}"><span class="rail-brand-mark" aria-hidden="true">W7</span><span class="rail-label">WPS7</span></button>
               <button class="sidebar-pin" type="button" data-sidebar-pin aria-label="${state.sidebarPinned ? 'Unpin' : 'Pin'} sidebar" aria-pressed="${state.sidebarPinned}" title="${state.sidebarPinned ? 'Unpin sidebar' : 'Pin sidebar'}"><span class="rail-icon" aria-hidden="true">${fileActionIcon(state.sidebarPinned ? 'pin-off' : 'pin')}</span></button>
             </div>
+            <div class="draw-toolbar" role="toolbar" aria-label="Drawing tools">
+              ${drawTools.map((tool) => `
+                <button class="draw-tool ${state.drawTool === tool.id ? 'active' : ''}" type="button" data-draw-tool-button="${tool.id}" aria-label="${tool.label}" aria-pressed="${state.drawTool === tool.id}" title="${tool.label}">${fileActionIcon(tool.icon)}</button>
+              `).join('')}
+            </div>
             <button class="rail-button" data-action="new-powershell" aria-label="New PowerShell" title="New PowerShell">
               <span class="rail-icon" aria-hidden="true">${fileActionIcon('terminal')}</span><span class="rail-label">New PowerShell</span>
             </button>
@@ -1237,10 +1267,13 @@
             <button type="button" class="primary" data-switch-mobile>Switch to Mobile</button>
             <button type="button" class="desktop-mode-banner-dismiss" data-dismiss-banner aria-label="Keep desktop layout" title="Keep desktop layout">×</button>
           </div>
-          <div class="pane-grid">
+          <div class="pane-grid" data-draw-tool="${state.drawTool}">
             <div class="pane-canvas" data-pane-canvas>
               ${tab.panes.map((pane) => renderPane(pane)).join('')}
             </div>
+            <svg class="draw-layer" data-draw-layer aria-hidden="true">
+              <g data-draw-scene>${activeDrawings().map(drawElementMarkup).join('')}</g>
+            </svg>
           </div>
         </section>
       </main>
@@ -1317,6 +1350,7 @@
     app.querySelector('[data-theme-toggle]').onclick = () => setThemeLive(pairedThemeId(), true);
     app.querySelector('.sidebar').addEventListener('click', closeMobileSidebarAfterAction);
     wireMobileKeybarButtons(app);
+    wireDrawTools(app);
     wirePaneGrid(app);
     app.querySelectorAll('[data-tab-session]').forEach((button) => {
       button.onclick = (event) => {
@@ -1474,6 +1508,15 @@
         return;
       }
       if (event.target.closest?.('input, textarea, select, .inline-rename')) {
+        return;
+      }
+      if ((event.key === 'Delete' || event.key === 'Backspace') && state.drawSelectionId) {
+        event.preventDefault();
+        deleteSelectedDrawElement();
+        return;
+      }
+      if (event.key === 'Escape' && (state.drawSelectionId || state.drawTool !== 'selection')) {
+        setDrawTool('selection');
         return;
       }
       if (event.ctrlKey && event.shiftKey && key === 't') {
@@ -5253,7 +5296,7 @@
       return;
     }
     grid.ondblclick = async (event) => {
-      if (event.target.closest('[data-pane]')) {
+      if (event.target.closest('[data-pane]') || state.drawTool !== 'selection') {
         return;
       }
       const session = activeSession();
@@ -5272,6 +5315,7 @@
     };
     grid.addEventListener('wheel', (event) => onCanvasWheel(grid, event), { passive: false, capture: true });
     grid.addEventListener('pointerdown', (event) => onCanvasPanStart(grid, event));
+    grid.addEventListener('pointerdown', (event) => onDrawPointerDown(grid, event));
   }
 
   function onCanvasWheel(grid, event) {
@@ -5319,6 +5363,10 @@
     if (event.button !== 1) {
       return; // middle-button drag pans the canvas
     }
+    startCanvasPan(grid, event);
+  }
+
+  function startCanvasPan(grid, event) {
     event.preventDefault();
     const cam = activeCamera();
     const startX = event.clientX;
@@ -5583,6 +5631,10 @@
   }
 
   const GRID_UNIT = 120;
+  // Sixteen dashed cells (4 x 4) fill one solid grid square.
+  const GRID_MINOR_UNIT = 30;
+  const GRID_DASH_PERIOD = GRID_MINOR_UNIT / 5;
+  const GRID_DASH_LENGTH = 2;
   const MIN_PANE_WIDTH = GRID_UNIT;
   const MIN_PANE_HEIGHT = GRID_UNIT;
   const DEFAULT_PANE_WIDTH = 720;
@@ -5594,8 +5646,9 @@
     return `left: ${layout.x}px; top: ${layout.y}px; width: ${layout.w}px; height: ${layout.h}px; z-index: ${layout.z || 1};`;
   }
 
+  // Panes snap to the dashed minor grid, which also covers every solid grid line.
   function snapUnit(value) {
-    return Math.round(value / GRID_UNIT) * GRID_UNIT;
+    return Math.round(value / GRID_MINOR_UNIT) * GRID_MINOR_UNIT;
   }
 
   function normalizePaneLayout(layout) {
@@ -5630,6 +5683,7 @@
     const cam = activeCamera();
     const canvas = app.querySelector('[data-pane-canvas]');
     const grid = app.querySelector('.pane-grid');
+    const scene = app.querySelector('[data-draw-scene]');
     if (isMobileLayout()) {
       // Mobile shows the active pane filling the grid, so the camera must not
       // offset the canvas: it would push that pane outside the viewport.
@@ -5645,10 +5699,18 @@
     if (canvas) {
       canvas.style.transform = `translate(${cam.x}px, ${cam.y}px) scale(${cam.scale})`;
     }
+    if (scene) {
+      scene.setAttribute('transform', `translate(${cam.x} ${cam.y}) scale(${cam.scale})`);
+    }
     if (grid) {
-      const size = GRID_UNIT * cam.scale;
-      grid.style.backgroundSize = `${size}px ${size}px`;
+      const solid = GRID_UNIT * cam.scale;
+      const minor = GRID_MINOR_UNIT * cam.scale;
+      const dash = GRID_DASH_PERIOD * cam.scale;
+      grid.style.backgroundSize = `${solid}px ${solid}px, ${solid}px ${solid}px, ${minor}px ${dash}px, ${dash}px ${minor}px`;
       grid.style.backgroundPosition = `${cam.x}px ${cam.y}px`;
+      grid.style.setProperty('--grid-dash-length', `${GRID_DASH_LENGTH * cam.scale}px`);
+      // Zoomed far out the dashed cells collapse into a haze, so drop them.
+      grid.classList.toggle('minor-grid-hidden', minor < 12);
     }
   }
 
@@ -5707,6 +5769,335 @@
         body: JSON.stringify({ camera: cam })
       }).catch(() => {});
     }, 400);
+  }
+
+  const DRAW_TEXT_SIZE = 20;
+  const DRAW_TEXT_LINE_HEIGHT = 25;
+
+  function activeDrawings() {
+    const tab = activeTab(activeSession());
+    if (!tab) {
+      return [];
+    }
+    if (!Array.isArray(tab.drawings)) {
+      tab.drawings = [];
+    }
+    return tab.drawings;
+  }
+
+  function drawElementId() {
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  function wireDrawTools(root) {
+    root.querySelectorAll('[data-draw-tool-button]').forEach((button) => {
+      button.onclick = () => setDrawTool(button.dataset.drawToolButton);
+    });
+  }
+
+  function setDrawTool(tool) {
+    state.drawTool = tool;
+    if (tool !== 'selection') {
+      selectDrawElement('');
+    }
+    app.querySelector('.pane-grid')?.setAttribute('data-draw-tool', tool);
+    app.querySelectorAll('[data-draw-tool-button]').forEach((button) => {
+      const active = button.dataset.drawToolButton === tool;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+  }
+
+  function selectDrawElement(elementId) {
+    state.drawSelectionId = elementId;
+    app.querySelectorAll('[data-draw-element]').forEach((node) => {
+      node.classList.toggle('selected', node.dataset.drawElement === elementId);
+    });
+  }
+
+  function drawElementMarkup(element) {
+    const selected = state.drawSelectionId === element.id ? ' selected' : '';
+    return `<g class="draw-element${selected}" data-draw-element="${escapeAttr(element.id)}">${drawShapeMarkup(element, 'draw-hit')}${drawShapeMarkup(element, 'draw-shape')}</g>`;
+  }
+
+  function drawShapeMarkup(element, className) {
+    const x = Math.min(element.x, element.x + element.w);
+    const y = Math.min(element.y, element.y + element.h);
+    const w = Math.abs(element.w);
+    const h = Math.abs(element.h);
+    if (element.type === 'rectangle') {
+      return `<rect class="${className}" x="${x}" y="${y}" width="${w}" height="${h}"/>`;
+    }
+    if (element.type === 'ellipse') {
+      return `<ellipse class="${className}" cx="${x + w / 2}" cy="${y + h / 2}" rx="${w / 2}" ry="${h / 2}"/>`;
+    }
+    if (element.type === 'diamond') {
+      return `<polygon class="${className}" points="${x + w / 2},${y} ${x + w},${y + h / 2} ${x + w / 2},${y + h} ${x},${y + h / 2}"/>`;
+    }
+    if (element.type === 'line' || element.type === 'arrow') {
+      const head = element.type === 'arrow' ? arrowHeadPath(element) : '';
+      return `<path class="${className}" d="M${element.x} ${element.y}L${element.x + element.w} ${element.y + element.h}${head}"/>`;
+    }
+    if (element.type === 'draw') {
+      return `<path class="${className}" d="${freeDrawPath(element)}"/>`;
+    }
+    if (element.type === 'text' && className === 'draw-shape') {
+      const lines = String(element.text || '').split('\n');
+      const spans = lines
+        .map((line, index) => `<tspan x="${element.x}" dy="${index ? DRAW_TEXT_LINE_HEIGHT : 0}">${escapeHtml(line) || ' '}</tspan>`)
+        .join('');
+      return `<text class="${className}" x="${element.x}" y="${element.y}" font-size="${DRAW_TEXT_SIZE}" dominant-baseline="text-before-edge">${spans}</text>`;
+    }
+    return '';
+  }
+
+  function arrowHeadPath(element) {
+    const tipX = element.x + element.w;
+    const tipY = element.y + element.h;
+    const angle = Math.atan2(element.h, element.w);
+    const length = Math.min(20, Math.hypot(element.w, element.h) / 3);
+    const wing = (spread) => `M${tipX} ${tipY}L${(tipX - length * Math.cos(angle - spread)).toFixed(1)} ${(tipY - length * Math.sin(angle - spread)).toFixed(1)}`;
+    return `${wing(0.45)}${wing(-0.45)}`;
+  }
+
+  function freeDrawPath(element) {
+    return (element.points || [])
+      .map((point, index) => `${index ? 'L' : 'M'}${element.x + point[0]} ${element.y + point[1]}`)
+      .join('');
+  }
+
+  function appendDrawElement(element) {
+    const scene = app.querySelector('[data-draw-scene]');
+    scene?.insertAdjacentHTML('beforeend', drawElementMarkup(element));
+    return scene?.lastElementChild;
+  }
+
+  function redrawDrawElement(element) {
+    const node = app.querySelector(`[data-draw-element="${element.id}"]`);
+    if (node) {
+      node.innerHTML = `${drawShapeMarkup(element, 'draw-hit')}${drawShapeMarkup(element, 'draw-shape')}`;
+    }
+  }
+
+  function commitDrawElement(element) {
+    activeDrawings().push(element);
+    saveDrawingsSoon();
+    setDrawTool('selection');
+    selectDrawElement(element.id);
+  }
+
+  function deleteSelectedDrawElement() {
+    const drawings = activeDrawings();
+    const index = drawings.findIndex((element) => element.id === state.drawSelectionId);
+    if (index < 0) {
+      return;
+    }
+    app.querySelector(`[data-draw-element="${drawings[index].id}"]`)?.remove();
+    drawings.splice(index, 1);
+    state.drawSelectionId = '';
+    saveDrawingsSoon();
+  }
+
+  let drawingsSaveTimer = 0;
+  function saveDrawingsSoon() {
+    const tab = activeTab(activeSession());
+    if (!tab) {
+      return;
+    }
+    window.clearTimeout(drawingsSaveTimer);
+    drawingsSaveTimer = window.setTimeout(() => {
+      api(`/api/tabs/${tab.id}/drawings`, {
+        method: 'PATCH',
+        body: JSON.stringify({ drawings: tab.drawings })
+      }).catch(() => {});
+    }, 400);
+  }
+
+  function onDrawPointerDown(grid, event) {
+    if (event.button !== 0 || isMobileLayout()) {
+      return;
+    }
+    const openText = grid.querySelector('.draw-text-input');
+    if (openText) {
+      openText.blur(); // commit the text being typed instead of starting a gesture
+      return;
+    }
+    if (state.drawTool === 'hand') {
+      startCanvasPan(grid, event);
+      return;
+    }
+    if (state.drawTool === 'selection') {
+      const node = event.target.closest?.('[data-draw-element]');
+      selectDrawElement(node?.dataset.drawElement || '');
+      if (node) {
+        startDrawElementMove(event, node);
+      }
+      return;
+    }
+    if (state.drawTool === 'eraser') {
+      startDrawErase(grid, event);
+      return;
+    }
+    if (state.drawTool === 'text') {
+      startDrawText(grid, event);
+      return;
+    }
+    if (state.drawTool === 'draw') {
+      startFreeDraw(grid, event);
+      return;
+    }
+    startDrawShape(grid, event);
+  }
+
+  // Shapes are anchored to the dashed grid the same way Excalidraw snaps to its
+  // grid: both the start corner and the dragged corner land on a grid point.
+  function startDrawShape(grid, event) {
+    event.preventDefault();
+    const rect = grid.getBoundingClientRect();
+    const cam = activeCamera();
+    const start = pointerToWorld(event.clientX, event.clientY, rect, cam);
+    const element = { id: drawElementId(), type: state.drawTool, x: snapUnit(start.x), y: snapUnit(start.y), w: 0, h: 0 };
+    const node = appendDrawElement(element);
+    trackDrawPointer(grid, event, (moveEvent) => {
+      const point = pointerToWorld(moveEvent.clientX, moveEvent.clientY, rect, cam);
+      element.w = snapUnit(point.x) - element.x;
+      element.h = snapUnit(point.y) - element.y;
+      redrawDrawElement(element);
+    }, () => {
+      if (!element.w && !element.h) {
+        node?.remove();
+        setDrawTool('selection');
+        return;
+      }
+      commitDrawElement(element);
+    });
+  }
+
+  // Freehand strokes follow the pointer exactly, as Excalidraw never snaps them.
+  function startFreeDraw(grid, event) {
+    event.preventDefault();
+    const rect = grid.getBoundingClientRect();
+    const cam = activeCamera();
+    const start = pointerToWorld(event.clientX, event.clientY, rect, cam);
+    const element = { id: drawElementId(), type: 'draw', x: Math.round(start.x), y: Math.round(start.y), w: 0, h: 0, points: [[0, 0]] };
+    const node = appendDrawElement(element);
+    trackDrawPointer(grid, event, (moveEvent) => {
+      const point = pointerToWorld(moveEvent.clientX, moveEvent.clientY, rect, cam);
+      element.points.push([Math.round(point.x - element.x), Math.round(point.y - element.y)]);
+      redrawDrawElement(element);
+    }, () => {
+      if (element.points.length < 2) {
+        node?.remove();
+        setDrawTool('selection');
+        return;
+      }
+      commitDrawElement(element);
+    });
+  }
+
+  function startDrawErase(grid, event) {
+    event.preventDefault();
+    const eraseAt = (clientX, clientY) => {
+      const node = document.elementsFromPoint(clientX, clientY)
+        .map((element) => element.closest?.('[data-draw-element]'))
+        .find(Boolean);
+      if (!node) {
+        return;
+      }
+      const drawings = activeDrawings();
+      const index = drawings.findIndex((element) => element.id === node.dataset.drawElement);
+      if (index >= 0) {
+        drawings.splice(index, 1);
+        saveDrawingsSoon();
+      }
+      node.remove();
+    };
+    eraseAt(event.clientX, event.clientY);
+    trackDrawPointer(grid, event, (moveEvent) => eraseAt(moveEvent.clientX, moveEvent.clientY), () => {});
+  }
+
+  function startDrawText(grid, event) {
+    event.preventDefault();
+    const cam = activeCamera();
+    const world = pointerToWorld(event.clientX, event.clientY, grid.getBoundingClientRect(), cam);
+    const origin = { x: snapUnit(world.x), y: snapUnit(world.y) };
+    const input = document.createElement('textarea');
+    input.className = 'draw-text-input';
+    input.rows = 1;
+    input.spellcheck = false;
+    input.setAttribute('aria-label', 'Drawing text');
+    input.style.left = `${origin.x * cam.scale + cam.x}px`;
+    input.style.top = `${origin.y * cam.scale + cam.y}px`;
+    input.style.fontSize = `${DRAW_TEXT_SIZE * cam.scale}px`;
+    input.style.lineHeight = `${DRAW_TEXT_LINE_HEIGHT * cam.scale}px`;
+    grid.append(input);
+    input.focus();
+    input.oninput = () => {
+      input.style.height = 'auto';
+      input.style.height = `${input.scrollHeight}px`;
+    };
+    input.onkeydown = (keyEvent) => {
+      if (keyEvent.key === 'Escape') {
+        keyEvent.preventDefault();
+        input.value = '';
+        input.blur();
+      }
+    };
+    input.onblur = () => {
+      const text = input.value.replace(/\s+$/, '');
+      input.remove();
+      if (!text) {
+        setDrawTool('selection');
+        return;
+      }
+      const element = { id: drawElementId(), type: 'text', x: origin.x, y: origin.y, w: 0, h: 0, text };
+      appendDrawElement(element);
+      commitDrawElement(element);
+    };
+  }
+
+  function startDrawElementMove(event, node) {
+    const element = activeDrawings().find((item) => item.id === node.dataset.drawElement);
+    if (!element) {
+      return;
+    }
+    event.preventDefault();
+    const scale = activeCamera().scale;
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const originX = element.x;
+    const originY = element.y;
+    node.setPointerCapture(event.pointerId);
+    const onMove = (moveEvent) => {
+      element.x = snapUnit(originX + (moveEvent.clientX - startX) / scale);
+      element.y = snapUnit(originY + (moveEvent.clientY - startY) / scale);
+      redrawDrawElement(element);
+    };
+    const onUp = () => {
+      node.removeEventListener('pointermove', onMove);
+      node.removeEventListener('pointerup', onUp);
+      node.removeEventListener('pointercancel', onUp);
+      if (element.x !== originX || element.y !== originY) {
+        saveDrawingsSoon();
+      }
+    };
+    node.addEventListener('pointermove', onMove);
+    node.addEventListener('pointerup', onUp);
+    node.addEventListener('pointercancel', onUp);
+  }
+
+  function trackDrawPointer(grid, event, onMove, onFinish) {
+    const layer = grid.querySelector('[data-draw-layer]');
+    layer.setPointerCapture(event.pointerId);
+    const onUp = () => {
+      layer.removeEventListener('pointermove', onMove);
+      layer.removeEventListener('pointerup', onUp);
+      layer.removeEventListener('pointercancel', onUp);
+      onFinish();
+    };
+    layer.addEventListener('pointermove', onMove);
+    layer.addEventListener('pointerup', onUp);
+    layer.addEventListener('pointercancel', onUp);
   }
 
   function mountTerminal(paneId, terminalTabId) {

@@ -1129,6 +1129,14 @@ function main() {
     res.json({ ok: true });
   });
 
+  app.patch('/api/tabs/:tabId/drawings', requireAuth(config), (req, res) => {
+    if (!store.setDrawings(req.params.tabId, req.body.drawings)) {
+      res.status(404).json({ error: 'Tab not found.' });
+      return;
+    }
+    res.json({ ok: true });
+  });
+
   app.post('/api/panes/:paneId/move', requireAuth(config), (req, res) => {
     if (!store.movePane(req.params.paneId, req.body.beforePaneId)) {
       res.status(404).json({ error: 'Pane not found.' });

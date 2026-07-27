@@ -696,11 +696,47 @@ test('panes expose invisible resize targets on every edge and corner over an ali
   assert.doesNotMatch(styles, /\.pane-resize::after\s*\{[^}]*border-/s);
 });
 
-test('pane layouts snap to a fixed grid unit so every pane area is a multiple of one cell', () => {
+test('pane layouts snap to the dashed grid cell so panes can rest between solid lines', () => {
   assert.match(appSource, /function snapUnit\(value\)/);
-  assert.match(appSource, /Math\.round\(value \/ GRID_UNIT\) \* GRID_UNIT/);
+  assert.match(appSource, /const GRID_UNIT = 120/);
+  assert.match(appSource, /const GRID_MINOR_UNIT = 30/);
+  assert.match(appSource, /Math\.round\(value \/ GRID_MINOR_UNIT\) \* GRID_MINOR_UNIT/);
   assert.match(appSource, /const w = Math\.max\(GRID_UNIT, snapUnit\(/);
   assert.match(appSource, /const x = snapUnit\(/);
+});
+
+test('the canvas paints dashed 30px cells inside every 120px solid square', () => {
+  assert.match(styles, /\.pane-grid\s*\{[^}]*background-size:\s*120px 120px, 120px 120px, 30px 6px, 6px 30px/s);
+  assert.match(styles, /\.pane-grid\s*\{[^}]*conic-gradient\(at 1px var\(--grid-dash-length\)[^}]*conic-gradient\(at var\(--grid-dash-length\) 1px/s);
+  assert.match(styles, /\.pane-grid\.minor-grid-hidden\s*\{[^}]*background-image:[^}]*\}/s);
+  assert.doesNotMatch(styles, /\.pane-grid\.minor-grid-hidden\s*\{[^}]*conic-gradient/s);
+  assert.match(appSource, /const GRID_DASH_PERIOD = GRID_MINOR_UNIT \/ 5/);
+  assert.match(appSource, /grid\.style\.backgroundSize = `\$\{solid\}px \$\{solid\}px, \$\{solid\}px \$\{solid\}px, \$\{minor\}px \$\{dash\}px, \$\{dash\}px \$\{minor\}px`/);
+  assert.match(appSource, /grid\.classList\.toggle\('minor-grid-hidden', minor < 12\)/);
+});
+
+test('drawing tools sit between the brand row and the pane actions and wrap by width', () => {
+  const railStart = appSource.indexOf('class="rail-button sidebar-brand"');
+  const toolbarStart = appSource.indexOf('class="draw-toolbar"');
+  const newPaneStart = appSource.indexOf('data-action="new-powershell"');
+  assert.ok(railStart < toolbarStart && toolbarStart < newPaneStart);
+  for (const tool of ['hand', 'selection', 'rectangle', 'diamond', 'ellipse', 'arrow', 'line', 'draw', 'text', 'eraser']) {
+    assert.match(appSource, new RegExp(`\\{ id: '${tool}', label: '[^']+', icon: '[^']+' \\}`));
+  }
+  assert.match(appSource, /data-draw-tool-button="\$\{tool\.id\}"[^>]*aria-pressed="\$\{state\.drawTool === tool\.id\}"/);
+  assert.match(styles, /\.draw-toolbar\s*\{[^}]*display:\s*flex[^}]*flex-wrap:\s*wrap/s);
+});
+
+test('drawing gestures snap to the grid and stay on the tab that owns them', () => {
+  assert.match(appSource, /element\.w = snapUnit\(point\.x\) - element\.x/);
+  assert.match(appSource, /element\.x = snapUnit\(originX \+ \(moveEvent\.clientX - startX\) \/ scale\)/);
+  // freehand strokes follow the pointer without snapping, as in Excalidraw
+  const freeDraw = appSource.slice(appSource.indexOf('function startFreeDraw'), appSource.indexOf('function startDrawErase'));
+  assert.doesNotMatch(freeDraw, /snapUnit/);
+  assert.match(appSource, /api\(`\/api\/tabs\/\$\{tab\.id\}\/drawings`/);
+  assert.match(mainSource, /app\.patch\('\/api\/tabs\/:tabId\/drawings'/);
+  assert.match(styles, /\.pane-grid:not\(\[data-draw-tool="selection"\]\) \.draw-layer\s*\{[^}]*pointer-events:\s*auto/s);
+  assert.match(styles, /\.draw-hit\s*\{[^}]*pointer-events:\s*stroke/s);
 });
 
 test('pane resize uses free world-pixel deltas scaled by the camera zoom', () => {
