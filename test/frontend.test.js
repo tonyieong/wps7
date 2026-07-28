@@ -739,6 +739,30 @@ test('drawing gestures snap to the grid and stay on the tab that owns them', () 
   assert.match(styles, /\.draw-hit\s*\{[^}]*pointer-events:\s*stroke/s);
 });
 
+test('drawing elements carry per-element style attributes instead of a fixed look', () => {
+  assert.match(appSource, /data-draw-props/);
+  assert.match(appSource, /wps7\.drawStyles/);
+  const stylesFieldsSource = appSource.slice(appSource.indexOf('const DRAW_STYLE_FIELDS'), appSource.indexOf('const DRAW_STYLE_DEFAULTS'));
+  for (const prop of ['strokeColor', 'backgroundColor', 'fillStyle', 'strokeWidth', 'strokeStyle', 'roundness', 'startArrowhead', 'endArrowhead', 'fontFamily', 'fontSize', 'textAlign', 'opacity']) {
+    assert.match(stylesFieldsSource, new RegExp(`'${prop}'`));
+  }
+  // only "arrow" has arrowheads in Excalidraw; "line" must not list them
+  const lineFields = stylesFieldsSource.match(/line: \[([^\]]+)\]/)[1];
+  assert.doesNotMatch(lineFields, /Arrowhead/);
+  for (const kind of ['none', 'arrow', 'triangle', 'triangle_outline', 'diamond', 'diamond_outline', 'circle', 'circle_outline', 'bar']) {
+    assert.match(appSource, new RegExp(`'${kind}'`));
+  }
+  // shapes render presentation attributes per element instead of a fixed CSS look
+  assert.match(appSource, /stroke="\$\{stroke\}" stroke-width="\$\{strokeWidth\}"/);
+  assert.match(appSource, /function ensureFillPattern\(color, style\)/);
+  // .draw-hit keeps a constant screen-space pick width regardless of zoom, but
+  // the visible shape's stroke now scales with zoom like Excalidraw's does
+  assert.doesNotMatch(styles, /\.draw-shape\s*\{[^}]*vector-effect/s);
+  assert.match(styles, /\.draw-hit\s*\{[^}]*vector-effect:\s*non-scaling-stroke/s);
+  assert.match(styles, /\.draw-props\s*\{/);
+  assert.match(styles, /\.draw-hit-filled\s*\{[^}]*pointer-events:\s*all/s);
+});
+
 test('pane resize uses free world-pixel deltas scaled by the camera zoom', () => {
   const source = appSource.slice(appSource.indexOf('function startPaneResize'), appSource.indexOf('function startPaneMove'));
   assert.match(source, /const scale = activeCamera\(\)\.scale/);

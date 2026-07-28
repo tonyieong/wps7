@@ -73,7 +73,14 @@
     theme: ({ dark: 'wps-dark', light: 'wps-light', custom: 'custom-dark' })[localStorage.getItem('wps7.theme')] || localStorage.getItem('wps7.theme') || 'wps-dark',
     customThemeDraft: null,
     drawTool: 'selection',
-    drawSelectionId: ''
+    drawSelectionId: '',
+    drawStyles: (() => {
+      try {
+        return JSON.parse(localStorage.getItem('wps7.drawStyles') || '{}') || {};
+      } catch {
+        return {};
+      }
+    })()
   };
 
   const app = document.getElementById('app');
@@ -766,7 +773,21 @@
     line: '<path d="M4 20 20 4"/>',
     pencil: '<path d="m4 20 1-4L16.4 4.6a2.2 2.2 0 0 1 3 3L8 19z"/><path d="m14.5 6.5 3 3"/>',
     text: '<path d="M5 7V4h14v3M12 4v16M9 20h6"/>',
-    eraser: '<path d="m14 4 6 6-8 8H7l-3.5-3.5z"/><path d="M9.5 8.5 15 14"/><path d="M10 20h10"/>'
+    eraser: '<path d="m14 4 6 6-8 8H7l-3.5-3.5z"/><path d="M9.5 8.5 15 14"/><path d="M10 20h10"/>',
+    'fill-hachure': '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 20 20 4M4 13 13 4M11 20 20 11"/>',
+    'fill-cross-hatch': '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 20 20 4M4 13 13 4M11 20 20 11M4 4 20 20M4 11 11 4M13 20 20 13"/>',
+    'fill-solid': '<rect x="4" y="4" width="16" height="16" rx="2" fill="currentColor"/>',
+    'stroke-thin': '<path d="M4 12h16" stroke-width="1.5"/>',
+    'stroke-bold': '<path d="M4 12h16" stroke-width="3.5"/>',
+    'stroke-extrabold': '<path d="M4 12h16" stroke-width="6"/>',
+    'stroke-solid': '<path d="M4 12h16"/>',
+    'stroke-dashed': '<path d="M4 12h4M11 12h4M18 12h2"/>',
+    'stroke-dotted': '<path d="M4 12h.01M8.5 12h.01M13 12h.01M17.5 12h.01M20 12h.01" stroke-linecap="round" stroke-width="3"/>',
+    'edge-sharp': '<rect x="4" y="4" width="16" height="16"/>',
+    'edge-round': '<rect x="4" y="4" width="16" height="16" rx="6"/>',
+    'align-left': '<path d="M4 6h16M4 12h10M4 18h14"/>',
+    'align-center': '<path d="M4 6h16M7 12h10M5 18h14"/>',
+    'align-right': '<path d="M4 6h16M10 12h10M6 18h14"/>'
   };
 
   const drawTools = [
@@ -1272,8 +1293,10 @@
               ${tab.panes.map((pane) => renderPane(pane)).join('')}
             </div>
             <svg class="draw-layer" data-draw-layer aria-hidden="true">
+              <defs data-draw-defs></defs>
               <g data-draw-scene>${activeDrawings().map(drawElementMarkup).join('')}</g>
             </svg>
+            <div class="draw-props" data-draw-props hidden></div>
           </div>
         </section>
       </main>
@@ -1283,6 +1306,11 @@
     applyCameraTransform();
     ensureActivePaneVisible();
     updateDesktopModeBanner();
+    // The fresh <defs> just replaced the old DOM, so any fill patterns referenced
+    // by drawing markup need to be (re)inserted into it.
+    syncDrawFillPatterns();
+    syncTextSelectionOutline();
+    updateDrawProps();
     for (const pane of tab.panes) {
       mountPaneContent(pane);
     }
@@ -5296,7 +5324,7 @@
       return;
     }
     grid.ondblclick = async (event) => {
-      if (event.target.closest('[data-pane]') || state.drawTool !== 'selection') {
+      if (event.target.closest('[data-pane]') || event.target.closest('.draw-props') || state.drawTool !== 'selection') {
         return;
       }
       const session = activeSession();
@@ -5771,8 +5799,61 @@
     }, 400);
   }
 
-  const DRAW_TEXT_SIZE = 20;
-  const DRAW_TEXT_LINE_HEIGHT = 25;
+  // --- Style model (mirrors src/state.js so client-built elements already
+  // match what the server will sanitize them to). ---
+  const DRAW_STYLE_FIELDS = {
+    rectangle: ['strokeColor', 'backgroundColor', 'fillStyle', 'strokeWidth', 'strokeStyle', 'roundness', 'opacity'],
+    diamond: ['strokeColor', 'backgroundColor', 'fillStyle', 'strokeWidth', 'strokeStyle', 'roundness', 'opacity'],
+    ellipse: ['strokeColor', 'backgroundColor', 'fillStyle', 'strokeWidth', 'strokeStyle', 'opacity'],
+    arrow: ['strokeColor', 'strokeWidth', 'strokeStyle', 'startArrowhead', 'endArrowhead', 'opacity'],
+    line: ['strokeColor', 'strokeWidth', 'strokeStyle', 'opacity'],
+    draw: ['strokeColor', 'strokeWidth', 'opacity'],
+    text: ['strokeColor', 'fontFamily', 'fontSize', 'textAlign', 'opacity']
+  };
+  const DRAW_STYLE_DEFAULTS = {
+    strokeColor: 'auto', backgroundColor: 'transparent', fillStyle: 'hachure', strokeWidth: 1, strokeStyle: 'solid',
+    roundness: 'sharp', opacity: 100, startArrowhead: 'none', endArrowhead: 'arrow',
+    fontFamily: 'normal', fontSize: 20, textAlign: 'left'
+  };
+  const DRAW_FONT_FAMILY_STACKS = {
+    'hand-drawn': '"Segoe Print", "Comic Sans MS", cursive',
+    normal: '"Segoe UI", system-ui, sans-serif',
+    code: '"Cascadia Mono", Consolas, monospace'
+  };
+  const DRAW_STROKE_COLORS = ['auto', '#e03131', '#2f9e44', '#1971c2', '#f08c00'];
+  const DRAW_BACKGROUND_COLORS = ['transparent', '#ffc9c9', '#b2f2bb', '#a5d8ff', '#ffec99'];
+  const DRAW_FILL_STYLE_OPTIONS = [
+    { value: 'hachure', icon: 'fill-hachure', label: 'Hachure' },
+    { value: 'cross-hatch', icon: 'fill-cross-hatch', label: 'Cross-hatch' },
+    { value: 'solid', icon: 'fill-solid', label: 'Solid' }
+  ];
+  const DRAW_STROKE_WIDTH_OPTIONS = [
+    { value: 1, icon: 'stroke-thin', label: 'Thin' },
+    { value: 2, icon: 'stroke-bold', label: 'Bold' },
+    { value: 4, icon: 'stroke-extrabold', label: 'Extra bold' }
+  ];
+  const DRAW_STROKE_STYLE_OPTIONS = [
+    { value: 'solid', icon: 'stroke-solid', label: 'Solid' },
+    { value: 'dashed', icon: 'stroke-dashed', label: 'Dashed' },
+    { value: 'dotted', icon: 'stroke-dotted', label: 'Dotted' }
+  ];
+  const DRAW_ROUNDNESS_OPTIONS = [
+    { value: 'sharp', icon: 'edge-sharp', label: 'Sharp' },
+    { value: 'round', icon: 'edge-round', label: 'Round' }
+  ];
+  const DRAW_TEXT_ALIGN_OPTIONS = [
+    { value: 'left', icon: 'align-left', label: 'Left' },
+    { value: 'center', icon: 'align-center', label: 'Center' },
+    { value: 'right', icon: 'align-right', label: 'Right' }
+  ];
+  // Only "arrow" can have arrowheads in Excalidraw (canHaveArrowheads = type => type === 'arrow'); "line" never does.
+  const DRAW_ARROWHEAD_OPTIONS = [
+    ['none', 'None'], ['arrow', 'Arrow'], ['triangle', 'Triangle'], ['triangle_outline', 'Triangle outline'],
+    ['diamond', 'Diamond'], ['diamond_outline', 'Diamond outline'], ['circle', 'Circle'], ['circle_outline', 'Circle outline'], ['bar', 'Bar']
+  ];
+  const DRAW_NUMERIC_STYLE_PROPS = new Set(['strokeWidth', 'opacity', 'fontSize']);
+  const ARROWHEAD_BACK = 14;
+  const ARROWHEAD_HALF = 7;
 
   function activeDrawings() {
     const tab = activeTab(activeSession());
@@ -5787,6 +5868,457 @@
 
   function drawElementId() {
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  // Style prefs persist across tool switches, same as Excalidraw's currentItemXxx
+  // appState fields: the last color/width/etc picked applies to the next new element.
+  function defaultDrawStyle(type) {
+    const fields = DRAW_STYLE_FIELDS[type] || [];
+    const style = {};
+    for (const field of fields) {
+      style[field] = state.drawStyles[field] !== undefined ? state.drawStyles[field] : DRAW_STYLE_DEFAULTS[field];
+    }
+    return style;
+  }
+
+  function resolveDrawColor(value, fallback) {
+    return !value || value === 'auto' ? fallback : value;
+  }
+
+  function drawDasharray(style, strokeWidth) {
+    if (style === 'dashed') {
+      return `${8} ${8 + strokeWidth}`;
+    }
+    if (style === 'dotted') {
+      return `${1.5} ${6 + strokeWidth}`;
+    }
+    return '';
+  }
+
+  function fillPatternId(color, style) {
+    const safe = /^#[0-9a-f]{6}$/i.test(color) ? color.slice(1) : '000000';
+    return `draw-fill-${style}-${safe}`;
+  }
+
+  function fillPatternMarkup(id, color, style) {
+    const size = 8;
+    const safeColor = /^#[0-9a-f]{6}$/i.test(color) ? color : '#000000';
+    const diagonal = `<path d="M0 ${size}L${size} 0" stroke="${safeColor}" stroke-width="1.5"/>`;
+    const cross = style === 'cross-hatch' ? `<path d="M0 0L${size} ${size}" stroke="${safeColor}" stroke-width="1.5"/>` : '';
+    return `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${size}" height="${size}">${diagonal}${cross}</pattern>`;
+  }
+
+  // Lazily registers the <pattern> a hachure/cross-hatch fill needs into the live
+  // <defs>. Safe to call before the defs element exists (e.g. while building the
+  // very first render() string) - it just returns the id without touching the DOM.
+  function ensureFillPattern(color, style) {
+    const id = fillPatternId(color, style);
+    const defs = app.querySelector('[data-draw-defs]');
+    if (defs && !defs.querySelector(`#${CSS.escape(id)}`)) {
+      defs.insertAdjacentHTML('beforeend', fillPatternMarkup(id, color, style));
+    }
+    return id;
+  }
+
+  // render() rebuilds app.innerHTML wholesale, so the fresh <defs> it creates
+  // starts empty even though the freshly-built shape markup already references
+  // pattern ids. Re-sync right after so every referenced pattern actually exists.
+  function syncDrawFillPatterns() {
+    for (const element of activeDrawings()) {
+      if (element.backgroundColor && element.backgroundColor !== 'transparent' && element.fillStyle !== 'solid') {
+        ensureFillPattern(element.backgroundColor, element.fillStyle);
+      }
+    }
+  }
+
+  function drawFillAttr(element) {
+    if (!element.backgroundColor || element.backgroundColor === 'transparent') {
+      return 'none';
+    }
+    if (element.fillStyle === 'solid') {
+      return element.backgroundColor;
+    }
+    return `url(#${ensureFillPattern(element.backgroundColor, element.fillStyle || 'hachure')})`;
+  }
+
+  function shapeStrokeAttrs(element, className) {
+    if (className === 'draw-hit') {
+      return '';
+    }
+    if (className === 'draw-selection-outline') {
+      return ' stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="4 3"';
+    }
+    const stroke = resolveDrawColor(element.strokeColor, 'var(--text)');
+    const strokeWidth = element.strokeWidth || 1;
+    const dasharray = drawDasharray(element.strokeStyle, strokeWidth);
+    return ` stroke="${stroke}" stroke-width="${strokeWidth}"${dasharray ? ` stroke-dasharray="${dasharray}"` : ''}`;
+  }
+
+  function shapeFillAttrs(element, className) {
+    if (className === 'draw-selection-outline') {
+      return ' fill="none"';
+    }
+    if (className === 'draw-hit') {
+      const filled = element.backgroundColor && element.backgroundColor !== 'transparent';
+      return filled ? ' fill="transparent"' : ' fill="none"';
+    }
+    return ` fill="${drawFillAttr(element)}"`;
+  }
+
+  // Filled shapes need their hit region to opt back into pointer events across
+  // the whole interior, not just the fat stroke .draw-hit normally picks with.
+  function hitClass(element, className) {
+    if (className !== 'draw-hit') {
+      return className;
+    }
+    const filled = element.backgroundColor && element.backgroundColor !== 'transparent';
+    return filled ? 'draw-hit draw-hit-filled' : 'draw-hit';
+  }
+
+  function pullToward(from, to, distance) {
+    const dx = to[0] - from[0];
+    const dy = to[1] - from[1];
+    const length = Math.hypot(dx, dy) || 1;
+    const ratio = Math.min(distance, length / 2) / length;
+    return [from[0] + dx * ratio, from[1] + dy * ratio];
+  }
+
+  // Rounds every corner of a polygon by pulling each vertex in along both its
+  // edges and joining the cut corners with a quadratic curve through the vertex.
+  function roundedPolygonPath(points, radius) {
+    const n = points.length;
+    let d = '';
+    for (let i = 0; i < n; i++) {
+      const prev = points[(i - 1 + n) % n];
+      const curr = points[i];
+      const next = points[(i + 1) % n];
+      const start = pullToward(curr, prev, radius);
+      const end = pullToward(curr, next, radius);
+      d += `${i === 0 ? 'M' : 'L'}${start[0].toFixed(1)} ${start[1].toFixed(1)}`;
+      d += `Q${curr[0].toFixed(1)} ${curr[1].toFixed(1)} ${end[0].toFixed(1)} ${end[1].toFixed(1)}`;
+    }
+    return `${d}Z`;
+  }
+
+  function drawElementInnerMarkup(element) {
+    const selected = state.drawSelectionId === element.id;
+    const outline = selected && element.type !== 'text' ? drawShapeMarkup(element, 'draw-selection-outline') : '';
+    return `${drawShapeMarkup(element, 'draw-hit')}${drawShapeMarkup(element, 'draw-shape')}${outline}`;
+  }
+
+  function drawElementMarkup(element) {
+    const selected = state.drawSelectionId === element.id;
+    const opacityValue = Number.isFinite(element.opacity) ? element.opacity : 100;
+    return `<g class="draw-element${selected ? ' selected' : ''}" data-draw-element="${escapeAttr(element.id)}" opacity="${opacityValue / 100}">${drawElementInnerMarkup(element)}</g>`;
+  }
+
+  function drawShapeMarkup(element, className) {
+    const x = Math.min(element.x, element.x + element.w);
+    const y = Math.min(element.y, element.y + element.h);
+    const w = Math.abs(element.w);
+    const h = Math.abs(element.h);
+    if (element.type === 'rectangle' || element.type === 'diamond' || element.type === 'ellipse') {
+      const strokeAttrs = shapeStrokeAttrs(element, className);
+      const fillAttrs = shapeFillAttrs(element, className);
+      const cls = hitClass(element, className);
+      if (element.type === 'rectangle') {
+        const radius = element.roundness === 'round' ? Math.min(32, w / 4, h / 4) : 0;
+        return `<rect class="${cls}" x="${x}" y="${y}" width="${w}" height="${h}" rx="${radius}"${strokeAttrs}${fillAttrs}/>`;
+      }
+      if (element.type === 'ellipse') {
+        return `<ellipse class="${cls}" cx="${x + w / 2}" cy="${y + h / 2}" rx="${w / 2}" ry="${h / 2}"${strokeAttrs}${fillAttrs}/>`;
+      }
+      if (element.roundness === 'round') {
+        const points = [[x + w / 2, y], [x + w, y + h / 2], [x + w / 2, y + h], [x, y + h / 2]];
+        return `<path class="${cls}" d="${roundedPolygonPath(points, Math.min(20, w / 4, h / 4))}"${strokeAttrs}${fillAttrs}/>`;
+      }
+      return `<polygon class="${cls}" points="${x + w / 2},${y} ${x + w},${y + h / 2} ${x + w / 2},${y + h} ${x},${y + h / 2}"${strokeAttrs}${fillAttrs}/>`;
+    }
+    if (element.type === 'line' || element.type === 'arrow') {
+      const path = `<path class="${className}" d="M${element.x} ${element.y}L${element.x + element.w} ${element.y + element.h}"${shapeStrokeAttrs(element, className)} fill="none"/>`;
+      if (className !== 'draw-shape' || element.type !== 'arrow') {
+        return path;
+      }
+      const angle = Math.atan2(element.h, element.w);
+      const strokeWidth = element.strokeWidth || 1;
+      const strokeColor = resolveDrawColor(element.strokeColor, 'var(--text)');
+      const heads = [
+        arrowheadMarkup(element.startArrowhead, element.x, element.y, angle + Math.PI, strokeWidth, strokeColor, className),
+        arrowheadMarkup(element.endArrowhead, element.x + element.w, element.y + element.h, angle, strokeWidth, strokeColor, className)
+      ].join('');
+      return `${path}${heads}`;
+    }
+    if (element.type === 'draw') {
+      return `<path class="${className}" d="${freeDrawPath(element)}"${shapeStrokeAttrs(element, className)} fill="none"/>`;
+    }
+    if (element.type === 'text' && className === 'draw-shape') {
+      const family = DRAW_FONT_FAMILY_STACKS[element.fontFamily] || DRAW_FONT_FAMILY_STACKS.normal;
+      const fontSize = element.fontSize || 20;
+      const lineHeight = Math.round(fontSize * 1.25);
+      const anchor = element.textAlign === 'center' ? 'middle' : (element.textAlign === 'right' ? 'end' : 'start');
+      const fill = resolveDrawColor(element.strokeColor, 'var(--text)');
+      const lines = String(element.text || '').split('\n');
+      const spans = lines
+        .map((line, index) => `<tspan x="${element.x}" dy="${index ? lineHeight : 0}">${escapeHtml(line) || ' '}</tspan>`)
+        .join('');
+      return `<text class="${className}" x="${element.x}" y="${element.y}" font-size="${fontSize}" font-family="${escapeAttr(family)}" text-anchor="${anchor}" fill="${fill}" dominant-baseline="text-before-edge">${spans}</text>`;
+    }
+    return '';
+  }
+
+  // Generalizes the old two-line "wing" arrowhead into 9 Excalidraw endpoint
+  // styles. `angle` points outward from the segment toward the tip; each kind is
+  // built in head-local space (lx = distance back from the tip, ly = perpendicular
+  // offset) and rotated/placed at (tipX, tipY) by `at()`.
+  function arrowheadMarkup(kind, tipX, tipY, angle, strokeWidth, strokeColor, className) {
+    if (!kind || kind === 'none') {
+      return '';
+    }
+    const back = ARROWHEAD_BACK + strokeWidth;
+    const half = ARROWHEAD_HALF + strokeWidth * 0.5;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const at = (lx, ly) => `${(tipX - lx * cos - ly * sin).toFixed(1)},${(tipY - lx * sin + ly * cos).toFixed(1)}`;
+    const strokeAttrs = ` stroke="${strokeColor}" stroke-width="${strokeWidth}"`;
+    if (kind === 'arrow') {
+      return `<path class="${className}" d="M${at(back, half)} L${tipX.toFixed(1)},${tipY.toFixed(1)} L${at(back, -half)}" fill="none"${strokeAttrs}/>`;
+    }
+    if (kind === 'bar') {
+      return `<path class="${className}" d="M${at(0, half)} L${at(0, -half)}" fill="none"${strokeAttrs}/>`;
+    }
+    const outline = kind.endsWith('_outline');
+    const fill = outline ? 'none' : strokeColor;
+    if (kind === 'triangle' || kind === 'triangle_outline') {
+      return `<polygon class="${className}" points="${tipX.toFixed(1)},${tipY.toFixed(1)} ${at(back, half)} ${at(back, -half)}" fill="${fill}"${strokeAttrs}/>`;
+    }
+    if (kind === 'diamond' || kind === 'diamond_outline') {
+      return `<polygon class="${className}" points="${tipX.toFixed(1)},${tipY.toFixed(1)} ${at(back / 2, half)} ${at(back, 0)} ${at(back / 2, -half)}" fill="${fill}"${strokeAttrs}/>`;
+    }
+    if (kind === 'circle' || kind === 'circle_outline') {
+      const [cx, cy] = at(half, 0).split(',');
+      return `<circle class="${className}" cx="${cx}" cy="${cy}" r="${half}" fill="${fill}"${strokeAttrs}/>`;
+    }
+    return '';
+  }
+
+  function freeDrawPath(element) {
+    return (element.points || [])
+      .map((point, index) => `${index ? 'L' : 'M'}${element.x + point[0]} ${element.y + point[1]}`)
+      .join('');
+  }
+
+  function appendDrawElement(element) {
+    const scene = app.querySelector('[data-draw-scene]');
+    scene?.insertAdjacentHTML('beforeend', drawElementMarkup(element));
+    return scene?.lastElementChild;
+  }
+
+  function redrawDrawElement(element) {
+    const node = app.querySelector(`[data-draw-element="${CSS.escape(element.id)}"]`);
+    if (!node) {
+      return;
+    }
+    const selected = state.drawSelectionId === element.id;
+    node.classList.toggle('selected', selected);
+    const opacityValue = Number.isFinite(element.opacity) ? element.opacity : 100;
+    node.setAttribute('opacity', String(opacityValue / 100));
+    node.innerHTML = drawElementInnerMarkup(element);
+    if (selected && element.type === 'text') {
+      appendTextSelectionOutline(node);
+    }
+  }
+
+  // Text has no computed bbox (see the element model), so its selection outline
+  // is measured from the live glyph via getBBox() instead of being derived from
+  // x/y/w/h like every other shape's 'draw-selection-outline' variant.
+  function appendTextSelectionOutline(node) {
+    const textNode = node.querySelector('text.draw-shape');
+    if (!textNode) {
+      return;
+    }
+    const box = textNode.getBBox();
+    const pad = 4;
+    const x = (box.x - pad).toFixed(1);
+    const y = (box.y - pad).toFixed(1);
+    const w = (box.width + pad * 2).toFixed(1);
+    const h = (box.height + pad * 2).toFixed(1);
+    node.insertAdjacentHTML('beforeend', `<rect class="draw-selection-outline" x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="4 3"/>`);
+  }
+
+  // render() rebuilds the whole scene as a string, so a selected text element's
+  // outline (which needs a live getBBox()) can only be added once the fresh DOM exists.
+  function syncTextSelectionOutline() {
+    const element = state.drawSelectionId ? activeDrawings().find((item) => item.id === state.drawSelectionId) : null;
+    if (!element || element.type !== 'text') {
+      return;
+    }
+    const node = app.querySelector(`[data-draw-element="${CSS.escape(element.id)}"]`);
+    if (node) {
+      appendTextSelectionOutline(node);
+    }
+  }
+
+  function commitDrawElement(element) {
+    activeDrawings().push(element);
+    saveDrawingsSoon();
+    setDrawTool('selection');
+    selectDrawElement(element.id);
+  }
+
+  function deleteSelectedDrawElement() {
+    const drawings = activeDrawings();
+    const index = drawings.findIndex((element) => element.id === state.drawSelectionId);
+    if (index < 0) {
+      return;
+    }
+    app.querySelector(`[data-draw-element="${CSS.escape(drawings[index].id)}"]`)?.remove();
+    drawings.splice(index, 1);
+    state.drawSelectionId = '';
+    saveDrawingsSoon();
+    updateDrawProps();
+  }
+
+  let drawingsSaveTimer = 0;
+  function saveDrawingsSoon() {
+    const tab = activeTab(activeSession());
+    if (!tab) {
+      return;
+    }
+    window.clearTimeout(drawingsSaveTimer);
+    drawingsSaveTimer = window.setTimeout(() => {
+      api(`/api/tabs/${tab.id}/drawings`, {
+        method: 'PATCH',
+        body: JSON.stringify({ drawings: tab.drawings })
+      }).catch(() => {});
+    }, 400);
+  }
+
+  // --- Properties panel: a floating island (top-left of the canvas) that shows
+  // the style of the current selection, or the defaults for the active drawing
+  // tool when nothing is selected. ---
+  function drawPropGroup(label, contentHtml) {
+    return `<div class="draw-prop-group"><span class="draw-prop-label">${label}</span><div class="draw-prop-row">${contentHtml}</div></div>`;
+  }
+
+  function drawColorSwatchesMarkup(prop, colors, current) {
+    const swatches = colors.map((color) => {
+      const active = current === color;
+      const swatchColor = color === 'auto' ? 'var(--text)' : color;
+      const label = color === 'auto' ? 'Auto' : (color === 'transparent' ? 'Transparent' : color);
+      const extra = color === 'transparent' ? ' draw-swatch-transparent' : '';
+      return `<button type="button" class="draw-swatch${extra} ${active ? 'active' : ''}" data-draw-style="${prop}" data-draw-value="${color}" style="--draw-swatch-color: ${swatchColor}" aria-label="${label}" aria-pressed="${active}" title="${label}"></button>`;
+    }).join('');
+    const seed = /^#[0-9a-f]{6}$/i.test(current) ? current : '#000000';
+    const picker = `<input type="color" class="draw-swatch-custom" data-draw-style="${prop}" value="${seed}" aria-label="Custom ${prop === 'strokeColor' ? 'stroke' : 'background'} color">`;
+    return `${swatches}${picker}`;
+  }
+
+  function drawOptionButtonsMarkup(prop, options, current) {
+    return options.map((opt) => `<button type="button" class="draw-prop-btn ${current === opt.value ? 'active' : ''}" data-draw-style="${prop}" data-draw-value="${opt.value}" aria-label="${opt.label}" aria-pressed="${current === opt.value}" title="${opt.label}">${fileActionIcon(opt.icon)}</button>`).join('');
+  }
+
+  function drawFontFamilyMarkup(current) {
+    const families = [['hand-drawn', 'Hand-drawn'], ['normal', 'Normal'], ['code', 'Code']];
+    return families.map(([value, label]) => `<button type="button" class="draw-prop-btn draw-font-sample draw-font-${value} ${current === value ? 'active' : ''}" data-draw-style="fontFamily" data-draw-value="${value}" aria-label="${label} font" aria-pressed="${current === value}" title="${label}">Aa</button>`).join('');
+  }
+
+  function drawFontSizeMarkup(current) {
+    const sizes = [['S', 16], ['M', 20], ['L', 28], ['XL', 36]];
+    return sizes.map(([label, value]) => `<button type="button" class="draw-prop-btn draw-prop-btn-label ${current === value ? 'active' : ''}" data-draw-style="fontSize" data-draw-value="${value}" aria-label="Font size ${label}" aria-pressed="${current === value}" title="${label}">${label}</button>`).join('');
+  }
+
+  function drawArrowheadSelectMarkup(prop, current) {
+    const options = DRAW_ARROWHEAD_OPTIONS.map(([value, label]) => `<option value="${value}"${current === value ? ' selected' : ''}>${label}</option>`).join('');
+    const label = prop === 'startArrowhead' ? 'Start' : 'End';
+    return `<label class="draw-arrowhead-field"><span>${label}</span><select class="draw-prop-select" data-draw-style="${prop}" aria-label="${label} arrowhead">${options}</select></label>`;
+  }
+
+  function drawPropsMarkup(type, style) {
+    const fields = new Set(DRAW_STYLE_FIELDS[type] || []);
+    const groups = [];
+    if (fields.has('strokeColor')) {
+      groups.push(drawPropGroup('Stroke', drawColorSwatchesMarkup('strokeColor', DRAW_STROKE_COLORS, style.strokeColor)));
+    }
+    if (fields.has('backgroundColor')) {
+      groups.push(drawPropGroup('Background', drawColorSwatchesMarkup('backgroundColor', DRAW_BACKGROUND_COLORS, style.backgroundColor)));
+    }
+    if (fields.has('fillStyle')) {
+      groups.push(drawPropGroup('Fill', drawOptionButtonsMarkup('fillStyle', DRAW_FILL_STYLE_OPTIONS, style.fillStyle)));
+    }
+    if (fields.has('strokeWidth')) {
+      groups.push(drawPropGroup('Stroke width', drawOptionButtonsMarkup('strokeWidth', DRAW_STROKE_WIDTH_OPTIONS, style.strokeWidth)));
+    }
+    if (fields.has('strokeStyle')) {
+      groups.push(drawPropGroup('Stroke style', drawOptionButtonsMarkup('strokeStyle', DRAW_STROKE_STYLE_OPTIONS, style.strokeStyle)));
+    }
+    if (fields.has('roundness')) {
+      groups.push(drawPropGroup('Edges', drawOptionButtonsMarkup('roundness', DRAW_ROUNDNESS_OPTIONS, style.roundness)));
+    }
+    if (fields.has('startArrowhead')) {
+      groups.push(drawPropGroup('Arrowheads', `${drawArrowheadSelectMarkup('startArrowhead', style.startArrowhead)}${drawArrowheadSelectMarkup('endArrowhead', style.endArrowhead)}`));
+    }
+    if (fields.has('fontFamily')) {
+      groups.push(drawPropGroup('Font family', drawFontFamilyMarkup(style.fontFamily)));
+    }
+    if (fields.has('fontSize')) {
+      groups.push(drawPropGroup('Font size', drawFontSizeMarkup(style.fontSize)));
+    }
+    if (fields.has('textAlign')) {
+      groups.push(drawPropGroup('Align', drawOptionButtonsMarkup('textAlign', DRAW_TEXT_ALIGN_OPTIONS, style.textAlign)));
+    }
+    if (fields.has('opacity')) {
+      groups.push(`<div class="draw-prop-group draw-prop-opacity"><span class="draw-prop-label">Opacity</span><input type="range" class="draw-prop-range" min="0" max="100" step="10" value="${style.opacity}" data-draw-style="opacity" aria-label="Opacity"></div>`);
+    }
+    return groups.join('');
+  }
+
+  function wireDrawProps(panel) {
+    panel.querySelectorAll('[data-draw-style]').forEach((control) => {
+      const prop = control.dataset.drawStyle;
+      if (control.tagName === 'SELECT') {
+        control.onchange = () => setDrawStyle(prop, control.value);
+      } else if (control.type === 'range' || control.type === 'color') {
+        control.oninput = () => setDrawStyle(prop, DRAW_NUMERIC_STYLE_PROPS.has(prop) ? Number(control.value) : control.value);
+      } else {
+        control.onclick = () => {
+          const raw = control.dataset.drawValue;
+          setDrawStyle(prop, DRAW_NUMERIC_STYLE_PROPS.has(prop) ? Number(raw) : raw);
+        };
+      }
+    });
+  }
+
+  // Shows the selected element's style, or the pending defaults for the active
+  // drawing tool; hidden entirely for hand/selection(no selection)/eraser.
+  function updateDrawProps() {
+    const panel = app.querySelector('[data-draw-props]');
+    if (!panel) {
+      return;
+    }
+    const selected = state.drawSelectionId ? activeDrawings().find((item) => item.id === state.drawSelectionId) : null;
+    const type = selected ? selected.type : state.drawTool;
+    if (!DRAW_STYLE_FIELDS[type]) {
+      panel.hidden = true;
+      panel.innerHTML = '';
+      return;
+    }
+    panel.hidden = false;
+    panel.innerHTML = drawPropsMarkup(type, selected || defaultDrawStyle(type));
+    wireDrawProps(panel);
+  }
+
+  function setDrawStyle(prop, value) {
+    state.drawStyles[prop] = value;
+    localStorage.setItem('wps7.drawStyles', JSON.stringify(state.drawStyles));
+    if (state.drawSelectionId) {
+      const element = activeDrawings().find((item) => item.id === state.drawSelectionId);
+      if (element && prop in element) {
+        element[prop] = value;
+        redrawDrawElement(element);
+        saveDrawingsSoon();
+      }
+    }
+    updateDrawProps();
   }
 
   function wireDrawTools(root) {
@@ -5806,116 +6338,31 @@
       button.classList.toggle('active', active);
       button.setAttribute('aria-pressed', String(active));
     });
+    updateDrawProps();
   }
 
   function selectDrawElement(elementId) {
+    const previousId = state.drawSelectionId;
     state.drawSelectionId = elementId;
-    app.querySelectorAll('[data-draw-element]').forEach((node) => {
-      node.classList.toggle('selected', node.dataset.drawElement === elementId);
-    });
-  }
-
-  function drawElementMarkup(element) {
-    const selected = state.drawSelectionId === element.id ? ' selected' : '';
-    return `<g class="draw-element${selected}" data-draw-element="${escapeAttr(element.id)}">${drawShapeMarkup(element, 'draw-hit')}${drawShapeMarkup(element, 'draw-shape')}</g>`;
-  }
-
-  function drawShapeMarkup(element, className) {
-    const x = Math.min(element.x, element.x + element.w);
-    const y = Math.min(element.y, element.y + element.h);
-    const w = Math.abs(element.w);
-    const h = Math.abs(element.h);
-    if (element.type === 'rectangle') {
-      return `<rect class="${className}" x="${x}" y="${y}" width="${w}" height="${h}"/>`;
-    }
-    if (element.type === 'ellipse') {
-      return `<ellipse class="${className}" cx="${x + w / 2}" cy="${y + h / 2}" rx="${w / 2}" ry="${h / 2}"/>`;
-    }
-    if (element.type === 'diamond') {
-      return `<polygon class="${className}" points="${x + w / 2},${y} ${x + w},${y + h / 2} ${x + w / 2},${y + h} ${x},${y + h / 2}"/>`;
-    }
-    if (element.type === 'line' || element.type === 'arrow') {
-      const head = element.type === 'arrow' ? arrowHeadPath(element) : '';
-      return `<path class="${className}" d="M${element.x} ${element.y}L${element.x + element.w} ${element.y + element.h}${head}"/>`;
-    }
-    if (element.type === 'draw') {
-      return `<path class="${className}" d="${freeDrawPath(element)}"/>`;
-    }
-    if (element.type === 'text' && className === 'draw-shape') {
-      const lines = String(element.text || '').split('\n');
-      const spans = lines
-        .map((line, index) => `<tspan x="${element.x}" dy="${index ? DRAW_TEXT_LINE_HEIGHT : 0}">${escapeHtml(line) || ' '}</tspan>`)
-        .join('');
-      return `<text class="${className}" x="${element.x}" y="${element.y}" font-size="${DRAW_TEXT_SIZE}" dominant-baseline="text-before-edge">${spans}</text>`;
-    }
-    return '';
-  }
-
-  function arrowHeadPath(element) {
-    const tipX = element.x + element.w;
-    const tipY = element.y + element.h;
-    const angle = Math.atan2(element.h, element.w);
-    const length = Math.min(20, Math.hypot(element.w, element.h) / 3);
-    const wing = (spread) => `M${tipX} ${tipY}L${(tipX - length * Math.cos(angle - spread)).toFixed(1)} ${(tipY - length * Math.sin(angle - spread)).toFixed(1)}`;
-    return `${wing(0.45)}${wing(-0.45)}`;
-  }
-
-  function freeDrawPath(element) {
-    return (element.points || [])
-      .map((point, index) => `${index ? 'L' : 'M'}${element.x + point[0]} ${element.y + point[1]}`)
-      .join('');
-  }
-
-  function appendDrawElement(element) {
-    const scene = app.querySelector('[data-draw-scene]');
-    scene?.insertAdjacentHTML('beforeend', drawElementMarkup(element));
-    return scene?.lastElementChild;
-  }
-
-  function redrawDrawElement(element) {
-    const node = app.querySelector(`[data-draw-element="${element.id}"]`);
-    if (node) {
-      node.innerHTML = `${drawShapeMarkup(element, 'draw-hit')}${drawShapeMarkup(element, 'draw-shape')}`;
-    }
-  }
-
-  function commitDrawElement(element) {
-    activeDrawings().push(element);
-    saveDrawingsSoon();
-    setDrawTool('selection');
-    selectDrawElement(element.id);
-  }
-
-  function deleteSelectedDrawElement() {
     const drawings = activeDrawings();
-    const index = drawings.findIndex((element) => element.id === state.drawSelectionId);
-    if (index < 0) {
-      return;
-    }
-    app.querySelector(`[data-draw-element="${drawings[index].id}"]`)?.remove();
-    drawings.splice(index, 1);
-    state.drawSelectionId = '';
-    saveDrawingsSoon();
-  }
-
-  let drawingsSaveTimer = 0;
-  function saveDrawingsSoon() {
-    const tab = activeTab(activeSession());
-    if (!tab) {
-      return;
-    }
-    window.clearTimeout(drawingsSaveTimer);
-    drawingsSaveTimer = window.setTimeout(() => {
-      api(`/api/tabs/${tab.id}/drawings`, {
-        method: 'PATCH',
-        body: JSON.stringify({ drawings: tab.drawings })
-      }).catch(() => {});
-    }, 400);
+    [previousId, elementId].forEach((id) => {
+      if (!id) {
+        return;
+      }
+      const element = drawings.find((item) => item.id === id);
+      if (element) {
+        redrawDrawElement(element);
+      }
+    });
+    updateDrawProps();
   }
 
   function onDrawPointerDown(grid, event) {
     if (event.button !== 0 || isMobileLayout()) {
       return;
+    }
+    if (event.target.closest?.('.draw-props')) {
+      return; // clicks inside the floating properties panel are not canvas gestures
     }
     const openText = grid.querySelector('.draw-text-input');
     if (openText) {
@@ -5956,7 +6403,7 @@
     const rect = grid.getBoundingClientRect();
     const cam = activeCamera();
     const start = pointerToWorld(event.clientX, event.clientY, rect, cam);
-    const element = { id: drawElementId(), type: state.drawTool, x: snapUnit(start.x), y: snapUnit(start.y), w: 0, h: 0 };
+    const element = { id: drawElementId(), type: state.drawTool, x: snapUnit(start.x), y: snapUnit(start.y), w: 0, h: 0, ...defaultDrawStyle(state.drawTool) };
     const node = appendDrawElement(element);
     trackDrawPointer(grid, event, (moveEvent) => {
       const point = pointerToWorld(moveEvent.clientX, moveEvent.clientY, rect, cam);
@@ -5979,7 +6426,7 @@
     const rect = grid.getBoundingClientRect();
     const cam = activeCamera();
     const start = pointerToWorld(event.clientX, event.clientY, rect, cam);
-    const element = { id: drawElementId(), type: 'draw', x: Math.round(start.x), y: Math.round(start.y), w: 0, h: 0, points: [[0, 0]] };
+    const element = { id: drawElementId(), type: 'draw', x: Math.round(start.x), y: Math.round(start.y), w: 0, h: 0, points: [[0, 0]], ...defaultDrawStyle('draw') };
     const node = appendDrawElement(element);
     trackDrawPointer(grid, event, (moveEvent) => {
       const point = pointerToWorld(moveEvent.clientX, moveEvent.clientY, rect, cam);
@@ -6021,6 +6468,7 @@
     const cam = activeCamera();
     const world = pointerToWorld(event.clientX, event.clientY, grid.getBoundingClientRect(), cam);
     const origin = { x: snapUnit(world.x), y: snapUnit(world.y) };
+    const style = defaultDrawStyle('text');
     const input = document.createElement('textarea');
     input.className = 'draw-text-input';
     input.rows = 1;
@@ -6028,8 +6476,11 @@
     input.setAttribute('aria-label', 'Drawing text');
     input.style.left = `${origin.x * cam.scale + cam.x}px`;
     input.style.top = `${origin.y * cam.scale + cam.y}px`;
-    input.style.fontSize = `${DRAW_TEXT_SIZE * cam.scale}px`;
-    input.style.lineHeight = `${DRAW_TEXT_LINE_HEIGHT * cam.scale}px`;
+    input.style.fontSize = `${style.fontSize * cam.scale}px`;
+    input.style.lineHeight = `${Math.round(style.fontSize * 1.25) * cam.scale}px`;
+    input.style.fontFamily = DRAW_FONT_FAMILY_STACKS[style.fontFamily] || DRAW_FONT_FAMILY_STACKS.normal;
+    input.style.textAlign = style.textAlign;
+    input.style.color = resolveDrawColor(style.strokeColor, 'var(--text)');
     grid.append(input);
     input.focus();
     input.oninput = () => {
@@ -6050,7 +6501,7 @@
         setDrawTool('selection');
         return;
       }
-      const element = { id: drawElementId(), type: 'text', x: origin.x, y: origin.y, w: 0, h: 0, text };
+      const element = { id: drawElementId(), type: 'text', x: origin.x, y: origin.y, w: 0, h: 0, text, ...style };
       appendDrawElement(element);
       commitDrawElement(element);
     };

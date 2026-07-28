@@ -5206,19 +5206,12 @@ a:focus-visible {
   cursor: cell;
 }
 
+/* Stroke/fill/width/dash are now per-element attributes (see drawShapeMarkup in
+   app.js) so a drawing can carry its own color, line style and fill instead of
+   this fixed look; only the line cap/join stay as shared CSS. */
 .draw-shape {
-  fill: none;
-  stroke: var(--text);
-  stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
-}
-
-text.draw-shape {
-  fill: var(--text);
-  stroke: none;
-  font-family: "Segoe UI", system-ui, sans-serif;
 }
 
 /* Invisible fat stroke so thin shapes stay easy to pick and erase. */
@@ -5230,16 +5223,23 @@ text.draw-shape {
   pointer-events: stroke;
 }
 
+/* A filled shape's interior should be clickable too, not just its outline. */
+.draw-hit-filled {
+  pointer-events: all;
+}
+
 .pane-grid[data-draw-tool="selection"] .draw-hit {
   cursor: move;
 }
 
-.draw-element.selected .draw-shape {
-  stroke: var(--accent);
-}
-
-.draw-element.selected text.draw-shape {
-  fill: var(--accent);
+/* Selection is shown as a dashed accent outline traced over the shape's own
+   geometry (see drawShapeMarkup's 'draw-selection-outline' variant, or
+   appendTextSelectionOutline's getBBox()-measured rect for text) rather than
+   recoloring the shape's stroke, which would hide the color the user picked. */
+.draw-selection-outline {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
 }
 
 .draw-text-input {
@@ -5257,9 +5257,162 @@ text.draw-shape {
   white-space: pre;
 }
 
+/* Floating properties panel: shows the style of the current selection, or the
+   pending defaults for the active drawing tool. */
+.draw-props {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 3;
+  width: 200px;
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .18);
+  pointer-events: auto;
+}
+
+.draw-props[hidden] {
+  display: none;
+}
+
+.draw-prop-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.draw-prop-label {
+  font: 11px "Segoe UI", system-ui, sans-serif;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.draw-prop-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.draw-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--draw-swatch-color, transparent);
+  padding: 0;
+  cursor: pointer;
+}
+
+.draw-swatch-transparent {
+  background-image:
+    linear-gradient(45deg, var(--line) 25%, transparent 25%, transparent 75%, var(--line) 75%),
+    linear-gradient(45deg, var(--line) 25%, transparent 25%, transparent 75%, var(--line) 75%);
+  background-size: 8px 8px;
+  background-position: 0 0, 4px 4px;
+}
+
+.draw-swatch.active,
+.draw-prop-btn.active {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 1px;
+}
+
+.draw-swatch-custom {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+
+.draw-prop-btn {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.draw-prop-btn:hover,
+.draw-prop-btn:focus-visible {
+  background: var(--accent-soft);
+  color: var(--accent);
+  outline: none;
+}
+
+.draw-prop-btn .file-action-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.draw-prop-btn-label {
+  width: auto;
+  min-width: 28px;
+  padding: 0 6px;
+  font: 12px "Segoe UI", system-ui, sans-serif;
+}
+
+.draw-font-sample {
+  font-size: 14px;
+}
+
+.draw-font-hand-drawn {
+  font-family: "Segoe Print", "Comic Sans MS", cursive;
+}
+
+.draw-font-normal {
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+.draw-font-code {
+  font-family: "Cascadia Mono", Consolas, monospace;
+}
+
+.draw-prop-range {
+  flex: 1 1 auto;
+  accent-color: var(--accent);
+}
+
+.draw-arrowhead-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  font: 11px "Segoe UI", system-ui, sans-serif;
+  color: var(--muted);
+}
+
+.draw-prop-select {
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--terminal-bg);
+  color: var(--text);
+  font: 12px "Segoe UI", system-ui, sans-serif;
+}
+
 .app.mobile-device .draw-toolbar,
 .app.mode-mobile .draw-toolbar,
 .app.mobile-device .draw-layer,
-.app.mode-mobile .draw-layer {
+.app.mode-mobile .draw-layer,
+.app.mobile-device .draw-props,
+.app.mode-mobile .draw-props {
   display: none;
 }

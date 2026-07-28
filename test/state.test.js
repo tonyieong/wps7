@@ -564,8 +564,90 @@ test('drawings persist per tab and drop unknown shapes', () => {
   restored.load();
   const drawings = restored.state.sessions[0].tabs[0].drawings;
   assert.deepEqual(drawings.map((element) => element.id), ['a', 'b', 'c']);
-  assert.deepEqual(drawings[0], { id: 'a', type: 'rectangle', x: 120, y: 150, w: 240, h: 90 });
+  assert.deepEqual(drawings[0], {
+    id: 'a', type: 'rectangle', x: 120, y: 150, w: 240, h: 90,
+    strokeColor: 'auto', opacity: 100, backgroundColor: 'transparent', fillStyle: 'hachure',
+    strokeWidth: 1, strokeStyle: 'solid', roundness: 'sharp'
+  });
   assert.deepEqual(drawings[1].points, [[0, 0], [12, 18]]);
   assert.equal(drawings[2].text, 'note');
   assert.equal(store.setDrawings('missing-tab', []), false);
+});
+
+test('drawing styles are validated per element type', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100);
+  store.load();
+  const tabId = store.state.sessions[0].tabs[0].id;
+
+  store.setDrawings(tabId, [
+    { id: 'rect', type: 'rectangle', x: 0, y: 0, w: 10, h: 10, strokeColor: '#E03131', backgroundColor: '#B2F2BB', fillStyle: 'solid', strokeWidth: 4, strokeStyle: 'dashed', roundness: 'round', opacity: 55 },
+    { id: 'bad', type: 'rectangle', x: 0, y: 0, w: 10, h: 10, strokeColor: 'notacolor', backgroundColor: 'nope', fillStyle: 'glitter', strokeWidth: 99, strokeStyle: 'zigzag', roundness: 'extreme', opacity: 500 },
+    { id: 'arrow', type: 'arrow', x: 0, y: 0, w: 10, h: 10, startArrowhead: 'circle', endArrowhead: 'triangle_outline' },
+    { id: 'line', type: 'line', x: 0, y: 0, w: 10, h: 10 },
+    { id: 'text', type: 'text', x: 0, y: 0, w: 0, h: 0, text: 'hi', fontSize: 28, fontFamily: 'code', textAlign: 'center' },
+    { id: 'ellipse', type: 'ellipse', x: 0, y: 0, w: 10, h: 10 }
+  ]);
+
+  const drawings = store.state.sessions[0].tabs[0].drawings;
+  const byId = Object.fromEntries(drawings.map((element) => [element.id, element]));
+
+  assert.equal(byId.rect.strokeColor, '#e03131');
+  assert.equal(byId.rect.backgroundColor, '#b2f2bb');
+  assert.equal(byId.rect.fillStyle, 'solid');
+  assert.equal(byId.rect.strokeWidth, 4);
+  assert.equal(byId.rect.strokeStyle, 'dashed');
+  assert.equal(byId.rect.roundness, 'round');
+  assert.equal(byId.rect.opacity, 55);
+
+  // invalid values fall back to defaults rather than being dropped
+  assert.equal(byId.bad.strokeColor, 'auto');
+  assert.equal(byId.bad.backgroundColor, 'transparent');
+  assert.equal(byId.bad.fillStyle, 'hachure');
+  assert.equal(byId.bad.strokeWidth, 1);
+  assert.equal(byId.bad.strokeStyle, 'solid');
+  assert.equal(byId.bad.roundness, 'sharp');
+  assert.equal(byId.bad.opacity, 100);
+
+  assert.equal(byId.arrow.startArrowhead, 'circle');
+  assert.equal(byId.arrow.endArrowhead, 'triangle_outline');
+  // only "arrow" has arrowheads in Excalidraw; "line" has none at all
+  assert.equal(byId.line.startArrowhead, undefined);
+  assert.equal(byId.line.endArrowhead, undefined);
+  assert.equal(byId.line.strokeWidth, 1);
+
+  assert.equal(byId.text.fontSize, 28);
+  assert.equal(byId.text.fontFamily, 'code');
+  assert.equal(byId.text.textAlign, 'center');
+  assert.equal(byId.text.backgroundColor, undefined);
+  assert.equal(byId.text.fillStyle, undefined);
+
+  assert.equal(byId.ellipse.roundness, undefined);
+  assert.equal(byId.ellipse.fillStyle, 'hachure');
+
+  // opacity clamps to [0, 100] instead of failing validation
+  store.setDrawings(tabId, [{ id: 'clamp', type: 'rectangle', x: 0, y: 0, w: 10, h: 10, opacity: -20 }]);
+  assert.equal(store.state.sessions[0].tabs[0].drawings[0].opacity, 0);
+  store.setDrawings(tabId, [{ id: 'clamp2', type: 'rectangle', x: 0, y: 0, w: 10, h: 10, opacity: 250 }]);
+  assert.equal(store.state.sessions[0].tabs[0].drawings[0].opacity, 100);
+});
+
+test('drawings without style fields (pre-existing data) round-trip with full defaults', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100);
+  store.load();
+  const tabId = store.state.sessions[0].tabs[0].id;
+
+  store.setDrawings(tabId, [{ id: 'legacy', type: 'rectangle', x: 0, y: 0, w: 30, h: 30 }]);
+
+  const restored = new StateStore(root, 100);
+  restored.load();
+  const element = restored.state.sessions[0].tabs[0].drawings[0];
+  assert.equal(element.strokeColor, 'auto');
+  assert.equal(element.backgroundColor, 'transparent');
+  assert.equal(element.fillStyle, 'hachure');
+  assert.equal(element.strokeWidth, 1);
+  assert.equal(element.strokeStyle, 'solid');
+  assert.equal(element.roundness, 'sharp');
+  assert.equal(element.opacity, 100);
 });

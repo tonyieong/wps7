@@ -14,6 +14,15 @@ const DRAW_TYPES = new Set(['rectangle', 'diamond', 'ellipse', 'arrow', 'line', 
 const MAX_DRAW_ELEMENTS = 2000;
 const MAX_DRAW_POINTS = 4000;
 const MAX_DRAW_TEXT_LENGTH = 2000;
+const DRAW_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
+const DRAW_FILL_STYLES = new Set(['hachure', 'cross-hatch', 'solid']);
+const DRAW_STROKE_WIDTHS = new Set([1, 2, 4]);
+const DRAW_STROKE_STYLES = new Set(['solid', 'dashed', 'dotted']);
+const DRAW_ROUNDNESS = new Set(['sharp', 'round']);
+const DRAW_ARROWHEADS = new Set(['none', 'arrow', 'triangle', 'triangle_outline', 'diamond', 'diamond_outline', 'circle', 'circle_outline', 'bar']);
+const DRAW_FONT_FAMILIES = new Set(['hand-drawn', 'normal', 'code']);
+const DRAW_FONT_SIZES = new Set([16, 20, 28, 36]);
+const DRAW_TEXT_ALIGNS = new Set(['left', 'center', 'right']);
 const PANE_TYPES = new Set(['terminal', 'files', 'browser', 'notepad', 'usage']);
 const NOTEPAD_ENCODINGS = new Set(['utf8', 'utf8-bom', 'utf16le', 'utf16be', 'latin1']);
 const MAX_NOTEPAD_CONTENT_LENGTH = 10 * 1024 * 1024;
@@ -926,24 +935,89 @@ function migrateLayout(layout) {
   });
 }
 
+// strokeColor keeps 'auto' as a valid value (resolved to the --text theme token
+// on the client) so drawings stay visible in both the light and dark themes.
+function drawStrokeColor(value) {
+  if (value === 'auto') {
+    return 'auto';
+  }
+  return typeof value === 'string' && DRAW_COLOR_PATTERN.test(value) ? value.toLowerCase() : 'auto';
+}
+
+function drawBackgroundColor(value) {
+  if (value === 'transparent') {
+    return 'transparent';
+  }
+  return typeof value === 'string' && DRAW_COLOR_PATTERN.test(value) ? value.toLowerCase() : 'transparent';
+}
+
+function drawEnum(set, value, fallback) {
+  return set.has(value) ? value : fallback;
+}
+
+function drawOpacity(value) {
+  const number = Math.round(Number(value));
+  return Number.isFinite(number) ? Math.min(100, Math.max(0, number)) : 100;
+}
+
+// Style fields are scoped per element type so e.g. a line can't carry a
+// fillStyle and a text element can't carry an arrowhead.
+function drawStyle(value, type) {
+  const style = {
+    strokeColor: drawStrokeColor(value?.strokeColor),
+    opacity: drawOpacity(value?.opacity)
+  };
+  const strokeWidth = Math.round(Number(value?.strokeWidth));
+  if (type === 'rectangle' || type === 'diamond' || type === 'ellipse') {
+    style.backgroundColor = drawBackgroundColor(value?.backgroundColor);
+    style.fillStyle = drawEnum(DRAW_FILL_STYLES, value?.fillStyle, 'hachure');
+    style.strokeWidth = drawEnum(DRAW_STROKE_WIDTHS, strokeWidth, 1);
+    style.strokeStyle = drawEnum(DRAW_STROKE_STYLES, value?.strokeStyle, 'solid');
+  }
+  if (type === 'rectangle' || type === 'diamond') {
+    style.roundness = drawEnum(DRAW_ROUNDNESS, value?.roundness, 'sharp');
+  }
+  if (type === 'arrow' || type === 'line') {
+    style.strokeWidth = drawEnum(DRAW_STROKE_WIDTHS, strokeWidth, 1);
+    style.strokeStyle = drawEnum(DRAW_STROKE_STYLES, value?.strokeStyle, 'solid');
+  }
+  // Only "arrow" has arrowheads in Excalidraw (canHaveArrowheads = type => type === 'arrow');
+  // "line" intentionally has none.
+  if (type === 'arrow') {
+    style.startArrowhead = drawEnum(DRAW_ARROWHEADS, value?.startArrowhead, 'none');
+    style.endArrowhead = drawEnum(DRAW_ARROWHEADS, value?.endArrowhead, 'arrow');
+  }
+  if (type === 'draw') {
+    style.strokeWidth = drawEnum(DRAW_STROKE_WIDTHS, strokeWidth, 1);
+  }
+  if (type === 'text') {
+    style.fontSize = drawEnum(DRAW_FONT_SIZES, Math.round(Number(value?.fontSize)), 20);
+    style.fontFamily = drawEnum(DRAW_FONT_FAMILIES, value?.fontFamily, 'normal');
+    style.textAlign = drawEnum(DRAW_TEXT_ALIGNS, value?.textAlign, 'left');
+  }
+  return style;
+}
+
 function drawElement(value) {
   if (!DRAW_TYPES.has(value?.type)) {
     return null;
   }
+  const type = value.type;
   const element = {
     id: String(value.id || crypto.randomUUID()).slice(0, 64),
-    type: value.type,
+    type,
     x: Math.round(Number(value.x)) || 0,
     y: Math.round(Number(value.y)) || 0,
     w: Math.round(Number(value.w)) || 0,
-    h: Math.round(Number(value.h)) || 0
+    h: Math.round(Number(value.h)) || 0,
+    ...drawStyle(value, type)
   };
-  if (value.type === 'draw') {
+  if (type === 'draw') {
     element.points = (Array.isArray(value.points) ? value.points : [])
       .slice(0, MAX_DRAW_POINTS)
       .map((point) => [Math.round(Number(point?.[0])) || 0, Math.round(Number(point?.[1])) || 0]);
   }
-  if (value.type === 'text') {
+  if (type === 'text') {
     element.text = String(value.text || '').slice(0, MAX_DRAW_TEXT_LENGTH);
   }
   return element;
