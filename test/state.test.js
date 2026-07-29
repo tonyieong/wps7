@@ -650,4 +650,33 @@ test('drawings without style fields (pre-existing data) round-trip with full def
   assert.equal(element.strokeStyle, 'solid');
   assert.equal(element.roundness, 'sharp');
   assert.equal(element.opacity, 100);
+  assert.equal(element.groupId, undefined);
+});
+
+test('drawing groupId round-trips, is capped at 64 chars, and is omitted when absent', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100);
+  store.load();
+  const tabId = store.state.sessions[0].tabs[0].id;
+
+  const longId = 'g'.repeat(100);
+  store.setDrawings(tabId, [
+    { id: 'a', type: 'rectangle', x: 0, y: 0, w: 10, h: 10, groupId: 'group-1' },
+    { id: 'b', type: 'ellipse', x: 0, y: 0, w: 10, h: 10, groupId: 'group-1' },
+    { id: 'c', type: 'diamond', x: 0, y: 0, w: 10, h: 10, groupId: longId },
+    { id: 'd', type: 'line', x: 0, y: 0, w: 10, h: 10 },
+    { id: 'e', type: 'text', x: 0, y: 0, w: 0, h: 0, text: 'hi', groupId: 42 }
+  ]);
+
+  const restored = new StateStore(root, 100);
+  restored.load();
+  const byId = Object.fromEntries(restored.state.sessions[0].tabs[0].drawings.map((el) => [el.id, el]));
+
+  assert.equal(byId.a.groupId, 'group-1');
+  assert.equal(byId.b.groupId, 'group-1');
+  assert.equal(byId.c.groupId, longId.slice(0, 64));
+  assert.equal(byId.c.groupId.length, 64);
+  assert.equal(byId.d.groupId, undefined);
+  // non-string groupId (e.g. a stray number) is ignored rather than coerced
+  assert.equal(byId.e.groupId, undefined);
 });

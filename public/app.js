@@ -73,7 +73,8 @@
     theme: ({ dark: 'wps-dark', light: 'wps-light', custom: 'custom-dark' })[localStorage.getItem('wps7.theme')] || localStorage.getItem('wps7.theme') || 'wps-dark',
     customThemeDraft: null,
     drawTool: 'selection',
-    drawSelectionId: '',
+    drawSelection: new Set(),
+    drawClipboard: [],
     drawStyles: (() => {
       try {
         return JSON.parse(localStorage.getItem('wps7.drawStyles') || '{}') || {};
@@ -1297,6 +1298,7 @@
               <g data-draw-scene>${activeDrawings().map(drawElementMarkup).join('')}</g>
             </svg>
             <div class="draw-props" data-draw-props hidden></div>
+            <div class="draw-handles" data-draw-handles></div>
           </div>
         </section>
       </main>
@@ -1311,6 +1313,7 @@
     syncDrawFillPatterns();
     syncTextSelectionOutline();
     updateDrawProps();
+    updateDrawHandles();
     for (const pane of tab.panes) {
       mountPaneContent(pane);
     }
@@ -1538,14 +1541,52 @@
       if (event.target.closest?.('input, textarea, select, .inline-rename')) {
         return;
       }
-      if ((event.key === 'Delete' || event.key === 'Backspace') && state.drawSelectionId) {
+      if ((event.key === 'Delete' || event.key === 'Backspace') && state.drawSelection.size) {
         event.preventDefault();
-        deleteSelectedDrawElement();
+        deleteSelectedDrawElements();
         return;
       }
-      if (event.key === 'Escape' && (state.drawSelectionId || state.drawTool !== 'selection')) {
+      if (event.key === 'Escape' && (state.drawSelection.size || state.drawTool !== 'selection')) {
         setDrawTool('selection');
         return;
+      }
+      if (event.ctrlKey && !event.shiftKey && key === 'z') {
+        event.preventDefault();
+        undoDraw();
+        return;
+      }
+      if (event.ctrlKey && (key === 'y' || (event.shiftKey && key === 'z'))) {
+        event.preventDefault();
+        redoDraw();
+        return;
+      }
+      if (event.ctrlKey && key === 'g') {
+        event.preventDefault();
+        if (event.shiftKey) {
+          ungroupSelectedDrawElements();
+        } else {
+          groupSelectedDrawElements();
+        }
+        return;
+      }
+      // Copy/paste/duplicate share keys with Files pane cut/paste and other
+      // pane-scoped shortcuts, so only act on them when focus isn't inside a pane.
+      if (event.ctrlKey && !event.target.closest?.('[data-pane]')) {
+        if (key === 'c' && state.drawSelection.size) {
+          event.preventDefault();
+          copySelectedDrawElements();
+          return;
+        }
+        if (key === 'v' && state.drawClipboard.length) {
+          event.preventDefault();
+          pasteDrawElementsAt();
+          return;
+        }
+        if (key === 'd' && state.drawSelection.size) {
+          event.preventDefault();
+          duplicateSelectedDrawElements();
+          return;
+        }
       }
       if (event.ctrlKey && event.shiftKey && key === 't') {
         event.preventDefault();
@@ -5722,6 +5763,7 @@
         grid.style.backgroundSize = '';
         grid.style.backgroundPosition = '';
       }
+      updateDrawHandles();
       return;
     }
     if (canvas) {
@@ -5740,6 +5782,7 @@
       // Zoomed far out the dashed cells collapse into a haze, so drop them.
       grid.classList.toggle('minor-grid-hidden', minor < 12);
     }
+    updateDrawHandles();
   }
 
   function ensureActivePaneVisible() {
@@ -6001,13 +6044,13 @@
   }
 
   function drawElementInnerMarkup(element) {
-    const selected = state.drawSelectionId === element.id;
+    const selected = state.drawSelection.has(element.id);
     const outline = selected && element.type !== 'text' ? drawShapeMarkup(element, 'draw-selection-outline') : '';
     return `${drawShapeMarkup(element, 'draw-hit')}${drawShapeMarkup(element, 'draw-shape')}${outline}`;
   }
 
   function drawElementMarkup(element) {
-    const selected = state.drawSelectionId === element.id;
+    const selected = state.drawSelection.has(element.id);
     const opacityValue = Number.isFinite(element.opacity) ? element.opacity : 100;
     return `<g class="draw-element${selected ? ' selected' : ''}" data-draw-element="${escapeAttr(element.id)}" opacity="${opacityValue / 100}">${drawElementInnerMarkup(element)}</g>`;
   }
@@ -6118,7 +6161,7 @@
     if (!node) {
       return;
     }
-    const selected = state.drawSelectionId === element.id;
+    const selected = state.drawSelection.has(element.id);
     node.classList.toggle('selected', selected);
     const opacityValue = Number.isFinite(element.opacity) ? element.opacity : 100;
     node.setAttribute('opacity', String(opacityValue / 100));
@@ -6148,34 +6191,44 @@
   // render() rebuilds the whole scene as a string, so a selected text element's
   // outline (which needs a live getBBox()) can only be added once the fresh DOM exists.
   function syncTextSelectionOutline() {
-    const element = state.drawSelectionId ? activeDrawings().find((item) => item.id === state.drawSelectionId) : null;
-    if (!element || element.type !== 'text') {
-      return;
-    }
-    const node = app.querySelector(`[data-draw-element="${CSS.escape(element.id)}"]`);
-    if (node) {
-      appendTextSelectionOutline(node);
-    }
+    activeDrawings().forEach((element) => {
+      if (element.type !== 'text' || !state.drawSelection.has(element.id)) {
+        return;
+      }
+      const node = app.querySelector(`[data-draw-element="${CSS.escape(element.id)}"]`);
+      if (node) {
+        appendTextSelectionOutline(node);
+      }
+    });
   }
 
   function commitDrawElement(element) {
+    const before = beginDrawHistoryEntry();
     activeDrawings().push(element);
+    commitDrawHistoryEntry(before);
     saveDrawingsSoon();
     setDrawTool('selection');
-    selectDrawElement(element.id);
+    replaceDrawSelection([element.id]);
   }
 
-  function deleteSelectedDrawElement() {
-    const drawings = activeDrawings();
-    const index = drawings.findIndex((element) => element.id === state.drawSelectionId);
-    if (index < 0) {
+  function deleteSelectedDrawElements() {
+    if (!state.drawSelection.size) {
       return;
     }
-    app.querySelector(`[data-draw-element="${CSS.escape(drawings[index].id)}"]`)?.remove();
-    drawings.splice(index, 1);
-    state.drawSelectionId = '';
+    const drawings = activeDrawings();
+    const ids = state.drawSelection;
+    const before = beginDrawHistoryEntry();
+    for (let i = drawings.length - 1; i >= 0; i--) {
+      if (ids.has(drawings[i].id)) {
+        app.querySelector(`[data-draw-element="${CSS.escape(drawings[i].id)}"]`)?.remove();
+        drawings.splice(i, 1);
+      }
+    }
+    commitDrawHistoryEntry(before);
+    state.drawSelection = new Set();
     saveDrawingsSoon();
     updateDrawProps();
+    updateDrawHandles();
   }
 
   let drawingsSaveTimer = 0;
@@ -6191,6 +6244,78 @@
         body: JSON.stringify({ drawings: tab.drawings })
       }).catch(() => {});
     }, 400);
+  }
+
+  // --- Undo/redo: an in-memory, per-tab snapshot stack. Snapshots are plain
+  // JSON strings of the whole drawings array (mirrors what saveDrawingsSoon
+  // already sends), so undo/redo never needs server-side support beyond the
+  // existing PATCH /api/tabs/:id/drawings route. ---
+  const drawHistories = new Map(); // tabId -> { undo: string[], redo: string[] }
+  const DRAW_HISTORY_LIMIT = 50;
+
+  function drawHistoryFor(tabId) {
+    if (!drawHistories.has(tabId)) {
+      drawHistories.set(tabId, { undo: [], redo: [] });
+    }
+    return drawHistories.get(tabId);
+  }
+
+  // Call before a mutation; pair with commitDrawHistoryEntry after it actually
+  // happens. Discrete actions call both back-to-back; drag gestures capture the
+  // "before" snapshot at gesture start and only commit it if something moved.
+  function beginDrawHistoryEntry() {
+    const tab = activeTab(activeSession());
+    return tab ? JSON.stringify(activeDrawings()) : null;
+  }
+
+  function commitDrawHistoryEntry(beforeSnapshot) {
+    if (beforeSnapshot === null || beforeSnapshot === undefined) {
+      return;
+    }
+    const tab = activeTab(activeSession());
+    if (!tab) {
+      return;
+    }
+    const history = drawHistoryFor(tab.id);
+    history.undo.push(beforeSnapshot);
+    if (history.undo.length > DRAW_HISTORY_LIMIT) {
+      history.undo.shift();
+    }
+    history.redo.length = 0;
+  }
+
+  function undoDraw() {
+    const tab = activeTab(activeSession());
+    if (!tab) {
+      return;
+    }
+    const history = drawHistoryFor(tab.id);
+    const previous = history.undo.pop();
+    if (previous === undefined) {
+      return;
+    }
+    history.redo.push(JSON.stringify(tab.drawings || []));
+    tab.drawings = JSON.parse(previous);
+    state.drawSelection = new Set();
+    render();
+    saveDrawingsSoon();
+  }
+
+  function redoDraw() {
+    const tab = activeTab(activeSession());
+    if (!tab) {
+      return;
+    }
+    const history = drawHistoryFor(tab.id);
+    const next = history.redo.pop();
+    if (next === undefined) {
+      return;
+    }
+    history.undo.push(JSON.stringify(tab.drawings || []));
+    tab.drawings = JSON.parse(next);
+    state.drawSelection = new Set();
+    render();
+    saveDrawingsSoon();
   }
 
   // --- Properties panel: a floating island (top-left of the canvas) that shows
@@ -6233,8 +6358,8 @@
     return `<label class="draw-arrowhead-field"><span>${label}</span><select class="draw-prop-select" data-draw-style="${prop}" aria-label="${label} arrowhead">${options}</select></label>`;
   }
 
-  function drawPropsMarkup(type, style) {
-    const fields = new Set(DRAW_STYLE_FIELDS[type] || []);
+  function drawPropsMarkup(fieldList, style) {
+    const fields = fieldList instanceof Set ? fieldList : new Set(fieldList || []);
     const groups = [];
     if (fields.has('strokeColor')) {
       groups.push(drawPropGroup('Stroke', drawColorSwatchesMarkup('strokeColor', DRAW_STROKE_COLORS, style.strokeColor)));
@@ -6273,48 +6398,93 @@
   }
 
   function wireDrawProps(panel) {
+    // Style edits only need a history entry when a selection actually exists to
+    // mutate (otherwise setDrawStyle only updates the "next new element" defaults).
+    const withHistory = (apply) => {
+      if (!state.drawSelection.size) {
+        apply();
+        return;
+      }
+      const before = beginDrawHistoryEntry();
+      apply();
+      commitDrawHistoryEntry(before);
+    };
     panel.querySelectorAll('[data-draw-style]').forEach((control) => {
       const prop = control.dataset.drawStyle;
       if (control.tagName === 'SELECT') {
-        control.onchange = () => setDrawStyle(prop, control.value);
+        control.onchange = () => withHistory(() => setDrawStyle(prop, control.value));
       } else if (control.type === 'range' || control.type === 'color') {
-        control.oninput = () => setDrawStyle(prop, DRAW_NUMERIC_STYLE_PROPS.has(prop) ? Number(control.value) : control.value);
+        let pendingSnapshot;
+        let hasPending = false;
+        control.addEventListener('pointerdown', () => {
+          if (state.drawSelection.size) {
+            pendingSnapshot = beginDrawHistoryEntry();
+            hasPending = true;
+          }
+        });
+        control.oninput = () => {
+          if (hasPending) {
+            commitDrawHistoryEntry(pendingSnapshot);
+            hasPending = false;
+          }
+          setDrawStyle(prop, DRAW_NUMERIC_STYLE_PROPS.has(prop) ? Number(control.value) : control.value);
+        };
       } else {
         control.onclick = () => {
           const raw = control.dataset.drawValue;
-          setDrawStyle(prop, DRAW_NUMERIC_STYLE_PROPS.has(prop) ? Number(raw) : raw);
+          withHistory(() => setDrawStyle(prop, DRAW_NUMERIC_STYLE_PROPS.has(prop) ? Number(raw) : raw));
         };
       }
     });
   }
 
-  // Shows the selected element's style, or the pending defaults for the active
-  // drawing tool; hidden entirely for hand/selection(no selection)/eraser.
+  // Shows the selected element's style (or the fields common to every selected
+  // element's type, for a mixed multi-select), or the pending defaults for the
+  // active drawing tool when nothing is selected.
   function updateDrawProps() {
     const panel = app.querySelector('[data-draw-props]');
     if (!panel) {
       return;
     }
-    const selected = state.drawSelectionId ? activeDrawings().find((item) => item.id === state.drawSelectionId) : null;
-    const type = selected ? selected.type : state.drawTool;
-    if (!DRAW_STYLE_FIELDS[type]) {
+    const selectedElements = [...state.drawSelection].map(findDrawElementById).filter(Boolean);
+    let fields;
+    let styleSource;
+    if (!selectedElements.length) {
+      fields = DRAW_STYLE_FIELDS[state.drawTool];
+      styleSource = fields ? defaultDrawStyle(state.drawTool) : null;
+    } else if (selectedElements.length === 1) {
+      fields = DRAW_STYLE_FIELDS[selectedElements[0].type];
+      styleSource = selectedElements[0];
+    } else {
+      const fieldSets = selectedElements.map((el) => new Set(DRAW_STYLE_FIELDS[el.type] || []));
+      fields = fieldSets.length ? [...fieldSets[0]].filter((field) => fieldSets.every((set) => set.has(field))) : [];
+      styleSource = selectedElements[0];
+    }
+    if (!fields || !fields.length) {
       panel.hidden = true;
       panel.innerHTML = '';
       return;
     }
     panel.hidden = false;
-    panel.innerHTML = drawPropsMarkup(type, selected || defaultDrawStyle(type));
+    panel.innerHTML = drawPropsMarkup(fields, styleSource);
     wireDrawProps(panel);
   }
 
   function setDrawStyle(prop, value) {
     state.drawStyles[prop] = value;
     localStorage.setItem('wps7.drawStyles', JSON.stringify(state.drawStyles));
-    if (state.drawSelectionId) {
-      const element = activeDrawings().find((item) => item.id === state.drawSelectionId);
-      if (element && prop in element) {
-        element[prop] = value;
-        redrawDrawElement(element);
+    if (state.drawSelection.size) {
+      const drawings = activeDrawings();
+      let changed = false;
+      state.drawSelection.forEach((id) => {
+        const element = drawings.find((item) => item.id === id);
+        if (element && prop in element) {
+          element[prop] = value;
+          redrawDrawElement(element);
+          changed = true;
+        }
+      });
+      if (changed) {
         saveDrawingsSoon();
       }
     }
@@ -6330,7 +6500,7 @@
   function setDrawTool(tool) {
     state.drawTool = tool;
     if (tool !== 'selection') {
-      selectDrawElement('');
+      clearDrawSelection();
     }
     app.querySelector('.pane-grid')?.setAttribute('data-draw-tool', tool);
     app.querySelectorAll('[data-draw-tool-button]').forEach((button) => {
@@ -6341,20 +6511,55 @@
     updateDrawProps();
   }
 
-  function selectDrawElement(elementId) {
-    const previousId = state.drawSelectionId;
-    state.drawSelectionId = elementId;
-    const drawings = activeDrawings();
-    [previousId, elementId].forEach((id) => {
-      if (!id) {
-        return;
-      }
-      const element = drawings.find((item) => item.id === id);
-      if (element) {
-        redrawDrawElement(element);
+  // --- Selection: a Set of element ids so multiple drawings can be selected at
+  // once (Excalidraw-style: plain click replaces, Shift+click adds, Ctrl/Cmd+click
+  // toggles). Clicking any member of a group selects every element sharing its
+  // groupId. ---
+  function groupMembers(element) {
+    if (!element?.groupId) {
+      return element ? [element] : [];
+    }
+    return activeDrawings().filter((el) => el.groupId === element.groupId);
+  }
+
+  function findDrawElementById(id) {
+    return activeDrawings().find((el) => el.id === id);
+  }
+
+  function applyDrawSelectionChange(nextIds) {
+    const previous = state.drawSelection;
+    const next = new Set(nextIds);
+    const touched = new Set([...previous, ...next]);
+    state.drawSelection = next;
+    touched.forEach((id) => {
+      const el = findDrawElementById(id);
+      if (el) {
+        redrawDrawElement(el);
       }
     });
     updateDrawProps();
+    updateDrawHandles();
+  }
+
+  function replaceDrawSelection(ids) {
+    applyDrawSelectionChange(ids);
+  }
+
+  function addDrawSelection(id) {
+    const additions = groupMembers(findDrawElementById(id)).map((el) => el.id);
+    applyDrawSelectionChange([...state.drawSelection, ...additions]);
+  }
+
+  function toggleDrawSelection(id) {
+    const ids = groupMembers(findDrawElementById(id)).map((el) => el.id);
+    const has = ids.some((itemId) => state.drawSelection.has(itemId));
+    const next = new Set(state.drawSelection);
+    ids.forEach((itemId) => (has ? next.delete(itemId) : next.add(itemId)));
+    applyDrawSelectionChange([...next]);
+  }
+
+  function clearDrawSelection() {
+    applyDrawSelectionChange([]);
   }
 
   function onDrawPointerDown(grid, event) {
@@ -6375,9 +6580,18 @@
     }
     if (state.drawTool === 'selection') {
       const node = event.target.closest?.('[data-draw-element]');
-      selectDrawElement(node?.dataset.drawElement || '');
       if (node) {
-        startDrawElementMove(event, node);
+        const id = node.dataset.drawElement;
+        if (event.shiftKey) {
+          addDrawSelection(id);
+        } else if (event.ctrlKey || event.metaKey) {
+          toggleDrawSelection(id);
+        } else if (!state.drawSelection.has(id)) {
+          replaceDrawSelection(groupMembers(findDrawElementById(id)).map((el) => el.id));
+        }
+        startDrawElementsMove(event, node);
+      } else {
+        startDrawMarquee(grid, event);
       }
       return;
     }
@@ -6444,6 +6658,8 @@
 
   function startDrawErase(grid, event) {
     event.preventDefault();
+    const before = beginDrawHistoryEntry();
+    let erasedAny = false;
     const eraseAt = (clientX, clientY) => {
       const node = document.elementsFromPoint(clientX, clientY)
         .map((element) => element.closest?.('[data-draw-element]'))
@@ -6452,15 +6668,24 @@
         return;
       }
       const drawings = activeDrawings();
-      const index = drawings.findIndex((element) => element.id === node.dataset.drawElement);
+      const id = node.dataset.drawElement;
+      const index = drawings.findIndex((element) => element.id === id);
       if (index >= 0) {
         drawings.splice(index, 1);
-        saveDrawingsSoon();
+        erasedAny = true;
+        state.drawSelection.delete(id);
       }
       node.remove();
     };
     eraseAt(event.clientX, event.clientY);
-    trackDrawPointer(grid, event, (moveEvent) => eraseAt(moveEvent.clientX, moveEvent.clientY), () => {});
+    trackDrawPointer(grid, event, (moveEvent) => eraseAt(moveEvent.clientX, moveEvent.clientY), () => {
+      if (erasedAny) {
+        commitDrawHistoryEntry(before);
+        saveDrawingsSoon();
+        updateDrawProps();
+        updateDrawHandles();
+      }
+    });
   }
 
   function startDrawText(grid, event) {
@@ -6507,28 +6732,40 @@
     };
   }
 
-  function startDrawElementMove(event, node) {
-    const element = activeDrawings().find((item) => item.id === node.dataset.drawElement);
-    if (!element) {
+  // Moves every selected element together (falling back to just the clicked
+  // node if nothing was selected yet, e.g. a stale pointer capture edge case).
+  function startDrawElementsMove(event, node) {
+    const ids = state.drawSelection.size ? [...state.drawSelection] : [node.dataset.drawElement];
+    const drawings = activeDrawings();
+    const elements = ids.map((id) => drawings.find((item) => item.id === id)).filter(Boolean);
+    if (!elements.length) {
       return;
     }
     event.preventDefault();
+    const before = beginDrawHistoryEntry();
     const scale = activeCamera().scale;
     const startX = event.clientX;
     const startY = event.clientY;
-    const originX = element.x;
-    const originY = element.y;
+    const origins = elements.map((el) => ({ el, x: el.x, y: el.y }));
+    let moved = false;
     node.setPointerCapture(event.pointerId);
     const onMove = (moveEvent) => {
-      element.x = snapUnit(originX + (moveEvent.clientX - startX) / scale);
-      element.y = snapUnit(originY + (moveEvent.clientY - startY) / scale);
-      redrawDrawElement(element);
+      const dx = (moveEvent.clientX - startX) / scale;
+      const dy = (moveEvent.clientY - startY) / scale;
+      origins.forEach(({ el, x, y }) => {
+        el.x = snapUnit(x + dx);
+        el.y = snapUnit(y + dy);
+        redrawDrawElement(el);
+      });
+      moved = true;
+      updateDrawHandles();
     };
     const onUp = () => {
       node.removeEventListener('pointermove', onMove);
       node.removeEventListener('pointerup', onUp);
       node.removeEventListener('pointercancel', onUp);
-      if (element.x !== originX || element.y !== originY) {
+      if (moved) {
+        commitDrawHistoryEntry(before);
         saveDrawingsSoon();
       }
     };
@@ -6549,6 +6786,350 @@
     layer.addEventListener('pointermove', onMove);
     layer.addEventListener('pointerup', onUp);
     layer.addEventListener('pointercancel', onUp);
+  }
+
+  // --- Shared bounding box helper (marquee hit-testing + resize handle
+  // placement). Freehand and text have no stored w/h, so their bounds are
+  // derived: freehand from its points, text from a live getBBox() when
+  // available, else a rough character-count heuristic. ---
+  function elementBounds(element) {
+    if (element.type === 'draw') {
+      const xs = element.points.map((point) => point[0]);
+      const ys = element.points.map((point) => point[1]);
+      const minX = Math.min(...xs);
+      const minY = Math.min(...ys);
+      return { x: element.x + minX, y: element.y + minY, w: Math.max(...xs) - minX, h: Math.max(...ys) - minY };
+    }
+    if (element.type === 'text') {
+      const node = app.querySelector(`[data-draw-element="${CSS.escape(element.id)}"] text.draw-shape`);
+      if (node) {
+        const box = node.getBBox();
+        return { x: box.x, y: box.y, w: box.width, h: box.height };
+      }
+      const fontSize = element.fontSize || 20;
+      const lines = String(element.text || '').split('\n');
+      const widestLine = Math.max(...lines.map((line) => line.length), 1);
+      return { x: element.x, y: element.y, w: widestLine * fontSize * 0.6, h: lines.length * fontSize * 1.25 };
+    }
+    return {
+      x: Math.min(element.x, element.x + element.w),
+      y: Math.min(element.y, element.y + element.h),
+      w: Math.abs(element.w),
+      h: Math.abs(element.h)
+    };
+  }
+
+  function elementIntersectsBox(element, box) {
+    const bounds = elementBounds(element);
+    return !(box.maxX < bounds.x || box.minX > bounds.x + bounds.w || box.maxY < bounds.y || box.minY > bounds.y + bounds.h);
+  }
+
+  // Marquee/rubber-band select: drag on empty canvas. Ctrl/Cmd/Shift held down
+  // makes it additive (keeps the existing selection and adds whatever the box
+  // overlaps) instead of replacing it. Captures on the grid, not the (pointer-
+  // events:none in selection mode) draw-layer.
+  function startDrawMarquee(grid, event) {
+    event.preventDefault();
+    const additive = event.ctrlKey || event.metaKey || event.shiftKey;
+    const rect = grid.getBoundingClientRect();
+    const cam = activeCamera();
+    const start = pointerToWorld(event.clientX, event.clientY, rect, cam);
+    const baseSelection = additive ? new Set(state.drawSelection) : new Set();
+    const box = document.createElement('div');
+    box.className = 'draw-marquee';
+    grid.append(box);
+    let moved = false;
+    const onMove = (moveEvent) => {
+      moved = true;
+      const world = pointerToWorld(moveEvent.clientX, moveEvent.clientY, rect, cam);
+      const minX = Math.min(start.x, world.x);
+      const minY = Math.min(start.y, world.y);
+      const maxX = Math.max(start.x, world.x);
+      const maxY = Math.max(start.y, world.y);
+      box.style.left = `${minX * cam.scale + cam.x}px`;
+      box.style.top = `${minY * cam.scale + cam.y}px`;
+      box.style.width = `${(maxX - minX) * cam.scale}px`;
+      box.style.height = `${(maxY - minY) * cam.scale}px`;
+      const testBox = { minX, minY, maxX, maxY };
+      const next = new Set(baseSelection);
+      activeDrawings().forEach((element) => {
+        if (elementIntersectsBox(element, testBox)) {
+          groupMembers(element).forEach((el) => next.add(el.id));
+        }
+      });
+      applyDrawSelectionChange([...next]);
+    };
+    const onUp = () => {
+      grid.removeEventListener('pointermove', onMove);
+      grid.removeEventListener('pointerup', onUp);
+      grid.removeEventListener('pointercancel', onUp);
+      box.remove();
+      if (!moved && !additive) {
+        clearDrawSelection();
+      }
+    };
+    grid.setPointerCapture(event.pointerId);
+    grid.addEventListener('pointermove', onMove);
+    grid.addEventListener('pointerup', onUp);
+    grid.addEventListener('pointercancel', onUp);
+  }
+
+  // --- Grouping ---
+  function groupSelectedDrawElements() {
+    if (state.drawSelection.size < 2) {
+      return;
+    }
+    const before = beginDrawHistoryEntry();
+    const groupId = drawElementId();
+    activeDrawings().forEach((el) => {
+      if (state.drawSelection.has(el.id)) {
+        el.groupId = groupId;
+      }
+    });
+    commitDrawHistoryEntry(before);
+    saveDrawingsSoon();
+  }
+
+  function ungroupSelectedDrawElements() {
+    const ids = new Set();
+    state.drawSelection.forEach((id) => {
+      groupMembers(findDrawElementById(id)).forEach((el) => ids.add(el.id));
+    });
+    if (!ids.size) {
+      return;
+    }
+    const before = beginDrawHistoryEntry();
+    activeDrawings().forEach((el) => {
+      if (ids.has(el.id)) {
+        delete el.groupId;
+      }
+    });
+    commitDrawHistoryEntry(before);
+    saveDrawingsSoon();
+  }
+
+  // --- Copy / paste (in-app clipboard; not the OS clipboard, since these are
+  // structured element objects rather than text). ---
+  function copySelectedDrawElements() {
+    if (!state.drawSelection.size) {
+      return;
+    }
+    const drawings = activeDrawings();
+    state.drawClipboard = [...state.drawSelection]
+      .map((id) => drawings.find((el) => el.id === id))
+      .filter(Boolean)
+      .map((el) => JSON.parse(JSON.stringify(el)));
+  }
+
+  function pasteDrawElementsAt(offset = 20) {
+    if (!state.drawClipboard?.length) {
+      return;
+    }
+    const before = beginDrawHistoryEntry();
+    const groupIdMap = new Map();
+    const pasted = state.drawClipboard.map((source) => {
+      const clone = JSON.parse(JSON.stringify(source));
+      clone.id = drawElementId();
+      clone.x += offset;
+      clone.y += offset;
+      if (clone.groupId) {
+        if (!groupIdMap.has(clone.groupId)) {
+          groupIdMap.set(clone.groupId, drawElementId());
+        }
+        clone.groupId = groupIdMap.get(clone.groupId);
+      }
+      return clone;
+    });
+    activeDrawings().push(...pasted);
+    commitDrawHistoryEntry(before);
+    render(); // multiple new elements at once - a full re-render is simplest and safe
+    replaceDrawSelection(pasted.map((el) => el.id));
+    saveDrawingsSoon();
+  }
+
+  function duplicateSelectedDrawElements() {
+    copySelectedDrawElements();
+    pasteDrawElementsAt(20);
+  }
+
+  // --- Resize handles: a screen-space HTML overlay (same technique as
+  // .draw-text-input) rather than SVG, so handle size doesn't need to fight the
+  // scene's camera transform. Only shown for a single non-freehand, non-text
+  // selection: rectangle/diamond/ellipse get 8 box handles, arrow/line get 2
+  // endpoint handles. ---
+  function worldToScreen(x, y, cam) {
+    return { x: x * cam.scale + cam.x, y: y * cam.scale + cam.y };
+  }
+
+  function updateDrawHandles() {
+    const container = app.querySelector('[data-draw-handles]');
+    if (!container) {
+      return;
+    }
+    container.innerHTML = '';
+    if (isMobileLayout() || state.drawSelection.size !== 1) {
+      return;
+    }
+    const element = findDrawElementById([...state.drawSelection][0]);
+    if (!element || element.type === 'draw' || element.type === 'text') {
+      return;
+    }
+    const cam = activeCamera();
+    const addHandle = (dir, wx, wy) => {
+      const point = worldToScreen(wx, wy, cam);
+      const div = document.createElement('div');
+      div.className = `draw-handle draw-handle-${dir}`;
+      div.dataset.dir = dir;
+      div.style.left = `${point.x}px`;
+      div.style.top = `${point.y}px`;
+      div.onpointerdown = (handleEvent) => startDrawResize(handleEvent, element, dir);
+      container.appendChild(div);
+    };
+    if (element.type === 'line' || element.type === 'arrow') {
+      addHandle('start', element.x, element.y);
+      addHandle('end', element.x + element.w, element.y + element.h);
+      return;
+    }
+    const bounds = elementBounds(element);
+    [['nw', 0, 0], ['n', .5, 0], ['ne', 1, 0], ['e', 1, .5], ['se', 1, 1], ['s', .5, 1], ['sw', 0, 1], ['w', 0, .5]]
+      .forEach(([dir, fx, fy]) => addHandle(dir, bounds.x + bounds.w * fx, bounds.y + bounds.h * fy));
+  }
+
+  // Lighter-weight than updateDrawHandles(): repositions the EXISTING handle
+  // divs instead of clearing and recreating them. Vital for a resize/move drag
+  // in progress, since the dragged handle itself holds the pointer capture -
+  // destroying and recreating it mid-drag (via innerHTML='') would silently
+  // end the gesture.
+  function repositionDrawHandles() {
+    const container = app.querySelector('[data-draw-handles]');
+    if (!container || !container.children.length || state.drawSelection.size !== 1) {
+      return;
+    }
+    const element = findDrawElementById([...state.drawSelection][0]);
+    if (!element) {
+      return;
+    }
+    const cam = activeCamera();
+    let positions;
+    if (element.type === 'line' || element.type === 'arrow') {
+      positions = { start: [element.x, element.y], end: [element.x + element.w, element.y + element.h] };
+    } else {
+      const bounds = elementBounds(element);
+      const factors = { nw: [0, 0], n: [.5, 0], ne: [1, 0], e: [1, .5], se: [1, 1], s: [.5, 1], sw: [0, 1], w: [0, .5] };
+      positions = Object.fromEntries(Object.entries(factors).map(([dir, [fx, fy]]) => [dir, [bounds.x + bounds.w * fx, bounds.y + bounds.h * fy]]));
+    }
+    container.querySelectorAll('.draw-handle').forEach((div) => {
+      const point = positions[div.dataset.dir];
+      if (!point) {
+        return;
+      }
+      const screen = worldToScreen(point[0], point[1], cam);
+      div.style.left = `${screen.x}px`;
+      div.style.top = `${screen.y}px`;
+    });
+  }
+
+  function startDrawResize(event, element, direction) {
+    event.preventDefault();
+    event.stopPropagation();
+    const handle = event.currentTarget;
+    const before = beginDrawHistoryEntry();
+    const cam = activeCamera();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    let moved = false;
+
+    const finish = (onMove, onUp) => {
+      handle.setPointerCapture(event.pointerId);
+      handle.addEventListener('pointermove', onMove);
+      handle.addEventListener('pointerup', onUp);
+      handle.addEventListener('pointercancel', onUp);
+    };
+
+    if (direction === 'start' || direction === 'end') {
+      const originX = direction === 'start' ? element.x : element.x + element.w;
+      const originY = direction === 'start' ? element.y : element.y + element.h;
+      const onMove = (moveEvent) => {
+        const dx = (moveEvent.clientX - startX) / cam.scale;
+        const dy = (moveEvent.clientY - startY) / cam.scale;
+        const nx = snapUnit(originX + dx);
+        const ny = snapUnit(originY + dy);
+        if (direction === 'start') {
+          element.w += element.x - nx;
+          element.h += element.y - ny;
+          element.x = nx;
+          element.y = ny;
+        } else {
+          element.w = nx - element.x;
+          element.h = ny - element.y;
+        }
+        moved = true;
+        redrawDrawElement(element);
+        repositionDrawHandles();
+      };
+      const onUp = () => {
+        handle.removeEventListener('pointermove', onMove);
+        handle.removeEventListener('pointerup', onUp);
+        handle.removeEventListener('pointercancel', onUp);
+        if (moved) {
+          commitDrawHistoryEntry(before);
+          saveDrawingsSoon();
+        }
+      };
+      finish(onMove, onUp);
+      return;
+    }
+
+    // Box resize (rectangle/diamond/ellipse): normalize to a non-negative
+    // baseline first (stored w/h can be negative from a right-to-left drag),
+    // then reuse the exact direction math startPaneResize uses for panes.
+    const startLayout = {
+      x: Math.min(element.x, element.x + element.w),
+      y: Math.min(element.y, element.y + element.h),
+      w: Math.abs(element.w),
+      h: Math.abs(element.h)
+    };
+    const MIN_SIZE = GRID_MINOR_UNIT;
+    const onMove = (moveEvent) => {
+      const dx = (moveEvent.clientX - startX) / cam.scale;
+      const dy = (moveEvent.clientY - startY) / cam.scale;
+      const candidate = { ...startLayout };
+      if (direction.includes('e')) candidate.w = startLayout.w + dx;
+      if (direction.includes('w')) {
+        candidate.x = startLayout.x + dx;
+        candidate.w = startLayout.w - dx;
+      }
+      if (direction.includes('s')) candidate.h = startLayout.h + dy;
+      if (direction.includes('n')) {
+        candidate.y = startLayout.y + dy;
+        candidate.h = startLayout.h - dy;
+      }
+      candidate.w = Math.max(MIN_SIZE, candidate.w);
+      candidate.h = Math.max(MIN_SIZE, candidate.h);
+      if (direction.includes('w') && candidate.w === MIN_SIZE) {
+        candidate.x = startLayout.x + startLayout.w - MIN_SIZE;
+      }
+      if (direction.includes('n') && candidate.h === MIN_SIZE) {
+        candidate.y = startLayout.y + startLayout.h - MIN_SIZE;
+      }
+      element.x = snapUnit(candidate.x);
+      element.y = snapUnit(candidate.y);
+      element.w = snapUnit(candidate.x + candidate.w) - element.x;
+      element.h = snapUnit(candidate.y + candidate.h) - element.y;
+      moved = true;
+      redrawDrawElement(element);
+      repositionDrawHandles();
+    };
+    const onUp = () => {
+      handle.removeEventListener('pointermove', onMove);
+      handle.removeEventListener('pointerup', onUp);
+      handle.removeEventListener('pointercancel', onUp);
+      if (moved) {
+        commitDrawHistoryEntry(before);
+        saveDrawingsSoon();
+      }
+    };
+    finish(onMove, onUp);
   }
 
   function mountTerminal(paneId, terminalTabId) {

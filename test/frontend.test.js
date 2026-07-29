@@ -715,7 +715,7 @@ test('the canvas paints dashed 30px cells inside every 120px solid square', () =
   assert.match(appSource, /grid\.classList\.toggle\('minor-grid-hidden', minor < 12\)/);
 });
 
-test('drawing tools sit between the brand row and the pane actions and wrap by width', () => {
+test('drawing tools sit between the brand row and the pane actions in an evenly spaced grid', () => {
   const railStart = appSource.indexOf('class="rail-button sidebar-brand"');
   const toolbarStart = appSource.indexOf('class="draw-toolbar"');
   const newPaneStart = appSource.indexOf('data-action="new-powershell"');
@@ -724,12 +724,13 @@ test('drawing tools sit between the brand row and the pane actions and wrap by w
     assert.match(appSource, new RegExp(`\\{ id: '${tool}', label: '[^']+', icon: '[^']+' \\}`));
   }
   assert.match(appSource, /data-draw-tool-button="\$\{tool\.id\}"[^>]*aria-pressed="\$\{state\.drawTool === tool\.id\}"/);
-  assert.match(styles, /\.draw-toolbar\s*\{[^}]*display:\s*flex[^}]*flex-wrap:\s*wrap/s);
+  assert.match(styles, /\.draw-toolbar\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*repeat\(5, 1fr\)/s);
+  assert.match(styles, /\.app\.sidebar-closed \.draw-toolbar\s*\{[^}]*grid-template-columns:\s*1fr/s);
 });
 
 test('drawing gestures snap to the grid and stay on the tab that owns them', () => {
   assert.match(appSource, /element\.w = snapUnit\(point\.x\) - element\.x/);
-  assert.match(appSource, /element\.x = snapUnit\(originX \+ \(moveEvent\.clientX - startX\) \/ scale\)/);
+  assert.match(appSource, /el\.x = snapUnit\(x \+ dx\)/);
   // freehand strokes follow the pointer without snapping, as in Excalidraw
   const freeDraw = appSource.slice(appSource.indexOf('function startFreeDraw'), appSource.indexOf('function startDrawErase'));
   assert.doesNotMatch(freeDraw, /snapUnit/);
@@ -761,6 +762,71 @@ test('drawing elements carry per-element style attributes instead of a fixed loo
   assert.match(styles, /\.draw-hit\s*\{[^}]*vector-effect:\s*non-scaling-stroke/s);
   assert.match(styles, /\.draw-props\s*\{/);
   assert.match(styles, /\.draw-hit-filled\s*\{[^}]*pointer-events:\s*all/s);
+});
+
+test('drawing selection is a Set supporting multi-select, marquee drag, and grouping', () => {
+  assert.match(appSource, /drawSelection: new Set\(\)/);
+  assert.match(appSource, /function groupMembers\(element\)/);
+  assert.match(appSource, /function findDrawElementById\(id\)/);
+  assert.match(appSource, /function applyDrawSelectionChange\(nextIds\)/);
+  assert.match(appSource, /function replaceDrawSelection\(ids\)/);
+  assert.match(appSource, /function addDrawSelection\(id\)/);
+  assert.match(appSource, /function toggleDrawSelection\(id\)/);
+  assert.match(appSource, /function clearDrawSelection\(\)/);
+  // click conventions: Shift = additive add, Ctrl/Cmd = toggle, plain click on an
+  // element not already selected replaces the selection
+  const onDrawPointerDown = appSource.slice(appSource.indexOf('function onDrawPointerDown'), appSource.indexOf('function startDrawShape'));
+  assert.match(onDrawPointerDown, /event\.shiftKey\)\s*\{\s*addDrawSelection\(id\)/);
+  assert.match(onDrawPointerDown, /event\.ctrlKey \|\| event\.metaKey\)\s*\{\s*toggleDrawSelection\(id\)/);
+  assert.match(onDrawPointerDown, /!state\.drawSelection\.has\(id\)\)\s*\{?\s*replaceDrawSelection/);
+  assert.match(onDrawPointerDown, /startDrawMarquee\(grid, event\)/);
+  // marquee drag-select and its AABB hit test
+  assert.match(appSource, /function startDrawMarquee\(grid, event\)/);
+  assert.match(appSource, /function elementIntersectsBox\(element, box\)/);
+  assert.match(appSource, /function elementBounds\(element\)/);
+  assert.match(styles, /\.draw-marquee\s*\{/);
+  // grouping: click any member selects the whole group; Ctrl+G / Ctrl+Shift+G
+  assert.match(appSource, /function groupSelectedDrawElements\(\)/);
+  assert.match(appSource, /function ungroupSelectedDrawElements\(\)/);
+  assert.match(appSource, /event\.ctrlKey && key === 'g'/);
+});
+
+test('undo/redo tracks whiteboard mutations per tab without polluting history on no-op drags', () => {
+  assert.match(appSource, /const drawHistories = new Map\(\)/);
+  assert.match(appSource, /const DRAW_HISTORY_LIMIT = 50/);
+  assert.match(appSource, /function drawHistoryFor\(tabId\)/);
+  assert.match(appSource, /function beginDrawHistoryEntry\(\)/);
+  assert.match(appSource, /function commitDrawHistoryEntry\(beforeSnapshot\)/);
+  assert.match(appSource, /function undoDraw\(\)/);
+  assert.match(appSource, /function redoDraw\(\)/);
+  assert.match(appSource, /event\.ctrlKey && !event\.shiftKey && key === 'z'/);
+  assert.match(appSource, /key === 'y' \|\| \(event\.shiftKey && key === 'z'\)/);
+  // drag gestures only commit a history entry when something actually moved
+  const move = appSource.slice(appSource.indexOf('function startDrawElementsMove'), appSource.indexOf('function trackDrawPointer'));
+  assert.match(move, /if \(moved\)\s*\{\s*commitDrawHistoryEntry\(before\)/);
+});
+
+test('copy/paste/duplicate work on the whiteboard clipboard without stealing pane shortcuts', () => {
+  assert.match(appSource, /drawClipboard: \[\]/);
+  assert.match(appSource, /function copySelectedDrawElements\(\)/);
+  assert.match(appSource, /function pasteDrawElementsAt\(offset = 20\)/);
+  assert.match(appSource, /function duplicateSelectedDrawElements\(\)/);
+  const shortcuts = appSource.slice(appSource.indexOf('function installKeyboardShortcuts'), appSource.indexOf('function installKeyboardShortcuts') + 3000);
+  assert.match(shortcuts, /event\.ctrlKey && !event\.target\.closest\?\.\('\[data-pane\]'\)/);
+  assert.match(shortcuts, /duplicateSelectedDrawElements\(\)/);
+});
+
+test('resize handles cover box shapes and linear endpoints, but not freehand or text', () => {
+  assert.match(appSource, /function updateDrawHandles\(\)/);
+  assert.match(appSource, /function startDrawResize\(event, element, direction\)/);
+  assert.match(appSource, /function worldToScreen\(x, y, cam\)/);
+  const handles = appSource.slice(appSource.indexOf('function updateDrawHandles'), appSource.indexOf('function startDrawResize'));
+  assert.match(handles, /state\.drawSelection\.size !== 1/);
+  assert.match(handles, /element\.type === 'draw' \|\| element\.type === 'text'/);
+  assert.match(handles, /'nw'.*'n'.*'ne'.*'e'.*'se'.*'s'.*'sw'.*'w'/);
+  assert.match(appSource, /data-draw-handles/);
+  assert.match(styles, /\.draw-handle\s*\{/);
+  assert.match(styles, /\.draw-handle-start,\s*\n\.draw-handle-end\s*\{[^}]*cursor:\s*move/s);
 });
 
 test('pane resize uses free world-pixel deltas scaled by the camera zoom', () => {

@@ -1012,6 +1012,9 @@ function drawElement(value) {
     h: Math.round(Number(value.h)) || 0,
     ...drawStyle(value, type)
   };
+  if (typeof value.groupId === 'string' && value.groupId) {
+    element.groupId = value.groupId.slice(0, 64);
+  }
   if (type === 'draw') {
     element.points = (Array.isArray(value.points) ? value.points : [])
       .slice(0, MAX_DRAW_POINTS)

@@ -2985,6 +2985,10 @@ textarea:focus-visible {
   border-bottom: 0;
 }
 
+.app.sidebar-closed .draw-toolbar {
+  grid-template-columns: 1fr;
+}
+
 .app.sidebar-closed .rail-button {
   justify-content: center;
   padding: 0;
@@ -5143,16 +5147,16 @@ a:focus-visible {
 
 /* Whiteboard drawing tools. */
 .draw-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  padding-bottom: 6px;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--line);
 }
 
 .draw-tool {
-  width: 28px;
-  height: 28px;
+  width: auto;
+  aspect-ratio: 1;
   display: grid;
   place-items: center;
   padding: 0;
@@ -5408,11 +5412,70 @@ a:focus-visible {
   font: 12px "Segoe UI", system-ui, sans-serif;
 }
 
+/* Rubber-band drag-select rectangle. */
+.draw-marquee {
+  position: absolute;
+  z-index: 3;
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  opacity: .5;
+  pointer-events: none;
+}
+
+/* Resize handles: a screen-space overlay positioned in JS (see updateDrawHandles),
+   not SVG, so their on-screen size stays constant regardless of camera zoom. */
+.draw-handles {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.draw-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  background: var(--surface-raised);
+  border: 1.5px solid var(--accent);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.draw-handle-n,
+.draw-handle-s {
+  cursor: ns-resize;
+}
+
+.draw-handle-e,
+.draw-handle-w {
+  cursor: ew-resize;
+}
+
+.draw-handle-ne,
+.draw-handle-sw {
+  cursor: nesw-resize;
+}
+
+.draw-handle-nw,
+.draw-handle-se {
+  cursor: nwse-resize;
+}
+
+.draw-handle-start,
+.draw-handle-end {
+  cursor: move;
+  border-radius: 3px;
+}
+
 .app.mobile-device .draw-toolbar,
 .app.mode-mobile .draw-toolbar,
 .app.mobile-device .draw-layer,
 .app.mode-mobile .draw-layer,
 .app.mobile-device .draw-props,
-.app.mode-mobile .draw-props {
+.app.mode-mobile .draw-props,
+.app.mobile-device .draw-handles,
+.app.mode-mobile .draw-handles {
   display: none;
 }
