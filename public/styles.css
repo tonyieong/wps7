@@ -143,6 +143,7 @@ textarea {
 }
 
 .session-item span {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -659,31 +660,6 @@ textarea {
   background: #10251f;
 }
 
-.help-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 70;
-  display: grid;
-  place-items: center;
-  background: rgba(5, 7, 10, 0.72);
-}
-
-.help-panel {
-  width: min(520px, calc(100vw - 32px));
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
-  overflow: hidden;
-}
-
-.help-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--line);
-}
-
 .sidebar-brand {
   min-height: 46px;
   margin-bottom: 4px;
@@ -727,38 +703,6 @@ textarea {
   width: 26px;
   min-width: 26px;
   height: 26px;
-}
-
-.help-header .icon-button {
-  margin-left: auto;
-}
-
-.help-list {
-  display: grid;
-  gap: 8px;
-  padding: 12px;
-}
-
-.help-list div {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.help-list kbd {
-  min-width: 28px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--terminal);
-  color: var(--text);
-  padding: 3px 6px;
-  text-align: center;
-  font: 12px Consolas, "Cascadia Mono", monospace;
-}
-
-.help-list span {
-  margin-left: 4px;
 }
 
 .settings-panel {
@@ -1499,7 +1443,7 @@ textarea {
 }
 
 .sidebar-footer {
-  padding: 8px 10px 10px;
+  padding: 6px 10px 8px;
   border-top: 1px solid var(--line);
 }
 
@@ -1784,6 +1728,16 @@ textarea:focus-visible {
   padding: 9px 10px;
   border-radius: 7px;
   color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.session-item .session-branch {
+  flex: none;
+  white-space: pre;
+  font-family: "Cascadia Mono", Consolas, monospace;
+  color: var(--muted);
 }
 
 .session-item:hover {
@@ -1927,8 +1881,7 @@ textarea:focus-visible {
 .file-toolbar,
 .file-header,
 .settings-header,
-.settings-footer,
-.help-header {
+.settings-footer {
   border-color: var(--line);
 }
 
@@ -1950,15 +1903,13 @@ textarea:focus-visible {
 }
 
 .file-panel,
-.settings-panel,
-.help-panel {
+.settings-panel {
   background: var(--panel);
   border-color: var(--line);
   box-shadow: 0 20px 60px var(--shadow);
 }
 
-.settings-overlay,
-.help-overlay {
+.settings-overlay {
   background: color-mix(in srgb, var(--ink) 78%, transparent);
   backdrop-filter: blur(5px);
 }
@@ -2116,8 +2067,7 @@ textarea:focus-visible {
   font-size: 12px;
 }
 
-.login-hint kbd,
-.help-list kbd {
+.login-hint kbd {
   border: 1px solid var(--line-strong);
   border-radius: 5px;
   background: var(--surface-soft);
@@ -3147,6 +3097,12 @@ textarea:focus-visible {
   margin-bottom: 2px;
 }
 
+.sidebar-footer .rail-button {
+  min-height: 28px;
+  gap: 9px;
+  padding: 0 8px;
+}
+
 .files-pane {
   position: relative;
   grid-template-rows: auto auto minmax(0, 1fr);
@@ -3952,7 +3908,6 @@ textarea:focus-visible {
 /* User-controlled typography roles. */
 .app,
 .settings-overlay,
-.help-overlay,
 .login {
   font-size: var(--system-font-size);
 }
@@ -5148,15 +5103,16 @@ a:focus-visible {
 /* Whiteboard drawing tools. */
 .draw-toolbar {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(28px, 1fr));
   gap: 6px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--line);
 }
 
 .draw-tool {
-  width: auto;
-  aspect-ratio: 1;
+  width: 28px;
+  height: 28px;
+  justify-self: center;
   display: grid;
   place-items: center;
   padding: 0;

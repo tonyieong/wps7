@@ -358,7 +358,7 @@
 
   function renderLogin() {
     disposeTerminals();
-    document.querySelectorAll('.settings-overlay, .help-overlay, .file-panel').forEach((element) => {
+    document.querySelectorAll('.settings-overlay, .file-panel').forEach((element) => {
       element._disposeModal?.();
       element.remove();
     });
@@ -433,21 +433,35 @@
     return session && session.tabs[0];
   }
 
-  function allPanes() {
-    return state.sessions.flatMap((session) => (
-      session.tabs.flatMap((tab) => (
-        tab.panes.map((pane) => ({ session, tab, pane }))
-      ))
-    ));
+  // Flattens every pane of every workspace into one tree: the first pane of a
+  // workspace carries the workspace name, later panes hang off it as branches.
+  function sidebarPaneRows() {
+    return state.sessions.flatMap((session) => {
+      const panes = session.tabs.flatMap((tab) => tab.panes);
+      return panes.map((pane, index) => ({
+        session,
+        pane,
+        branch: index === 0 ? '' : (index === panes.length - 1 ? ' └─' : ' ├─'),
+        label: index === 0 ? `${session.name}/${pane.title}` : pane.title
+      }));
+    });
   }
 
-  function renderSidebarPaneItem(paneSession, pane) {
-    const prefix = paneSession.name;
+  function renderSidebarPaneItem({ session, pane, branch, label }) {
     return `
-      <button class="session-item ${pane.id === state.activePaneId ? 'active' : ''}" data-pane-link="${pane.id}" data-session="${paneSession.id}">
-        <span>${escapeHtml(prefix)} / ${escapeHtml(pane.title)}</span>
+      <button class="session-item ${pane.id === state.activePaneId ? 'active' : ''}" data-pane-link="${pane.id}" data-session="${session.id}">
+        ${branch ? `<span class="session-branch" aria-hidden="true">${branch}</span>` : ''}<span data-pane-label>${escapeHtml(label)}</span>
       </button>
     `;
+  }
+
+  function renderSidebarPaneList() {
+    const list = app.querySelector('.session-list');
+    if (!list) {
+      return;
+    }
+    list.innerHTML = sidebarPaneRows().map(renderSidebarPaneItem).join('');
+    wirePaneLinks(list);
   }
 
   function paneItemStyle(pane) {
@@ -1256,17 +1270,16 @@
               <span class="rail-icon" aria-hidden="true">${fileActionIcon('notepad')}</span><span class="rail-label">New notepad</span>
             </button>
             <button class="rail-button" data-action="usage" aria-label="New usage pane" title="New usage pane"><span class="rail-icon" aria-hidden="true">${fileActionIcon('usage')}</span><span class="rail-label">Usage pane</span></button>
-            <button class="rail-button" data-action="help" aria-label="Keyboard shortcuts" title="Keyboard shortcuts"><span class="rail-icon">?</span><span class="rail-label">Shortcuts</span></button>
-            <button class="rail-button" data-action="settings" aria-label="Settings" title="Settings"><span class="rail-icon">⚙</span><span class="rail-label">Settings</span></button>
           </nav>
           <div class="sidebar-inner">
             <div class="sidebar-divider" aria-hidden="true"></div>
             <div class="session-list" aria-label="Workspace list">
-              ${allPanes().map(({ session: paneSession, pane }) => renderSidebarPaneItem(paneSession, pane)).join('')}
+              ${sidebarPaneRows().map(renderSidebarPaneItem).join('')}
             </div>
           </div>
           <footer class="sidebar-footer">
-            <button class="rail-button" type="button" data-theme-toggle aria-label="Switch to ${themeMode() === 'dark' ? 'light' : 'dark'} mode" title="Switch theme"><span class="rail-icon">${themeMode() === 'dark' ? '☀' : '☾'}</span><span class="rail-label">${themeMode() === 'dark' ? 'Light mode' : 'Dark mode'}</span></button>
+            <button class="rail-button" data-action="settings" aria-label="Settings" title="Settings"><span class="rail-icon">⚙</span><span class="rail-label">Settings</span></button>
+            <button class="rail-button" type="button" data-theme-toggle aria-label="Switch to ${themeMode() === 'dark' ? 'light' : 'dark'} mode" title="Switch theme"><span class="rail-icon">${themeMode() === 'dark' ? '☾' : '☀'}</span><span class="rail-label">${themeMode() === 'dark' ? 'Dark mode' : 'Light mode'}</span></button>
           </footer>
           <div class="sidebar-resizer" data-action="resize-sidebar"></div>
         </aside>
@@ -1371,7 +1384,6 @@
     app.querySelectorAll('[data-action="notepad"]').forEach((button) => button.onclick = () => openNotepadPane());
     app.querySelectorAll('[data-action="usage"]').forEach((button) => button.onclick = openUsagePane);
     app.querySelectorAll('[data-action="settings"]').forEach((button) => button.onclick = openSettings);
-    app.querySelectorAll('[data-action="help"]').forEach((button) => button.onclick = openHelp);
     app.querySelector('[data-action="resize-sidebar"]').onpointerdown = startSidebarResize;
     app.querySelector('[data-switch-mobile]')?.addEventListener('click', () => setDisplayMode('mobile'));
     app.querySelector('[data-dismiss-banner]')?.addEventListener('click', () => {
@@ -1611,9 +1623,6 @@
         } else if (found) {
           renamePane(found.pane.id, found.pane.title);
         }
-      } else if (event.key === '?' && !event.ctrlKey && !event.altKey && !event.metaKey) {
-        event.preventDefault();
-        openHelp();
       }
     });
   }
@@ -1672,42 +1681,6 @@
     }
     existing._disposeModal?.();
     existing.remove();
-  }
-
-  function openHelp() {
-    discardOverlay('.help-overlay');
-    const overlay = document.createElement('div');
-    overlay.className = 'help-overlay';
-    overlay.innerHTML = `
-      <section class="help-panel">
-        <header class="help-header">
-          <div class="settings-title" id="help-dialog-title">Shortcuts</div>
-          <button class="icon-button" type="button" data-help-close title="Close">×</button>
-        </header>
-        <div class="help-list">
-          <div><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>T</kbd><span>New workspace</span></div>
-          <div><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>N</kbd><span>New PowerShell pane</span></div>
-          <div><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>W</kbd><span>Close active pane</span></div>
-          <div><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>←</kbd><span>Previous pane</span></div>
-          <div><kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>→</kbd><span>Next pane</span></div>
-          <div><kbd>F2</kbd><span>Rename active pane</span></div>
-          <div><kbd>?</kbd><span>Show this help</span></div>
-        </div>
-      </section>
-    `;
-    document.body.appendChild(overlay);
-    const closeHelp = () => {
-      disposeModal();
-      overlay.remove();
-    };
-    const disposeModal = wireModal(overlay.querySelector('.help-panel'), () => closeHelp(), 'help-dialog-title');
-    overlay._disposeModal = disposeModal;
-    overlay.querySelector('[data-help-close]').onclick = closeHelp;
-    overlay.onclick = (event) => {
-      if (event.target === overlay) {
-        closeHelp();
-      }
-    };
   }
 
   async function toggleFilePanel() {
@@ -5043,7 +5016,7 @@
       state.notepadAutosaveTimers.delete(tab.id);
     });
     document.querySelector(`[data-pane="${paneId}"]`)?.remove();
-    document.querySelector(`[data-pane-link="${paneId}"]`)?.remove();
+    renderSidebarPaneList();
     updateActivePaneUi();
     paneTerminal(state.activePaneId)?.term.focus();
   }
@@ -5166,12 +5139,16 @@
   }
 
   function updateSidebarLabels() {
+    const rows = new Map(sidebarPaneRows().map((row) => [row.pane.id, row]));
     app.querySelectorAll('[data-pane-link]').forEach((button) => {
-      const found = findPaneState(button.dataset.paneLink);
-      if (!found) {
+      const row = rows.get(button.dataset.paneLink);
+      if (!row) {
         return;
       }
-      button.querySelector('span').textContent = `${found.session.name} / ${found.pane.title}`;
+      const label = button.querySelector('[data-pane-label]');
+      if (label) {
+        label.textContent = row.label;
+      }
     });
   }
 
@@ -5343,8 +5320,8 @@
       button.title = 'Switch theme';
       const icon = button.querySelector('.rail-icon');
       const label = button.querySelector('.rail-label');
-      if (icon) icon.textContent = themeMode() === 'dark' ? '☀' : '☾';
-      if (label) label.textContent = themeMode() === 'dark' ? 'Light mode' : 'Dark mode';
+      if (icon) icon.textContent = themeMode() === 'dark' ? '☾' : '☀';
+      if (label) label.textContent = themeMode() === 'dark' ? 'Dark mode' : 'Light mode';
     });
     if (persist && state.token) {
       try {
@@ -5691,10 +5668,7 @@
       wirePaneTabStrips(paneElement);
       wireMobileKeybarButtons(paneElement);
     }
-    const sessionList = app.querySelector('.session-list');
-    sessionList?.insertAdjacentHTML('beforeend', renderSidebarPaneItem(session, pane));
-    const paneLink = sessionList?.querySelector(`[data-pane-link="${pane.id}"]`);
-    if (paneLink) wirePaneLinks(paneLink);
+    renderSidebarPaneList();
     updateActivePaneUi();
     mountPaneContent(pane);
   }
@@ -6568,6 +6542,9 @@
     }
     if (event.target.closest?.('.draw-props')) {
       return; // clicks inside the floating properties panel are not canvas gestures
+    }
+    if (event.target.closest?.('[data-pane]')) {
+      return; // clicks inside a pane belong to the pane, not the canvas
     }
     const openText = grid.querySelector('.draw-text-input');
     if (openText) {

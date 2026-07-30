@@ -40,12 +40,33 @@ test('collapsed navigation controls have explicit accessible names', () => {
   assert.match(appSource, /data-theme-toggle aria-label="Switch to \$\{themeMode\(\)/);
 });
 
+test('the theme toggle button shows the currently active mode, not the switch target', () => {
+  assert.match(appSource, /<span class="rail-icon">\$\{themeMode\(\) === 'dark' \? '☾' : '☀'\}<\/span><span class="rail-label">\$\{themeMode\(\) === 'dark' \? 'Dark mode' : 'Light mode'\}<\/span>/);
+  const setThemeLiveSource = appSource.slice(appSource.indexOf('async function setThemeLive'), appSource.indexOf('function wirePaneGrid'));
+  assert.match(setThemeLiveSource, /icon\.textContent = themeMode\(\) === 'dark' \? '☾' : '☀'/);
+  assert.match(setThemeLiveSource, /label\.textContent = themeMode\(\) === 'dark' \? 'Dark mode' : 'Light mode'/);
+});
+
+test('settings sits above the theme toggle in a shorter sidebar footer', () => {
+  const footerSource = appSource.slice(appSource.indexOf('<footer class="sidebar-footer">'), appSource.indexOf('</footer>'));
+  const settingsIndex = footerSource.indexOf('data-action="settings"');
+  const themeToggleIndex = footerSource.indexOf('data-theme-toggle');
+  assert.ok(settingsIndex !== -1 && themeToggleIndex !== -1 && settingsIndex < themeToggleIndex);
+  assert.match(styles, /\.sidebar-footer \.rail-button\s*\{[^}]*min-height:\s*28px/s);
+  assert.match(styles, /\.sidebar-footer\s*\{\s*padding:\s*6px 10px 8px/);
+});
+
 test('browser terminal scrollback follows the configured workspace limit', () => {
   assert.match(appSource, /scrollback:\s*Number\(state\.config\.persistence\?\.scrollback_lines\)/);
 });
 
 test('workspace header keeps shortcut controls in the sidebar only', () => {
   assert.doesNotMatch(appSource, /toolbar-button help-button/);
+});
+
+test('the sidebar shortcuts feature has been removed', () => {
+  assert.doesNotMatch(appSource, /openHelp|data-action="help"|help-overlay|help-dialog-title/);
+  assert.doesNotMatch(styles, /\.help-overlay|\.help-panel|\.help-header|\.help-list/);
 });
 
 test('workspace tabs and terminal grid use the compact edge-to-edge layout', () => {
@@ -61,12 +82,16 @@ test('sidebar brand is the dedicated collapse control', () => {
   assert.match(appSource, /<span class="rail-brand-mark" aria-hidden="true">W7<\/span><span class="rail-label">WPS7<\/span>/);
 });
 
-test('sidebar keeps only a divider above session panes and uses session names for every pane', () => {
+test('sidebar keeps only a divider above session panes and lists every pane as a workspace tree', () => {
   assert.doesNotMatch(appSource, /class="sidebar-header"/);
   assert.doesNotMatch(appSource, />Sessions<|>Persistent workspaces</);
   assert.match(appSource, /class="sidebar-divider" aria-hidden="true"/);
-  assert.match(appSource, /const prefix = paneSession\.name/);
-  assert.doesNotMatch(appSource, /pane\.type === 'files' \? 'Files' : paneSession\.name/);
+  assert.match(appSource, /function sidebarPaneRows\(\)/);
+  const rowsSource = appSource.slice(appSource.indexOf('function sidebarPaneRows'), appSource.indexOf('function renderSidebarPaneItem'));
+  assert.match(rowsSource, /index === 0 \? '' : \(index === panes\.length - 1 \? ' └─' : ' ├─'\)/);
+  assert.match(rowsSource, /index === 0 \? `\$\{session\.name\}\/\$\{pane\.title\}` : pane\.title/);
+  assert.match(appSource, /class="session-branch" aria-hidden="true">\$\{branch\}<\/span>` : ''\}<span data-pane-label>/);
+  assert.match(styles, /\.session-item \.session-branch\s*\{[^}]*white-space:\s*pre/s);
 });
 
 test('sidebar actions use shared icons for new PowerShell and new file', () => {
@@ -374,9 +399,7 @@ test('modal dialogs are labelled, escapable, and restore focus to the opener', (
   assert.match(modalSource, /event\.key === 'Escape'/);
   assert.match(modalSource, /event\.key !== 'Tab'/);
   assert.match(modalSource, /if \(opener\?\.isConnected\) \{\s*opener\.focus\(\);/);
-  assert.match(appSource, /wireModal\(overlay\.querySelector\('\.help-panel'\), \(\) => closeHelp\(\), 'help-dialog-title'\)/);
   assert.match(appSource, /wireModal\(overlay\.querySelector\('\.settings-panel'\), \(\) => closeSettings\(\), 'settings-dialog-title'\)/);
-  assert.match(appSource, /id="help-dialog-title"/);
   assert.match(appSource, /id="settings-dialog-title"/);
 });
 
@@ -715,7 +738,7 @@ test('the canvas paints dashed 30px cells inside every 120px solid square', () =
   assert.match(appSource, /grid\.classList\.toggle\('minor-grid-hidden', minor < 12\)/);
 });
 
-test('drawing tools sit between the brand row and the pane actions in an evenly spaced grid', () => {
+test('drawing tools sit between the brand row and the pane actions, and reflow to fit the sidebar width', () => {
   const railStart = appSource.indexOf('class="rail-button sidebar-brand"');
   const toolbarStart = appSource.indexOf('class="draw-toolbar"');
   const newPaneStart = appSource.indexOf('data-action="new-powershell"');
@@ -724,7 +747,8 @@ test('drawing tools sit between the brand row and the pane actions in an evenly 
     assert.match(appSource, new RegExp(`\\{ id: '${tool}', label: '[^']+', icon: '[^']+' \\}`));
   }
   assert.match(appSource, /data-draw-tool-button="\$\{tool\.id\}"[^>]*aria-pressed="\$\{state\.drawTool === tool\.id\}"/);
-  assert.match(styles, /\.draw-toolbar\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*repeat\(5, 1fr\)/s);
+  assert.match(styles, /\.draw-toolbar\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*repeat\(auto-fit, minmax\(28px, 1fr\)\)/s);
+  assert.match(styles, /\.draw-tool\s*\{[^}]*width:\s*28px[^}]*height:\s*28px[^}]*justify-self:\s*center/s);
   assert.match(styles, /\.app\.sidebar-closed \.draw-toolbar\s*\{[^}]*grid-template-columns:\s*1fr/s);
 });
 
@@ -789,6 +813,14 @@ test('drawing selection is a Set supporting multi-select, marquee drag, and grou
   assert.match(appSource, /function groupSelectedDrawElements\(\)/);
   assert.match(appSource, /function ungroupSelectedDrawElements\(\)/);
   assert.match(appSource, /event\.ctrlKey && key === 'g'/);
+});
+
+test('clicks inside a pane never start a draw gesture on the canvas behind it', () => {
+  const onDrawPointerDown = appSource.slice(appSource.indexOf('function onDrawPointerDown'), appSource.indexOf('function startDrawShape'));
+  const guardIndex = onDrawPointerDown.search(/event\.target\.closest\?\.\('\[data-pane\]'\)\)\s*\{\s*return;/);
+  const marqueeIndex = onDrawPointerDown.indexOf('startDrawMarquee(grid, event)');
+  assert.ok(guardIndex !== -1, 'onDrawPointerDown must bail out when the click target is inside a pane');
+  assert.ok(guardIndex < marqueeIndex, 'the [data-pane] guard must run before the marquee/selection gesture starts');
 });
 
 test('undo/redo tracks whiteboard mutations per tab without polluting history on no-op drags', () => {
