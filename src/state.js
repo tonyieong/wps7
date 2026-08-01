@@ -4,26 +4,12 @@ const crypto = require('crypto');
 const { normalizeCwd } = require('./shell');
 
 const GRID_UNIT = 120;
-const GRID_MINOR_UNIT = 30;
 const DEFAULT_PANE_WIDTH = 720;
 const DEFAULT_PANE_HEIGHT = 480;
-const PANE_CASCADE_STEP = GRID_UNIT;
-const MIN_ZOOM = 0.2;
-const MAX_ZOOM = 4;
-const DRAW_TYPES = new Set(['rectangle', 'diamond', 'ellipse', 'arrow', 'line', 'draw', 'text']);
-const MAX_DRAW_ELEMENTS = 2000;
-const MAX_DRAW_POINTS = 4000;
-const MAX_DRAW_TEXT_LENGTH = 2000;
-const DRAW_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
-const DRAW_FILL_STYLES = new Set(['hachure', 'cross-hatch', 'solid']);
-const DRAW_STROKE_WIDTHS = new Set([1, 2, 4]);
-const DRAW_STROKE_STYLES = new Set(['solid', 'dashed', 'dotted']);
-const DRAW_ROUNDNESS = new Set(['sharp', 'round']);
-const DRAW_ARROWHEADS = new Set(['none', 'arrow', 'triangle', 'triangle_outline', 'diamond', 'diamond_outline', 'circle', 'circle_outline', 'bar']);
-const DRAW_FONT_FAMILIES = new Set(['hand-drawn', 'normal', 'code']);
-const DRAW_FONT_SIZES = new Set([16, 20, 28, 36]);
-const DRAW_TEXT_ALIGNS = new Set(['left', 'center', 'right']);
-const PANE_TYPES = new Set(['terminal', 'files', 'browser', 'notepad', 'usage']);
+const MIN_COLUMN_WIDTH = GRID_UNIT;
+const MAX_COLUMN_SLOTS = 6;
+const PANE_TYPES = new Set(['terminal', 'files', 'browser', 'notepad', 'usage', 'whiteboard']);
+const MAX_WHITEBOARD_LENGTH = 5 * 1024 * 1024;
 const NOTEPAD_ENCODINGS = new Set(['utf8', 'utf8-bom', 'utf16le', 'utf16be', 'latin1']);
 const MAX_NOTEPAD_CONTENT_LENGTH = 10 * 1024 * 1024;
 
@@ -145,7 +131,7 @@ function defaultSession(name = 'Workspace 1', paneTitle = 'PowerShell 1') {
         id: crypto.randomUUID(),
         name: 'Main',
         activePaneId: paneId,
-        drawings: [],
+        columns: [sanitizeColumn({ width: DEFAULT_PANE_WIDTH, slots: 1 })],
         panes: [
           {
             id: paneId,
@@ -153,7 +139,7 @@ function defaultSession(name = 'Workspace 1', paneTitle = 'PowerShell 1') {
             title: paneTitle,
             cwd: process.cwd(),
             split: null,
-            layout: { x: GRID_UNIT, y: GRID_UNIT, w: DEFAULT_PANE_WIDTH, h: DEFAULT_PANE_HEIGHT, z: 1 },
+            layout: { column: 0, row: 0 },
             scrollback: [],
             terminalTabs: [{ ...firstTerminalTab, scrollback: [] }],
             activeTerminalTabId: firstTerminalTab.id
@@ -165,11 +151,12 @@ function defaultSession(name = 'Workspace 1', paneTitle = 'PowerShell 1') {
 }
 
 class StateStore {
-  constructor(root, scrollbackLimit) {
+  constructor(root, scrollbackLimit, defaultColumnSlots = 1) {
     this.root = root;
     this.dataDir = path.join(root, 'data');
     this.statePath = path.join(this.dataDir, 'state.json');
     this.scrollbackLimit = scrollbackLimit;
+    this.defaultColumnSlots = sanitizeColumn({ slots: defaultColumnSlots }).slots;
     const session = defaultSession();
     this.state = {
       activeSessionId: session.id,
@@ -217,7 +204,7 @@ class StateStore {
         url: pane.url || '',
         fontSize: validPaneFontSize(pane.fontSize) ? Number(pane.fontSize) : undefined,
         split: pane.split || null,
-        layout: migrateLayout(pane.layout),
+        layout: pane.layout,
         scrollback: []
       };
       if (nextPane.type === 'terminal') {
@@ -247,9 +234,18 @@ class StateStore {
         nextPane.activeNotepadTabId = notepadState.activeNotepadTabId;
         nextPane.path = nextPane.notepadTabs.find((tab) => tab.id === nextPane.activeNotepadTabId)?.path || '';
       }
+      if (nextPane.type === 'whiteboard') {
+        nextPane.whiteboard = whiteboardContent(pane.whiteboard);
+      }
       panes.push(nextPane);
     }
-    return { ...tab, panes, camera: sanitizeCamera(tab.camera), drawings: sanitizeDrawings(tab.drawings) };
+    // Column placement depends on every pane in the tab, so it is resolved once
+    // here rather than per pane above.
+    const migrated = migrateTabLayout(panes, tab.columns);
+    panes.forEach((pane, index) => {
+      pane.layout = migrated.layouts[index];
+    });
+    return { ...tab, panes, columns: migrated.columns };
   }
 
   getPersistedState() {
@@ -259,8 +255,7 @@ class StateStore {
         ...session,
         tabs: session.tabs.map((tab) => ({
           ...tab,
-          camera: sanitizeCamera(tab.camera),
-          drawings: sanitizeDrawings(tab.drawings),
+          columns: sanitizeColumns(tab.columns, tab.panes.map((pane) => sanitizeLayout(pane.layout))),
           panes: tab.panes.map((pane) => ({
             id: pane.id,
             type: paneType(pane.type),
@@ -268,6 +263,7 @@ class StateStore {
             cwd: pane.cwd,
             path: pane.type === 'files' || pane.type === 'notepad' ? pane.path : undefined,
             url: pane.type === 'browser' ? pane.url : undefined,
+            whiteboard: pane.type === 'whiteboard' ? whiteboardContent(pane.whiteboard) : undefined,
             terminalTabs: pane.type === 'terminal' ? pane.terminalTabs.map((tab) => terminalTab(tab)) : undefined,
             activeTerminalTabId: pane.type === 'terminal' ? pane.activeTerminalTabId : undefined,
             filesTabs: pane.type === 'files' ? pane.filesTabs.map((tab) => filesTab(tab)) : undefined,
@@ -292,8 +288,7 @@ class StateStore {
         ...session,
         tabs: session.tabs.map((tab) => ({
           ...tab,
-          camera: sanitizeCamera(tab.camera),
-          drawings: sanitizeDrawings(tab.drawings),
+          columns: sanitizeColumns(tab.columns, tab.panes.map((pane) => sanitizeLayout(pane.layout))),
           panes: tab.panes.map((pane) => ({
             id: pane.id,
             type: paneType(pane.type),
@@ -301,6 +296,7 @@ class StateStore {
             cwd: pane.cwd,
             path: pane.type === 'files' || pane.type === 'notepad' ? pane.path : undefined,
             url: pane.type === 'browser' ? pane.url : undefined,
+            whiteboard: pane.type === 'whiteboard' ? whiteboardContent(pane.whiteboard) : undefined,
             terminalTabs: pane.type === 'terminal' ? pane.terminalTabs.map((tab) => terminalTab(tab)) : undefined,
             activeTerminalTabId: pane.type === 'terminal' ? pane.activeTerminalTabId : undefined,
             filesTabs: pane.type === 'files' ? pane.filesTabs.map((tab) => filesTab(tab)) : undefined,
@@ -420,7 +416,7 @@ class StateStore {
       return null;
     }
 
-    const layout = cascadeLayout(found.tab.panes);
+    const layout = appendLayout(found.tab, found.pane, direction, this.defaultColumnSlots);
     const title = nextNumberedName('PowerShell', found.tab.panes.map((candidate) => candidate.title));
     const firstTab = { ...terminalTab({ title, cwd: found.pane.cwd }), scrollback: [] };
     const pane = {
@@ -449,7 +445,7 @@ class StateStore {
     if (!found) {
       return null;
     }
-    const layout = cascadeLayout(found.tab.panes);
+    const layout = appendLayout(found.tab, found.pane, 'auto', this.defaultColumnSlots);
     const firstTab = filesTab({ path: pathValue || '' });
     const pane = {
       id: crypto.randomUUID(),
@@ -680,6 +676,20 @@ class StateStore {
     return this.createUtilityPane(paneId, 'usage', 'Usage');
   }
 
+  createWhiteboardPane(paneId) {
+    return this.createUtilityPane(paneId, 'whiteboard', 'Whiteboard', '{}', 'whiteboard');
+  }
+
+  setWhiteboard(paneId, content) {
+    const found = this.findPane(paneId);
+    if (!found || found.pane.type !== 'whiteboard') {
+      return false;
+    }
+    found.pane.whiteboard = whiteboardContent(content);
+    this.save();
+    return true;
+  }
+
   createNotepadTab(paneId, pathValue = '', defaults = {}) {
     const found = this.findPane(paneId);
     if (!found || found.pane.type !== 'notepad' || found.pane.notepadTabs.length >= 50) return null;
@@ -753,7 +763,7 @@ class StateStore {
     if (!found) {
       return null;
     }
-    const layout = cascadeLayout(found.tab.panes);
+    const layout = appendLayout(found.tab, found.pane, 'auto', this.defaultColumnSlots);
     if (!layout) {
       return null;
     }
@@ -796,6 +806,7 @@ class StateStore {
         const index = tab.panes.findIndex((pane) => pane.id === paneId);
         if (index !== -1) {
           tab.panes.splice(index, 1);
+          this.pruneColumns(tab);
           tab.activePaneId = tab.panes[0].id;
           session.activePaneId = tab.panes[0].id;
           this.save();
@@ -828,15 +839,81 @@ class StateStore {
     return true;
   }
 
-  resizePane(paneId, layout) {
+  // Emptying a column would otherwise leave a gap the user cannot close, so
+  // empty columns are dropped and the survivors renumbered.
+  pruneColumns(tab) {
+    const used = new Set(tab.panes.map((pane) => sanitizeLayout(pane.layout).column));
+    const kept = [];
+    const remap = new Map();
+    tab.columns.forEach((column, index) => {
+      if (used.has(index)) {
+        remap.set(index, kept.length);
+        kept.push(column);
+      }
+    });
+    tab.columns = kept.length ? kept : [sanitizeColumn({ width: DEFAULT_PANE_WIDTH, slots: 1 })];
+    tab.panes.forEach((pane) => {
+      const layout = sanitizeLayout(pane.layout);
+      pane.layout = { column: remap.get(layout.column) ?? 0, row: layout.row };
+    });
+  }
+
+  placePane(paneId, layout) {
     const found = this.findPane(paneId);
     if (!found) {
       return false;
     }
 
-    found.pane.layout = sanitizeLayout(layout);
+    const next = sanitizeLayout(layout);
+    // Dropping past the last column appends exactly one column instead of
+    // leaving a run of empty ones behind.
+    next.column = Math.min(next.column, found.tab.columns.length);
+    if (next.column === found.tab.columns.length) {
+      found.tab.columns.push(sanitizeColumn({ width: DEFAULT_PANE_WIDTH, slots: 1 }));
+    }
+    next.row = Math.min(next.row, found.tab.columns[next.column].slots - 1);
+    found.pane.layout = next;
+    this.pruneColumns(found.tab);
     this.save();
     return true;
+  }
+
+  setColumnWidth(tabId, index, width) {
+    return this.updateColumn(tabId, index, (column) => sanitizeColumn({ ...column, width }));
+  }
+
+  setColumnSlots(tabId, index, slots) {
+    return this.updateColumn(tabId, index, (column, tab) => {
+      const next = sanitizeColumn({ ...column, slots });
+      // Shrinking a column must not strand panes on rows that no longer exist.
+      const occupied = tab.panes.reduce(
+        (max, pane) => {
+          const layout = sanitizeLayout(pane.layout);
+          return layout.column === index ? Math.max(max, layout.row + 1) : max;
+        },
+        1
+      );
+      next.slots = Math.max(next.slots, occupied);
+      return next;
+    });
+  }
+
+  updateColumn(tabId, index, build) {
+    for (const session of this.state.sessions) {
+      const tab = session.tabs.find((candidate) => candidate.id === tabId);
+      if (!tab) {
+        continue;
+      }
+      const columnIndex = Math.round(Number(index));
+      const column = tab.columns[columnIndex];
+      if (!column) {
+        return false;
+      }
+      tab.columns[columnIndex] = build(column, tab);
+      this.save();
+      return true;
+    }
+    return false;
   }
 
   movePane(paneId, beforePaneId) {
@@ -872,30 +949,6 @@ class StateStore {
     this.save();
     return true;
   }
-
-  setCamera(tabId, camera) {
-    for (const session of this.state.sessions) {
-      const tab = session.tabs.find((candidate) => candidate.id === tabId);
-      if (tab) {
-        tab.camera = sanitizeCamera(camera);
-        this.save();
-        return true;
-      }
-    }
-    return false;
-  }
-
-  setDrawings(tabId, drawings) {
-    for (const session of this.state.sessions) {
-      const tab = session.tabs.find((candidate) => candidate.id === tabId);
-      if (tab) {
-        tab.drawings = sanitizeDrawings(drawings);
-        this.save();
-        return true;
-      }
-    }
-    return false;
-  }
 }
 
 module.exports = {
@@ -904,157 +957,147 @@ module.exports = {
   nextNumberedName
 };
 
-// Panes snap to the dashed minor grid, which also covers every solid grid line.
-function snapUnit(value) {
-  return Math.round(value / GRID_MINOR_UNIT) * GRID_MINOR_UNIT;
+// Column widths snap to the solid grid so neighbouring columns stay aligned.
+function snapColumnWidth(value) {
+  return Math.round(value / GRID_UNIT) * GRID_UNIT;
 }
 
 function sanitizeLayout(layout) {
-  const w = Math.max(GRID_UNIT, snapUnit(Math.round(Number(layout?.w)) || DEFAULT_PANE_WIDTH));
-  const h = Math.max(GRID_UNIT, snapUnit(Math.round(Number(layout?.h)) || DEFAULT_PANE_HEIGHT));
-  const x = snapUnit(Math.round(Number(layout?.x)) || 0);
-  const y = snapUnit(Math.round(Number(layout?.y)) || 0);
-  const z = Math.max(0, Math.round(Number(layout?.z)) || 0);
-  return { x, y, w, h, z };
+  return {
+    column: Math.max(0, Math.round(Number(layout?.column)) || 0),
+    row: Math.max(0, Math.round(Number(layout?.row)) || 0)
+  };
 }
 
-function migrateLayout(layout) {
+function sanitizeColumn(column) {
+  const width = snapColumnWidth(Math.round(Number(column?.width)) || DEFAULT_PANE_WIDTH);
+  const slots = Math.round(Number(column?.slots)) || 1;
+  return {
+    width: Math.max(MIN_COLUMN_WIDTH, width),
+    slots: Math.min(MAX_COLUMN_SLOTS, Math.max(1, slots))
+  };
+}
+
+// A column must cover every row its panes claim, otherwise a pane would sit
+// outside the column that owns it.
+function sanitizeColumns(columns, layouts) {
+  const count = layouts.reduce((max, layout) => Math.max(max, layout.column + 1), 1);
+  const list = [];
+  for (let index = 0; index < count; index += 1) {
+    const claimed = layouts.reduce(
+      (max, layout) => (layout.column === index ? Math.max(max, layout.row + 1) : max),
+      0
+    );
+    const source = Array.isArray(columns) ? columns[index] : undefined;
+    list.push(sanitizeColumn({
+      width: source?.width,
+      slots: Math.max(Math.round(Number(source?.slots)) || 1, claimed)
+    }));
+  }
+  return list;
+}
+
+function isColumnarLayout(layout) {
+  return Boolean(layout) && Number.isFinite(Number(layout.column));
+}
+
+// Both older schemas reduce to world pixels first, so a single grouping pass
+// below covers the freeform canvas and the cell grid that preceded it.
+function worldLayout(layout) {
   if (layout && (Number.isFinite(Number(layout.w)) || Number.isFinite(Number(layout.h)))) {
-    return sanitizeLayout(layout);
+    return {
+      x: Math.round(Number(layout.x)) || 0,
+      y: Math.round(Number(layout.y)) || 0,
+      width: Math.max(MIN_COLUMN_WIDTH, Math.round(Number(layout.w)) || DEFAULT_PANE_WIDTH)
+    };
   }
   const cols = Math.max(1, Math.round(Number(layout?.cols)) || 1);
-  const rows = Math.max(1, Math.round(Number(layout?.rows)) || 1);
-  const cellX = Math.round(Number(layout?.x)) || 0;
-  const cellY = Math.round(Number(layout?.y)) || 0;
-  return sanitizeLayout({
-    x: cellX * DEFAULT_PANE_WIDTH,
-    y: cellY * DEFAULT_PANE_HEIGHT,
-    w: cols * DEFAULT_PANE_WIDTH,
-    h: rows * DEFAULT_PANE_HEIGHT,
-    z: 0
-  });
-}
-
-// strokeColor keeps 'auto' as a valid value (resolved to the --text theme token
-// on the client) so drawings stay visible in both the light and dark themes.
-function drawStrokeColor(value) {
-  if (value === 'auto') {
-    return 'auto';
-  }
-  return typeof value === 'string' && DRAW_COLOR_PATTERN.test(value) ? value.toLowerCase() : 'auto';
-}
-
-function drawBackgroundColor(value) {
-  if (value === 'transparent') {
-    return 'transparent';
-  }
-  return typeof value === 'string' && DRAW_COLOR_PATTERN.test(value) ? value.toLowerCase() : 'transparent';
-}
-
-function drawEnum(set, value, fallback) {
-  return set.has(value) ? value : fallback;
-}
-
-function drawOpacity(value) {
-  const number = Math.round(Number(value));
-  return Number.isFinite(number) ? Math.min(100, Math.max(0, number)) : 100;
-}
-
-// Style fields are scoped per element type so e.g. a line can't carry a
-// fillStyle and a text element can't carry an arrowhead.
-function drawStyle(value, type) {
-  const style = {
-    strokeColor: drawStrokeColor(value?.strokeColor),
-    opacity: drawOpacity(value?.opacity)
-  };
-  const strokeWidth = Math.round(Number(value?.strokeWidth));
-  if (type === 'rectangle' || type === 'diamond' || type === 'ellipse') {
-    style.backgroundColor = drawBackgroundColor(value?.backgroundColor);
-    style.fillStyle = drawEnum(DRAW_FILL_STYLES, value?.fillStyle, 'hachure');
-    style.strokeWidth = drawEnum(DRAW_STROKE_WIDTHS, strokeWidth, 1);
-    style.strokeStyle = drawEnum(DRAW_STROKE_STYLES, value?.strokeStyle, 'solid');
-  }
-  if (type === 'rectangle' || type === 'diamond') {
-    style.roundness = drawEnum(DRAW_ROUNDNESS, value?.roundness, 'sharp');
-  }
-  if (type === 'arrow' || type === 'line') {
-    style.strokeWidth = drawEnum(DRAW_STROKE_WIDTHS, strokeWidth, 1);
-    style.strokeStyle = drawEnum(DRAW_STROKE_STYLES, value?.strokeStyle, 'solid');
-  }
-  // Only "arrow" has arrowheads in Excalidraw (canHaveArrowheads = type => type === 'arrow');
-  // "line" intentionally has none.
-  if (type === 'arrow') {
-    style.startArrowhead = drawEnum(DRAW_ARROWHEADS, value?.startArrowhead, 'none');
-    style.endArrowhead = drawEnum(DRAW_ARROWHEADS, value?.endArrowhead, 'arrow');
-  }
-  if (type === 'draw') {
-    style.strokeWidth = drawEnum(DRAW_STROKE_WIDTHS, strokeWidth, 1);
-  }
-  if (type === 'text') {
-    style.fontSize = drawEnum(DRAW_FONT_SIZES, Math.round(Number(value?.fontSize)), 20);
-    style.fontFamily = drawEnum(DRAW_FONT_FAMILIES, value?.fontFamily, 'normal');
-    style.textAlign = drawEnum(DRAW_TEXT_ALIGNS, value?.textAlign, 'left');
-  }
-  return style;
-}
-
-function drawElement(value) {
-  if (!DRAW_TYPES.has(value?.type)) {
-    return null;
-  }
-  const type = value.type;
-  const element = {
-    id: String(value.id || crypto.randomUUID()).slice(0, 64),
-    type,
-    x: Math.round(Number(value.x)) || 0,
-    y: Math.round(Number(value.y)) || 0,
-    w: Math.round(Number(value.w)) || 0,
-    h: Math.round(Number(value.h)) || 0,
-    ...drawStyle(value, type)
-  };
-  if (typeof value.groupId === 'string' && value.groupId) {
-    element.groupId = value.groupId.slice(0, 64);
-  }
-  if (type === 'draw') {
-    element.points = (Array.isArray(value.points) ? value.points : [])
-      .slice(0, MAX_DRAW_POINTS)
-      .map((point) => [Math.round(Number(point?.[0])) || 0, Math.round(Number(point?.[1])) || 0]);
-  }
-  if (type === 'text') {
-    element.text = String(value.text || '').slice(0, MAX_DRAW_TEXT_LENGTH);
-  }
-  return element;
-}
-
-function sanitizeDrawings(drawings) {
-  return (Array.isArray(drawings) ? drawings : [])
-    .slice(0, MAX_DRAW_ELEMENTS)
-    .map(drawElement)
-    .filter(Boolean);
-}
-
-function sanitizeCamera(camera) {
-  const scale = Number(camera?.scale);
   return {
-    x: Math.round(Number(camera?.x)) || 0,
-    y: Math.round(Number(camera?.y)) || 0,
-    scale: scale >= MIN_ZOOM && scale <= MAX_ZOOM ? scale : 1
+    x: (Math.round(Number(layout?.x)) || 0) * DEFAULT_PANE_WIDTH,
+    y: (Math.round(Number(layout?.y)) || 0) * DEFAULT_PANE_HEIGHT,
+    width: cols * DEFAULT_PANE_WIDTH
   };
 }
 
-function nextPaneZ(panes) {
-  return panes.reduce((max, pane) => Math.max(max, Number(pane.layout?.z) || 0), 0) + 1;
+// Panes from the old freeform canvas become columns: each distinct x starts a
+// new column, and ascending y becomes the row inside that column.
+function migrateTabLayout(panes, columns) {
+  const layouts = panes.map((pane) => pane.layout);
+  if (layouts.every(isColumnarLayout)) {
+    const sanitized = layouts.map(sanitizeLayout);
+    return { layouts: sanitized, columns: sanitizeColumns(columns, sanitized) };
+  }
+
+  const grouped = new Map();
+  panes
+    .map((pane, index) => ({ ...worldLayout(pane.layout), index }))
+    .sort((a, b) => a.x - b.x || a.y - b.y)
+    .forEach((item) => {
+      if (!grouped.has(item.x)) {
+        grouped.set(item.x, []);
+      }
+      grouped.get(item.x).push(item);
+    });
+
+  const nextLayouts = new Array(panes.length);
+  const nextColumns = [];
+  for (const items of grouped.values()) {
+    const column = nextColumns.length;
+    items.forEach((item, row) => {
+      nextLayouts[item.index] = { column, row };
+    });
+    nextColumns.push(sanitizeColumn({
+      width: items.reduce((max, item) => Math.max(max, item.width), 0),
+      slots: items.length
+    }));
+  }
+  return { layouts: nextLayouts, columns: sanitizeColumns(nextColumns, nextLayouts) };
 }
 
-function cascadeLayout(panes) {
-  const step = PANE_CASCADE_STEP * (panes.length % 6);
-  return {
-    x: PANE_CASCADE_STEP + step,
-    y: PANE_CASCADE_STEP + step,
-    w: DEFAULT_PANE_WIDTH,
-    h: DEFAULT_PANE_HEIGHT,
-    z: nextPaneZ(panes)
-  };
+// The board grows to the right, but a new pane first tries to fill a free slot
+// of the column it came from, so the configured slots-per-column shape is what
+// actually fills up. 'vertical' additionally grows a full column by one slot;
+// 'horizontal' always starts a new column.
+function appendLayout(tab, sourcePane, direction, defaultSlots = 1) {
+  if ((direction === 'vertical' || direction === 'auto') && sourcePane) {
+    const columnIndex = sanitizeLayout(sourcePane.layout).column;
+    const column = tab.columns[columnIndex];
+    if (column) {
+      const used = new Set(
+        tab.panes
+          .filter((pane) => sanitizeLayout(pane.layout).column === columnIndex)
+          .map((pane) => sanitizeLayout(pane.layout).row)
+      );
+      for (let row = 0; row < column.slots; row += 1) {
+        if (!used.has(row)) {
+          return { column: columnIndex, row };
+        }
+      }
+      // An explicit vertical split still grows a column that is already full;
+      // 'auto' leaves it alone and falls through to a new column.
+      if (direction === 'vertical' && column.slots < MAX_COLUMN_SLOTS) {
+        column.slots += 1;
+        return { column: columnIndex, row: column.slots - 1 };
+      }
+    }
+  }
+  tab.columns.push(sanitizeColumn({ width: DEFAULT_PANE_WIDTH, slots: defaultSlots }));
+  return { column: tab.columns.length - 1, row: 0 };
+}
+
+// Excalidraw owns this payload's shape, so it is stored verbatim as a JSON
+// string; the server only checks that it parses and stays within its budget.
+function whiteboardContent(value) {
+  const json = typeof value === 'string' ? value : JSON.stringify(value ?? {});
+  if (typeof json !== 'string' || json.length > MAX_WHITEBOARD_LENGTH) {
+    return '{}';
+  }
+  try {
+    JSON.parse(json);
+    return json;
+  } catch {
+    return '{}';
+  }
 }
 
 function validPaneFontSize(value) {

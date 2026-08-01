@@ -36,8 +36,8 @@ browser_notifications = false
 [ui]
 # Hot reload after saving settings in the web UI.
 sidebar_width = 286
-max_pane_columns = 4
-max_pane_rows = 3
+# How many rows a newly opened column is split into (1-6).
+default_column_slots = 1
 terminal_font_family = "Consolas, \"Cascadia Mono\", monospace"
 terminal_font_size = 13
 mobile_terminal_font_size = 12

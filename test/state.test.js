@@ -33,7 +33,7 @@ test('saved state keeps layout only', () => {
   assert.equal(savedPane.title, 'PowerShell 1');
   assert.equal(savedPane.scrollback, undefined);
   assert.equal(savedPane.lastProgram, undefined);
-  assert.deepEqual(savedPane.layout, { x: 120, y: 120, w: 720, h: 480, z: 1 });
+  assert.deepEqual(savedPane.layout, { column: 0, row: 0 });
 });
 
 test('pane font size is validated and persisted per pane', () => {
@@ -84,7 +84,7 @@ test('loading old state strips non-layout terminal data', () => {
   const pane = store.findPane('pane-1').pane;
   assert.deepEqual(pane.scrollback, []);
   assert.equal(pane.lastProgram, undefined);
-  assert.deepEqual(pane.layout, { x: 0, y: 0, w: 720, h: 480, z: 0 });
+  assert.deepEqual(pane.layout, { column: 0, row: 0 });
 });
 
 test('new sessions and panes use unique default names', () => {
@@ -102,35 +102,54 @@ test('new sessions and panes use unique default names', () => {
   const thirdPane = store.splitPane(secondPane.id, 'vertical');
   assert.equal(secondPane.title, 'PowerShell 2');
   assert.equal(thirdPane.title, 'PowerShell 3');
-  assert.deepEqual(secondPane.layout, { x: 240, y: 240, w: 720, h: 480, z: 2 });
-  assert.deepEqual(thirdPane.layout, { x: 360, y: 360, w: 720, h: 480, z: 3 });
+  assert.deepEqual(secondPane.layout, { column: 1, row: 0 });
+  assert.deepEqual(thirdPane.layout, { column: 1, row: 1 });
 });
 
-test('resizePane saves free world coordinates and allows overlap', () => {
+test('placePane moves panes between columns and prunes emptied ones', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
   const store = new StateStore(root, 100);
   store.load();
   const paneId = store.state.sessions[0].tabs[0].panes[0].id;
-  const secondPane = store.splitPane(paneId, 'horizontal');
+  const secondPane = store.splitPane(paneId, 'vertical');
 
-  // grid-aligned world coordinates are stored as-is, without clamping to any bounds
-  assert.equal(store.resizePane(paneId, { x: 1200, y: 840, w: 480, h: 360, z: 5 }), true);
-  assert.deepEqual(store.findPane(paneId).pane.layout, { x: 1200, y: 840, w: 480, h: 360, z: 5 });
+  // a vertical split grows the column it came from instead of adding one
+  assert.deepEqual(store.state.sessions[0].tabs[0].columns, [{ width: 720, slots: 2 }]);
+  assert.deepEqual(store.findPane(secondPane.id).pane.layout, { column: 0, row: 1 });
 
-  // off-grid input snaps to the nearest dashed grid cell (30), which includes every solid line (120)
-  assert.equal(store.resizePane(secondPane.id, { x: 610, y: 130, w: 500, h: 300, z: 6 }), true);
-  assert.deepEqual(store.findPane(secondPane.id).pane.layout, { x: 600, y: 120, w: 510, h: 300, z: 6 });
+  // dropping past the last column appends exactly one, never a run of empties
+  assert.equal(store.placePane(secondPane.id, { column: 9, row: 0 }), true);
+  assert.deepEqual(store.findPane(secondPane.id).pane.layout, { column: 1, row: 0 });
+  assert.equal(store.state.sessions[0].tabs[0].columns.length, 2);
 
-  // a pane may rest on a dashed line that is not a solid grid line
-  assert.equal(store.resizePane(secondPane.id, { x: 147, y: 152, w: 480, h: 360, z: 6 }), true);
-  assert.deepEqual(store.findPane(secondPane.id).pane.layout, { x: 150, y: 150, w: 480, h: 360, z: 6 });
-
-  // overlapping another pane is allowed on the whiteboard
-  assert.equal(store.resizePane(secondPane.id, { x: 1200, y: 840, w: 480, h: 360, z: 7 }), true);
-  assert.deepEqual(store.findPane(secondPane.id).pane.layout, { x: 1200, y: 840, w: 480, h: 360, z: 7 });
+  // rows clamp to the slots the target column actually has, and the column the
+  // pane left behind is dropped
+  assert.equal(store.placePane(secondPane.id, { column: 0, row: 5 }), true);
+  assert.deepEqual(store.findPane(secondPane.id).pane.layout, { column: 0, row: 1 });
+  assert.equal(store.state.sessions[0].tabs[0].columns.length, 1);
 });
 
-test('new PowerShell and files panes get cascaded world layouts', () => {
+test('column slots are configurable and never strand a pane', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100);
+  store.load();
+  const tabId = store.state.sessions[0].tabs[0].id;
+  const paneId = store.state.sessions[0].tabs[0].panes[0].id;
+  store.splitPane(paneId, 'vertical');
+
+  assert.equal(store.setColumnSlots(tabId, 0, 4), true);
+  assert.equal(store.state.sessions[0].tabs[0].columns[0].slots, 4);
+
+  // shrinking below the occupied rows keeps the rows that hold panes
+  assert.equal(store.setColumnSlots(tabId, 0, 1), true);
+  assert.equal(store.state.sessions[0].tabs[0].columns[0].slots, 2);
+
+  assert.equal(store.setColumnWidth(tabId, 0, 470), true);
+  assert.equal(store.state.sessions[0].tabs[0].columns[0].width, 480);
+  assert.equal(store.setColumnWidth(tabId, 3, 480), false);
+});
+
+test('new panes open a fresh column to the right', () => {
   for (const type of ['terminal', 'files']) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
     const store = new StateStore(root, 100);
@@ -143,18 +162,17 @@ test('new PowerShell and files panes get cascaded world layouts', () => {
       : store.createFilesPane(firstPane.id, 'C:\\');
 
     assert.ok(newPane);
-    // new pane sits on the whiteboard with a grid-aligned world-pixel box, stacked above the first
-    assert.equal(newPane.layout.w, 720);
-    assert.equal(newPane.layout.h, 480);
-    assert.equal(newPane.layout.w % 120, 0);
-    assert.equal(newPane.layout.h % 120, 0);
-    assert.ok(newPane.layout.z > firstPane.layout.z);
-    // creating a pane never mutates existing panes
+    assert.deepEqual(newPane.layout, { column: 1, row: 0 });
+    assert.deepEqual(store.state.sessions[0].tabs[0].columns, [
+      { width: 720, slots: 1 },
+      { width: 720, slots: 1 }
+    ]);
+    // creating a pane never moves the panes already on the board
     assert.deepEqual(firstPane.layout, firstLayout);
   }
 });
 
-test('loading legacy cell layouts migrates them to world pixels', () => {
+test('loading legacy cell layouts migrates them to columns', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
   const dataDir = path.join(root, 'data');
   fs.mkdirSync(dataDir, { recursive: true });
@@ -180,14 +198,64 @@ test('loading legacy cell layouts migrates them to world pixels', () => {
 
   const store = new StateStore(root, 100);
   store.load();
+  const tab = store.state.sessions[0].tabs[0];
+  // Cells become world pixels first, so pane-1/pane-3 share column 0 and pane-2
+  // takes column 1 with the width its two-cell span implies.
   assert.deepEqual(
-    store.state.sessions[0].tabs[0].panes.map((pane) => pane.layout),
+    tab.panes.map((pane) => pane.layout),
     [
-      { x: 0, y: 0, w: 720, h: 480, z: 0 },
-      { x: 720, y: 0, w: 1440, h: 480, z: 0 },
-      { x: 0, y: 480, w: 720, h: 960, z: 0 }
+      { column: 0, row: 0 },
+      { column: 1, row: 0 },
+      { column: 0, row: 1 }
     ]
   );
+  assert.deepEqual(tab.columns, [
+    { width: 720, slots: 2 },
+    { width: 1440, slots: 1 }
+  ]);
+});
+
+test('loading freeform canvas layouts migrates them to columns', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const dataDir = path.join(root, 'data');
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(path.join(dataDir, 'state.json'), JSON.stringify({
+    activeSessionId: 'session-1',
+    updatedAt: new Date().toISOString(),
+    sessions: [{
+      id: 'session-1',
+      name: 'Session 1',
+      activePaneId: 'pane-1',
+      tabs: [{
+        id: 'tab-1',
+        name: 'Main',
+        activePaneId: 'pane-1',
+        camera: { x: -320, y: 128, scale: 1.5 },
+        panes: [
+          { id: 'pane-1', title: 'PowerShell', cwd: root, split: null, layout: { x: 960, y: 640, w: 480, h: 360, z: 3 } },
+          { id: 'pane-2', title: 'PowerShell', cwd: root, split: null, layout: { x: 120, y: 120, w: 720, h: 480, z: 1 } },
+          { id: 'pane-3', title: 'PowerShell', cwd: root, split: null, layout: { x: 960, y: 120, w: 480, h: 480, z: 2 } }
+        ]
+      }]
+    }]
+  }));
+
+  const store = new StateStore(root, 100);
+  store.load();
+  const tab = store.state.sessions[0].tabs[0];
+  // Columns follow ascending x; inside a column, rows follow ascending y.
+  assert.deepEqual(
+    tab.panes.map((pane) => pane.layout),
+    [
+      { column: 1, row: 1 },
+      { column: 0, row: 0 },
+      { column: 1, row: 0 }
+    ]
+  );
+  assert.deepEqual(tab.columns, [
+    { width: 720, slots: 1 },
+    { width: 480, slots: 2 }
+  ]);
 });
 
 test('pane move reorders panes inside its tab', () => {
@@ -529,154 +597,55 @@ test('loading legacy panes marks them as terminal', () => {
   assert.equal(store.state.sessions[0].tabs[0].panes[0].type, 'terminal');
 });
 
-test('camera state persists per tab and clamps invalid zoom', () => {
+test('auto placement fills a column to its configured slots before opening another', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100);
+  const store = new StateStore(root, 100, 3);
   store.load();
-  const tabId = store.state.sessions[0].tabs[0].id;
+  const columns = () => store.state.sessions[0].tabs[0].columns;
+  const first = store.state.sessions[0].tabs[0].panes[0];
 
-  assert.equal(store.setCamera(tabId, { x: -320, y: 128, scale: 1.5 }), true);
-  assert.deepEqual(store.state.sessions[0].tabs[0].camera, { x: -320, y: 128, scale: 1.5 });
+  // the seeded column holds one slot, so the next pane starts a 3-slot column
+  const second = store.splitPane(first.id, 'auto');
+  assert.deepEqual(second.layout, { column: 1, row: 0 });
+  assert.deepEqual(columns()[1], { width: 720, slots: 3 });
 
-  const restored = new StateStore(root, 100);
-  restored.load();
-  assert.deepEqual(restored.state.sessions[0].tabs[0].camera, { x: -320, y: 128, scale: 1.5 });
+  // the following panes fill that column rather than adding more
+  const third = store.splitPane(second.id, 'auto');
+  const fourth = store.splitPane(third.id, 'auto');
+  assert.deepEqual(third.layout, { column: 1, row: 1 });
+  assert.deepEqual(fourth.layout, { column: 1, row: 2 });
+  assert.equal(columns().length, 2);
 
-  // out-of-range zoom falls back to 1
-  assert.equal(store.setCamera(tabId, { x: 0, y: 0, scale: 99 }), true);
-  assert.equal(store.state.sessions[0].tabs[0].camera.scale, 1);
+  // once full, auto moves on instead of growing past the configured size
+  const fifth = store.splitPane(fourth.id, 'auto');
+  assert.deepEqual(fifth.layout, { column: 2, row: 0 });
+  assert.equal(columns()[1].slots, 3);
+
+  // an explicit horizontal split always starts a column, even with slots free
+  const sixth = store.splitPane(fifth.id, 'horizontal');
+  assert.deepEqual(sixth.layout, { column: 3, row: 0 });
 });
 
-test('drawings persist per tab and drop unknown shapes', () => {
+test('whiteboard panes store their Excalidraw scene as bounded JSON', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
   const store = new StateStore(root, 100);
   store.load();
-  const tabId = store.state.sessions[0].tabs[0].id;
+  const terminalPaneId = store.state.sessions[0].tabs[0].panes[0].id;
+  const pane = store.createWhiteboardPane(terminalPaneId);
 
-  assert.equal(store.setDrawings(tabId, [
-    { id: 'a', type: 'rectangle', x: 120, y: 150, w: 240, h: 90 },
-    { id: 'b', type: 'draw', x: 30, y: 30, w: 0, h: 0, points: [[0, 0], [12, 18]] },
-    { id: 'c', type: 'text', x: 60, y: 60, w: 0, h: 0, text: 'note' },
-    { id: 'd', type: 'sticker', x: 0, y: 0, w: 10, h: 10 }
-  ]), true);
+  assert.equal(pane.type, 'whiteboard');
+  assert.equal(pane.whiteboard, '{}');
 
-  const restored = new StateStore(root, 100);
-  restored.load();
-  const drawings = restored.state.sessions[0].tabs[0].drawings;
-  assert.deepEqual(drawings.map((element) => element.id), ['a', 'b', 'c']);
-  assert.deepEqual(drawings[0], {
-    id: 'a', type: 'rectangle', x: 120, y: 150, w: 240, h: 90,
-    strokeColor: 'auto', opacity: 100, backgroundColor: 'transparent', fillStyle: 'hachure',
-    strokeWidth: 1, strokeStyle: 'solid', roundness: 'sharp'
-  });
-  assert.deepEqual(drawings[1].points, [[0, 0], [12, 18]]);
-  assert.equal(drawings[2].text, 'note');
-  assert.equal(store.setDrawings('missing-tab', []), false);
-});
+  const scene = JSON.stringify({ elements: [{ id: 'a', type: 'rectangle' }], appState: { gridSize: 20 } });
+  assert.equal(store.setWhiteboard(pane.id, scene), true);
 
-test('drawing styles are validated per element type', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100);
-  store.load();
-  const tabId = store.state.sessions[0].tabs[0].id;
+  const reloaded = new StateStore(root, 100);
+  reloaded.load();
+  assert.equal(reloaded.findPane(pane.id).pane.whiteboard, scene);
 
-  store.setDrawings(tabId, [
-    { id: 'rect', type: 'rectangle', x: 0, y: 0, w: 10, h: 10, strokeColor: '#E03131', backgroundColor: '#B2F2BB', fillStyle: 'solid', strokeWidth: 4, strokeStyle: 'dashed', roundness: 'round', opacity: 55 },
-    { id: 'bad', type: 'rectangle', x: 0, y: 0, w: 10, h: 10, strokeColor: 'notacolor', backgroundColor: 'nope', fillStyle: 'glitter', strokeWidth: 99, strokeStyle: 'zigzag', roundness: 'extreme', opacity: 500 },
-    { id: 'arrow', type: 'arrow', x: 0, y: 0, w: 10, h: 10, startArrowhead: 'circle', endArrowhead: 'triangle_outline' },
-    { id: 'line', type: 'line', x: 0, y: 0, w: 10, h: 10 },
-    { id: 'text', type: 'text', x: 0, y: 0, w: 0, h: 0, text: 'hi', fontSize: 28, fontFamily: 'code', textAlign: 'center' },
-    { id: 'ellipse', type: 'ellipse', x: 0, y: 0, w: 10, h: 10 }
-  ]);
-
-  const drawings = store.state.sessions[0].tabs[0].drawings;
-  const byId = Object.fromEntries(drawings.map((element) => [element.id, element]));
-
-  assert.equal(byId.rect.strokeColor, '#e03131');
-  assert.equal(byId.rect.backgroundColor, '#b2f2bb');
-  assert.equal(byId.rect.fillStyle, 'solid');
-  assert.equal(byId.rect.strokeWidth, 4);
-  assert.equal(byId.rect.strokeStyle, 'dashed');
-  assert.equal(byId.rect.roundness, 'round');
-  assert.equal(byId.rect.opacity, 55);
-
-  // invalid values fall back to defaults rather than being dropped
-  assert.equal(byId.bad.strokeColor, 'auto');
-  assert.equal(byId.bad.backgroundColor, 'transparent');
-  assert.equal(byId.bad.fillStyle, 'hachure');
-  assert.equal(byId.bad.strokeWidth, 1);
-  assert.equal(byId.bad.strokeStyle, 'solid');
-  assert.equal(byId.bad.roundness, 'sharp');
-  assert.equal(byId.bad.opacity, 100);
-
-  assert.equal(byId.arrow.startArrowhead, 'circle');
-  assert.equal(byId.arrow.endArrowhead, 'triangle_outline');
-  // only "arrow" has arrowheads in Excalidraw; "line" has none at all
-  assert.equal(byId.line.startArrowhead, undefined);
-  assert.equal(byId.line.endArrowhead, undefined);
-  assert.equal(byId.line.strokeWidth, 1);
-
-  assert.equal(byId.text.fontSize, 28);
-  assert.equal(byId.text.fontFamily, 'code');
-  assert.equal(byId.text.textAlign, 'center');
-  assert.equal(byId.text.backgroundColor, undefined);
-  assert.equal(byId.text.fillStyle, undefined);
-
-  assert.equal(byId.ellipse.roundness, undefined);
-  assert.equal(byId.ellipse.fillStyle, 'hachure');
-
-  // opacity clamps to [0, 100] instead of failing validation
-  store.setDrawings(tabId, [{ id: 'clamp', type: 'rectangle', x: 0, y: 0, w: 10, h: 10, opacity: -20 }]);
-  assert.equal(store.state.sessions[0].tabs[0].drawings[0].opacity, 0);
-  store.setDrawings(tabId, [{ id: 'clamp2', type: 'rectangle', x: 0, y: 0, w: 10, h: 10, opacity: 250 }]);
-  assert.equal(store.state.sessions[0].tabs[0].drawings[0].opacity, 100);
-});
-
-test('drawings without style fields (pre-existing data) round-trip with full defaults', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100);
-  store.load();
-  const tabId = store.state.sessions[0].tabs[0].id;
-
-  store.setDrawings(tabId, [{ id: 'legacy', type: 'rectangle', x: 0, y: 0, w: 30, h: 30 }]);
-
-  const restored = new StateStore(root, 100);
-  restored.load();
-  const element = restored.state.sessions[0].tabs[0].drawings[0];
-  assert.equal(element.strokeColor, 'auto');
-  assert.equal(element.backgroundColor, 'transparent');
-  assert.equal(element.fillStyle, 'hachure');
-  assert.equal(element.strokeWidth, 1);
-  assert.equal(element.strokeStyle, 'solid');
-  assert.equal(element.roundness, 'sharp');
-  assert.equal(element.opacity, 100);
-  assert.equal(element.groupId, undefined);
-});
-
-test('drawing groupId round-trips, is capped at 64 chars, and is omitted when absent', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100);
-  store.load();
-  const tabId = store.state.sessions[0].tabs[0].id;
-
-  const longId = 'g'.repeat(100);
-  store.setDrawings(tabId, [
-    { id: 'a', type: 'rectangle', x: 0, y: 0, w: 10, h: 10, groupId: 'group-1' },
-    { id: 'b', type: 'ellipse', x: 0, y: 0, w: 10, h: 10, groupId: 'group-1' },
-    { id: 'c', type: 'diamond', x: 0, y: 0, w: 10, h: 10, groupId: longId },
-    { id: 'd', type: 'line', x: 0, y: 0, w: 10, h: 10 },
-    { id: 'e', type: 'text', x: 0, y: 0, w: 0, h: 0, text: 'hi', groupId: 42 }
-  ]);
-
-  const restored = new StateStore(root, 100);
-  restored.load();
-  const byId = Object.fromEntries(restored.state.sessions[0].tabs[0].drawings.map((el) => [el.id, el]));
-
-  assert.equal(byId.a.groupId, 'group-1');
-  assert.equal(byId.b.groupId, 'group-1');
-  assert.equal(byId.c.groupId, longId.slice(0, 64));
-  assert.equal(byId.c.groupId.length, 64);
-  assert.equal(byId.d.groupId, undefined);
-  // non-string groupId (e.g. a stray number) is ignored rather than coerced
-  assert.equal(byId.e.groupId, undefined);
+  // a malformed payload falls back to an empty scene rather than being stored
+  assert.equal(store.setWhiteboard(pane.id, 'not json'), true);
+  assert.equal(store.findPane(pane.id).pane.whiteboard, '{}');
+  // and only whiteboard panes accept one at all
+  assert.equal(store.setWhiteboard(terminalPaneId, scene), false);
 });

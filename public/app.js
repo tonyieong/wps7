@@ -72,16 +72,7 @@
     suppressSessionClickUntil: 0,
     theme: ({ dark: 'wps-dark', light: 'wps-light', custom: 'custom-dark' })[localStorage.getItem('wps7.theme')] || localStorage.getItem('wps7.theme') || 'wps-dark',
     customThemeDraft: null,
-    drawTool: 'selection',
-    drawSelection: new Set(),
-    drawClipboard: [],
-    drawStyles: (() => {
-      try {
-        return JSON.parse(localStorage.getItem('wps7.drawStyles') || '{}') || {};
-      } catch {
-        return {};
-      }
-    })()
+    whiteboards: new Map()
   };
 
   const app = document.getElementById('app');
@@ -433,24 +424,18 @@
     return session && session.tabs[0];
   }
 
-  // Flattens every pane of every workspace into one tree: the first pane of a
-  // workspace carries the workspace name, later panes hang off it as branches.
+  // One flat row per pane: every row names its own workspace, so no row depends
+  // on the one above it to be read.
   function sidebarPaneRows() {
-    return state.sessions.flatMap((session) => {
-      const panes = session.tabs.flatMap((tab) => tab.panes);
-      return panes.map((pane, index) => ({
-        session,
-        pane,
-        branch: index === 0 ? '' : (index === panes.length - 1 ? ' └─' : ' ├─'),
-        label: index === 0 ? `${session.name}/${pane.title}` : pane.title
-      }));
-    });
+    return state.sessions.flatMap((session) => session.tabs
+      .flatMap((tab) => tab.panes)
+      .map((pane) => ({ session, pane, label: `${session.name}/${pane.title}` })));
   }
 
-  function renderSidebarPaneItem({ session, pane, branch, label }) {
+  function renderSidebarPaneItem({ session, pane, label }) {
     return `
       <button class="session-item ${pane.id === state.activePaneId ? 'active' : ''}" data-pane-link="${pane.id}" data-session="${session.id}">
-        ${branch ? `<span class="session-branch" aria-hidden="true">${branch}</span>` : ''}<span data-pane-label>${escapeHtml(label)}</span>
+        <span data-pane-label>${escapeHtml(label)}</span>
       </button>
     `;
   }
@@ -468,7 +453,7 @@
     const layout = normalizePaneLayout(pane.layout);
     const fontSize = Number(pane.fontSize);
     const fontStyle = Number.isInteger(fontSize) ? ` --pane-font-size: ${fontSize}px;` : '';
-    return `${paneLayoutStyle(layout)}${fontStyle}`;
+    return `grid-row: ${layout.row + 1};${fontStyle}`;
   }
 
   function paneFontSize(pane) {
@@ -553,10 +538,8 @@
     if (!state.config) {
       return;
     }
-    // Crossing the mobile breakpoint changes whether the camera applies at all,
-    // and a shrinking viewport can leave the active pane off screen.
-    applyCameraTransform();
-    ensureActivePaneVisible();
+    // A shrinking viewport can leave the active pane's column off screen.
+    ensureActivePaneVisible('auto');
     if (!isMobileLayout()) {
       return;
     }
@@ -668,7 +651,8 @@
     const body = pane.type === 'files' ? renderFilesPane(pane)
       : pane.type === 'browser' ? renderBrowserPane(pane)
         : pane.type === 'notepad' ? renderNotepadPane(pane)
-          : pane.type === 'usage' ? renderUsagePane(pane) : `
+          : pane.type === 'usage' ? renderUsagePane(pane)
+            : pane.type === 'whiteboard' ? `<div class="whiteboard" id="whiteboard-${pane.id}" data-whiteboard="${pane.id}"></div>` : `
           ${renderMobileKeybar()}
           ${renderTerminalSurfaces(pane)}`;
     const header = pane.type === 'browser'
@@ -680,9 +664,9 @@
           <span class="pane-kind-icon" aria-hidden="true">${fileActionIcon('notepad')}</span>
           ${renderNotepadTabs(pane)}
         </div>`
-        : pane.type === 'usage'
+        : pane.type === 'usage' || pane.type === 'whiteboard'
           ? `<div class="pane-title" data-pane-title="${pane.id}">
-            <span class="pane-kind-icon" aria-hidden="true">${fileActionIcon('usage')}</span>
+            <span class="pane-kind-icon" aria-hidden="true">${fileActionIcon(pane.type === 'whiteboard' ? 'line' : 'usage')}</span>
             <span data-rename-pane="${pane.id}">${escapeHtml(pane.title)}</span>
           </div>`
           : `<div class="pane-tab-strip" data-pane-tab-strip data-pane-title="${pane.id}">
@@ -694,14 +678,6 @@
         ${pane.type === 'usage' ? `<button class="pane-usage-refresh" type="button" data-usage-refresh aria-label="Refresh usage" title="Refresh usage">${fileActionIcon('refresh')}</button>` : ''}
         <button class="pane-close" data-close-pane="${pane.id}" title="Close pane">${fileActionIcon('close')}</button>
         ${body}
-        <div class="pane-resize pane-resize-n" data-pane-resize="${pane.id}" data-pane-resize-direction="n"></div>
-        <div class="pane-resize pane-resize-ne" data-pane-resize="${pane.id}" data-pane-resize-direction="ne"></div>
-        <div class="pane-resize pane-resize-e" data-pane-resize="${pane.id}" data-pane-resize-direction="e"></div>
-        <div class="pane-resize pane-resize-se" data-pane-resize="${pane.id}" data-pane-resize-direction="se"></div>
-        <div class="pane-resize pane-resize-s" data-pane-resize="${pane.id}" data-pane-resize-direction="s"></div>
-        <div class="pane-resize pane-resize-sw" data-pane-resize="${pane.id}" data-pane-resize-direction="sw"></div>
-        <div class="pane-resize pane-resize-w" data-pane-resize="${pane.id}" data-pane-resize-direction="w"></div>
-        <div class="pane-resize pane-resize-nw" data-pane-resize="${pane.id}" data-pane-resize-direction="nw"></div>
       </section>
     `;
   }
@@ -779,44 +755,9 @@
     indent: '<path d="M4 4v16M9 4v16M4 8h5M4 16h5"/>',
     autosave: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/>',
     font: '<path d="M6 20 11 4h2l5 16M8 14h8"/>',
-    hand: '<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12"/><path d="M11 12V4.5a1.5 1.5 0 0 1 3 0V12"/><path d="M14 12V6.5a1.5 1.5 0 0 1 3 0V13"/><path d="M17 11a1.5 1.5 0 0 1 3 0v4a6 6 0 0 1-6 6h-2a6 6 0 0 1-6-6v-2a1.5 1.5 0 0 1 3 0"/>',
-    pointer: '<path d="M5 3.5 12 19l2.2-6 6-2.2z"/>',
-    rectangle: '<rect x="4" y="6" width="16" height="12"/>',
-    diamond: '<path d="M12 3 21 12 12 21 3 12z"/>',
-    ellipse: '<ellipse cx="12" cy="12" rx="9" ry="7"/>',
-    arrow: '<path d="M4 20 19 5"/><path d="M12 5h7v7"/>',
     line: '<path d="M4 20 20 4"/>',
-    pencil: '<path d="m4 20 1-4L16.4 4.6a2.2 2.2 0 0 1 3 3L8 19z"/><path d="m14.5 6.5 3 3"/>',
-    text: '<path d="M5 7V4h14v3M12 4v16M9 20h6"/>',
-    eraser: '<path d="m14 4 6 6-8 8H7l-3.5-3.5z"/><path d="M9.5 8.5 15 14"/><path d="M10 20h10"/>',
-    'fill-hachure': '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 20 20 4M4 13 13 4M11 20 20 11"/>',
-    'fill-cross-hatch': '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 20 20 4M4 13 13 4M11 20 20 11M4 4 20 20M4 11 11 4M13 20 20 13"/>',
-    'fill-solid': '<rect x="4" y="4" width="16" height="16" rx="2" fill="currentColor"/>',
-    'stroke-thin': '<path d="M4 12h16" stroke-width="1.5"/>',
-    'stroke-bold': '<path d="M4 12h16" stroke-width="3.5"/>',
-    'stroke-extrabold': '<path d="M4 12h16" stroke-width="6"/>',
-    'stroke-solid': '<path d="M4 12h16"/>',
-    'stroke-dashed': '<path d="M4 12h4M11 12h4M18 12h2"/>',
-    'stroke-dotted': '<path d="M4 12h.01M8.5 12h.01M13 12h.01M17.5 12h.01M20 12h.01" stroke-linecap="round" stroke-width="3"/>',
-    'edge-sharp': '<rect x="4" y="4" width="16" height="16"/>',
-    'edge-round': '<rect x="4" y="4" width="16" height="16" rx="6"/>',
-    'align-left': '<path d="M4 6h16M4 12h10M4 18h14"/>',
-    'align-center': '<path d="M4 6h16M7 12h10M5 18h14"/>',
-    'align-right': '<path d="M4 6h16M10 12h10M6 18h14"/>'
+    text: '<path d="M5 7V4h14v3M12 4v16M9 20h6"/>'
   };
-
-  const drawTools = [
-    { id: 'hand', label: 'Hand', icon: 'hand' },
-    { id: 'selection', label: 'Selection', icon: 'pointer' },
-    { id: 'rectangle', label: 'Rectangle', icon: 'rectangle' },
-    { id: 'diamond', label: 'Diamond', icon: 'diamond' },
-    { id: 'ellipse', label: 'Ellipse', icon: 'ellipse' },
-    { id: 'arrow', label: 'Arrow', icon: 'arrow' },
-    { id: 'line', label: 'Line', icon: 'line' },
-    { id: 'draw', label: 'Draw', icon: 'pencil' },
-    { id: 'text', label: 'Text', icon: 'text' },
-    { id: 'eraser', label: 'Eraser', icon: 'eraser' }
-  ];
 
   function fileActionIcon(name) {
     return `<svg class="file-action-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${fileActionIcons[name] || ''}</svg>`;
@@ -1225,9 +1166,100 @@
       loadNotepadTab(pane.id, tab?.id, tab?.path || '');
     }
     else if (pane.type === 'usage') loadUsagePane(pane.id);
+    else if (pane.type === 'whiteboard') mountWhiteboard(pane);
     else {
       loadFilesPane(pane);
     }
+  }
+
+  // Excalidraw and React are 4 MB of vendor code, so they are only fetched once
+  // a whiteboard pane actually exists.
+  let excalidrawLoader = null;
+  function loadExcalidraw() {
+    if (!excalidrawLoader) {
+      // Excalidraw resolves its fonts and vendor chunk against this path. Left
+      // unset it falls back to unpkg.com, which breaks an offline install.
+      window.EXCALIDRAW_ASSET_PATH = '/vendor/excalidraw/';
+      excalidrawLoader = ['react.js', 'react-dom.js', 'jsx-runtime.js', 'excalidraw.js']
+        .reduce(
+          (chain, file) => chain.then(() => loadVendorScript(`/vendor/excalidraw/${file}`)),
+          Promise.resolve()
+        );
+    }
+    return excalidrawLoader;
+  }
+
+  function loadVendorScript(src) {
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = src;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error(`Failed to load ${src}`));
+      document.head.appendChild(script);
+    });
+  }
+
+  function parseWhiteboard(content) {
+    try {
+      const data = JSON.parse(content || '{}');
+      return { elements: data.elements || [], appState: data.appState || {} };
+    } catch {
+      return { elements: [], appState: {} };
+    }
+  }
+
+  async function mountWhiteboard(pane) {
+    const host = document.getElementById(`whiteboard-${pane.id}`);
+    if (!host || state.whiteboards.has(pane.id)) {
+      return;
+    }
+    try {
+      await loadExcalidraw();
+    } catch (error) {
+      host.textContent = error.message;
+      return;
+    }
+    if (!document.body.contains(host)) {
+      return; // the pane was closed while the vendor bundle was loading
+    }
+    const root = window.ReactDOM.createRoot(host);
+    state.whiteboards.set(pane.id, root);
+    root.render(window.React.createElement(window.ExcalidrawLib.Excalidraw, {
+      initialData: parseWhiteboard(pane.whiteboard),
+      theme: state.theme.includes('light') ? 'light' : 'dark',
+      // appState carries live-session values (collaborators is a Map), so only
+      // the few fields worth restoring are persisted.
+      onChange: (elements, appState) => saveWhiteboardSoon(pane.id, {
+        elements,
+        appState: {
+          viewBackgroundColor: appState.viewBackgroundColor,
+          gridSize: appState.gridSize
+        }
+      })
+    }));
+  }
+
+  const whiteboardSaveTimers = new Map();
+  function saveWhiteboardSoon(paneId, data) {
+    window.clearTimeout(whiteboardSaveTimers.get(paneId));
+    whiteboardSaveTimers.set(paneId, window.setTimeout(() => {
+      const found = findPaneState(paneId);
+      const whiteboard = JSON.stringify(data);
+      if (found) {
+        found.pane.whiteboard = whiteboard;
+      }
+      api(`/api/panes/${paneId}/whiteboard`, {
+        method: 'PATCH',
+        body: JSON.stringify({ whiteboard })
+      }).catch(() => {});
+    }, 600));
+  }
+
+  function disposeWhiteboards() {
+    for (const root of state.whiteboards.values()) {
+      root.unmount();
+    }
+    state.whiteboards.clear();
   }
 
   function render() {
@@ -1244,6 +1276,7 @@
     applyUiTypography();
     disposeTerminals();
     disposeBrowsers();
+    disposeWhiteboards();
     app.innerHTML = `
       <main class="app ${state.sidebarOpen ? '' : 'sidebar-closed'} ${state.sidebarPinned ? 'sidebar-pinned' : ''} ${isMobileLayout() ? 'mobile-device' : ''} mode-${state.displayMode} density-${state.mobileTerminalDensity}" style="--sidebar-width: ${sidebarWidth}px">
         <aside class="sidebar">
@@ -1251,11 +1284,6 @@
             <div class="sidebar-brand-row">
               <button class="rail-button sidebar-brand" data-action="toggle" aria-label="Toggle sidebar" aria-expanded="${state.sidebarOpen}" title="${state.sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}"><span class="rail-brand-mark" aria-hidden="true">W7</span><span class="rail-label">WPS7</span></button>
               <button class="sidebar-pin" type="button" data-sidebar-pin aria-label="${state.sidebarPinned ? 'Unpin' : 'Pin'} sidebar" aria-pressed="${state.sidebarPinned}" title="${state.sidebarPinned ? 'Unpin sidebar' : 'Pin sidebar'}"><span class="rail-icon" aria-hidden="true">${fileActionIcon(state.sidebarPinned ? 'pin-off' : 'pin')}</span></button>
-            </div>
-            <div class="draw-toolbar" role="toolbar" aria-label="Drawing tools">
-              ${drawTools.map((tool) => `
-                <button class="draw-tool ${state.drawTool === tool.id ? 'active' : ''}" type="button" data-draw-tool-button="${tool.id}" aria-label="${tool.label}" aria-pressed="${state.drawTool === tool.id}" title="${tool.label}">${fileActionIcon(tool.icon)}</button>
-              `).join('')}
             </div>
             <button class="rail-button" data-action="new-powershell" aria-label="New PowerShell" title="New PowerShell">
               <span class="rail-icon" aria-hidden="true">${fileActionIcon('terminal')}</span><span class="rail-label">New PowerShell</span>
@@ -1270,6 +1298,7 @@
               <span class="rail-icon" aria-hidden="true">${fileActionIcon('notepad')}</span><span class="rail-label">New notepad</span>
             </button>
             <button class="rail-button" data-action="usage" aria-label="New usage pane" title="New usage pane"><span class="rail-icon" aria-hidden="true">${fileActionIcon('usage')}</span><span class="rail-label">Usage pane</span></button>
+            <button class="rail-button" data-action="whiteboard" aria-label="New whiteboard" title="New whiteboard"><span class="rail-icon" aria-hidden="true">${fileActionIcon('line')}</span><span class="rail-label">New whiteboard</span></button>
           </nav>
           <div class="sidebar-inner">
             <div class="sidebar-divider" aria-hidden="true"></div>
@@ -1302,31 +1331,16 @@
             <button type="button" class="primary" data-switch-mobile>Switch to Mobile</button>
             <button type="button" class="desktop-mode-banner-dismiss" data-dismiss-banner aria-label="Keep desktop layout" title="Keep desktop layout">×</button>
           </div>
-          <div class="pane-grid" data-draw-tool="${state.drawTool}">
-            <div class="pane-canvas" data-pane-canvas>
-              ${tab.panes.map((pane) => renderPane(pane)).join('')}
-            </div>
-            <svg class="draw-layer" data-draw-layer aria-hidden="true">
-              <defs data-draw-defs></defs>
-              <g data-draw-scene>${activeDrawings().map(drawElementMarkup).join('')}</g>
-            </svg>
-            <div class="draw-props" data-draw-props hidden></div>
-            <div class="draw-handles" data-draw-handles></div>
+          <div class="pane-grid" data-pane-grid>
+            ${renderPaneColumns(tab)}
           </div>
         </section>
       </main>
     `;
 
     wireControls();
-    applyCameraTransform();
-    ensureActivePaneVisible();
+    ensureActivePaneVisible('auto');
     updateDesktopModeBanner();
-    // The fresh <defs> just replaced the old DOM, so any fill patterns referenced
-    // by drawing markup need to be (re)inserted into it.
-    syncDrawFillPatterns();
-    syncTextSelectionOutline();
-    updateDrawProps();
-    updateDrawHandles();
     for (const pane of tab.panes) {
       mountPaneContent(pane);
     }
@@ -1383,6 +1397,7 @@
     app.querySelectorAll('[data-action="browser"]').forEach((button) => button.onclick = openBrowserPane);
     app.querySelectorAll('[data-action="notepad"]').forEach((button) => button.onclick = () => openNotepadPane());
     app.querySelectorAll('[data-action="usage"]').forEach((button) => button.onclick = openUsagePane);
+    app.querySelectorAll('[data-action="whiteboard"]').forEach((button) => button.onclick = openWhiteboardPane);
     app.querySelectorAll('[data-action="settings"]').forEach((button) => button.onclick = openSettings);
     app.querySelector('[data-action="resize-sidebar"]').onpointerdown = startSidebarResize;
     app.querySelector('[data-switch-mobile]')?.addEventListener('click', () => setDisplayMode('mobile'));
@@ -1393,7 +1408,6 @@
     app.querySelector('[data-theme-toggle]').onclick = () => setThemeLive(pairedThemeId(), true);
     app.querySelector('.sidebar').addEventListener('click', closeMobileSidebarAfterAction);
     wireMobileKeybarButtons(app);
-    wireDrawTools(app);
     wirePaneGrid(app);
     app.querySelectorAll('[data-tab-session]').forEach((button) => {
       button.onclick = (event) => {
@@ -1553,53 +1567,6 @@
       if (event.target.closest?.('input, textarea, select, .inline-rename')) {
         return;
       }
-      if ((event.key === 'Delete' || event.key === 'Backspace') && state.drawSelection.size) {
-        event.preventDefault();
-        deleteSelectedDrawElements();
-        return;
-      }
-      if (event.key === 'Escape' && (state.drawSelection.size || state.drawTool !== 'selection')) {
-        setDrawTool('selection');
-        return;
-      }
-      if (event.ctrlKey && !event.shiftKey && key === 'z') {
-        event.preventDefault();
-        undoDraw();
-        return;
-      }
-      if (event.ctrlKey && (key === 'y' || (event.shiftKey && key === 'z'))) {
-        event.preventDefault();
-        redoDraw();
-        return;
-      }
-      if (event.ctrlKey && key === 'g') {
-        event.preventDefault();
-        if (event.shiftKey) {
-          ungroupSelectedDrawElements();
-        } else {
-          groupSelectedDrawElements();
-        }
-        return;
-      }
-      // Copy/paste/duplicate share keys with Files pane cut/paste and other
-      // pane-scoped shortcuts, so only act on them when focus isn't inside a pane.
-      if (event.ctrlKey && !event.target.closest?.('[data-pane]')) {
-        if (key === 'c' && state.drawSelection.size) {
-          event.preventDefault();
-          copySelectedDrawElements();
-          return;
-        }
-        if (key === 'v' && state.drawClipboard.length) {
-          event.preventDefault();
-          pasteDrawElementsAt();
-          return;
-        }
-        if (key === 'd' && state.drawSelection.size) {
-          event.preventDefault();
-          duplicateSelectedDrawElements();
-          return;
-        }
-      }
       if (event.ctrlKey && event.shiftKey && key === 't') {
         event.preventDefault();
         app.querySelector('[data-action="new-session"]')?.click();
@@ -1716,6 +1683,19 @@
     if (!session || !tab || !basePaneId) return;
     try {
       const pane = await api(`/api/panes/${basePaneId}/usage`, { method: 'POST' });
+      appendPaneToWorkspace(session, tab, pane);
+    } catch (error) {
+      showToast(error.message);
+    }
+  }
+
+  async function openWhiteboardPane() {
+    const session = activeSession();
+    const tab = activeTab(session);
+    const basePaneId = state.activePaneId || tab?.activePaneId || tab?.panes[0]?.id;
+    if (!session || !tab || !basePaneId) return;
+    try {
+      const pane = await api(`/api/panes/${basePaneId}/whiteboard`, { method: 'POST' });
       appendPaneToWorkspace(session, tab, pane);
     } catch (error) {
       showToast(error.message);
@@ -4859,7 +4839,7 @@
         renamePane(label.dataset.renamePane, label.textContent);
       };
     });
-    findAll(root, '[data-pane-resize]').forEach((handle) => {
+    findAll(root, '[data-column-resize]').forEach((handle) => {
       handle.onpointerdown = startPaneResize;
     });
   }
@@ -5341,101 +5321,22 @@
     if (!grid) {
       return;
     }
+    // Double-clicking empty board space opens a pane in a new column.
     grid.ondblclick = async (event) => {
-      if (event.target.closest('[data-pane]') || event.target.closest('.draw-props') || state.drawTool !== 'selection') {
+      if (event.target.closest('[data-pane]')) {
         return;
       }
-      const session = activeSession();
-      const tab = activeTab(session);
-      if (!tab) {
-        return;
-      }
-      const rect = grid.getBoundingClientRect();
-      const world = pointerToWorld(event.clientX, event.clientY, rect, activeCamera());
-      await createPane({
-        x: Math.round(world.x - DEFAULT_PANE_WIDTH / 2),
-        y: Math.round(world.y - DEFAULT_PANE_HEIGHT / 2),
-        w: DEFAULT_PANE_WIDTH,
-        h: DEFAULT_PANE_HEIGHT
-      });
+      await createPane();
     };
-    grid.addEventListener('wheel', (event) => onCanvasWheel(grid, event), { passive: false, capture: true });
-    grid.addEventListener('pointerdown', (event) => onCanvasPanStart(grid, event));
-    grid.addEventListener('pointerdown', (event) => onDrawPointerDown(grid, event));
-  }
-
-  function onCanvasWheel(grid, event) {
-    const rect = grid.getBoundingClientRect();
-    const cam = activeCamera();
-    if (event.ctrlKey) {
+    grid.addEventListener('wheel', (event) => {
+      const paneEl = event.ctrlKey && event.shiftKey ? event.target.closest?.('[data-pane]') : null;
+      if (!paneEl) {
+        return; // the board scrolls natively; panes keep their own scrolling
+      }
       event.preventDefault();
       event.stopPropagation();
-      const paneEl = event.target.closest?.('[data-pane]');
-      if (event.shiftKey && paneEl) {
-        changePaneFontSize(paneEl.dataset.pane, event.deltaY < 0 ? 1 : -1);
-        return;
-      }
-      const oldScale = cam.scale;
-      const newScale = clampZoom(oldScale * Math.exp(-event.deltaY * 0.0015));
-      if (newScale === oldScale) {
-        return;
-      }
-      // keep the world point under the cursor fixed while zooming
-      const px = event.clientX - rect.left;
-      const py = event.clientY - rect.top;
-      cam.x = px - ((px - cam.x) / oldScale) * newScale;
-      cam.y = py - ((py - cam.y) / oldScale) * newScale;
-      cam.scale = newScale;
-      applyCameraTransform();
-      saveCameraSoon();
-      return;
-    }
-    if (event.target.closest?.('[data-pane]')) {
-      return; // over a pane: let the terminal / pane content scroll
-    }
-    // over empty canvas: scroll-to-pan (Excalidraw-style)
-    event.preventDefault();
-    if (event.shiftKey) {
-      cam.x -= event.deltaY || event.deltaX;
-    } else {
-      cam.x -= event.deltaX;
-      cam.y -= event.deltaY;
-    }
-    applyCameraTransform();
-    saveCameraSoon();
-  }
-
-  function onCanvasPanStart(grid, event) {
-    if (event.button !== 1) {
-      return; // middle-button drag pans the canvas
-    }
-    startCanvasPan(grid, event);
-  }
-
-  function startCanvasPan(grid, event) {
-    event.preventDefault();
-    const cam = activeCamera();
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const startCamX = cam.x;
-    const startCamY = cam.y;
-    grid.classList.add('panning');
-    grid.setPointerCapture(event.pointerId);
-    const onMove = (moveEvent) => {
-      cam.x = startCamX + (moveEvent.clientX - startX);
-      cam.y = startCamY + (moveEvent.clientY - startY);
-      applyCameraTransform();
-    };
-    const onUp = () => {
-      grid.removeEventListener('pointermove', onMove);
-      grid.removeEventListener('pointerup', onUp);
-      grid.removeEventListener('pointercancel', onUp);
-      grid.classList.remove('panning');
-      saveCameraSoon();
-    };
-    grid.addEventListener('pointermove', onMove);
-    grid.addEventListener('pointerup', onUp);
-    grid.addEventListener('pointercancel', onUp);
+      changePaneFontSize(paneEl.dataset.pane, event.deltaY < 0 ? 1 : -1);
+    }, { passive: false, capture: true });
   }
 
   async function createPane(preferredLayout) {
@@ -5449,16 +5350,18 @@
     try {
       const pane = await api(`/api/panes/${basePaneId}/split`, {
         method: 'POST',
-        body: JSON.stringify({ direction: 'horizontal' })
+        body: JSON.stringify({ direction: 'auto' })
       });
       if (preferredLayout) {
         try {
-          const layout = { ...preferredLayout, z: preferredLayout.z ?? pane.layout?.z ?? nextPaneZ(tab) };
           const result = await api(`/api/panes/${pane.id}/layout`, {
             method: 'PATCH',
-            body: JSON.stringify({ layout })
+            body: JSON.stringify({ layout: preferredLayout })
           });
-          pane.layout = result.layout || layout;
+          pane.layout = result.layout || preferredLayout;
+          if (Array.isArray(result.columns)) {
+            tab.columns = result.columns;
+          }
         } catch (error) {
           showToast(error.message);
         }
@@ -5469,69 +5372,80 @@
     }
   }
 
-  function bringPaneToFront(tab, pane, paneElement) {
-    const others = (tab?.panes || []).filter((candidate) => candidate.id !== pane.id);
-    const topZ = others.reduce((max, candidate) => Math.max(max, Number(candidate.layout?.z) || 0), 0) + 1;
-    const layout = { ...normalizePaneLayout(pane.layout), z: topZ };
-    pane.layout = layout;
-    if (paneElement) {
-      paneElement.style.zIndex = topZ;
+  // Which slot the pointer is over. Past the last column means "open a new one".
+  function dropTargetAt(clientX, clientY) {
+    const columns = [...app.querySelectorAll('[data-column]')];
+    const tab = activeTab(activeSession());
+    for (const element of columns) {
+      const rect = element.getBoundingClientRect();
+      if (clientX >= rect.left && clientX < rect.right) {
+        const index = Number(element.dataset.column);
+        const slots = tabColumns(tab)[index]?.slots || 1;
+        const offset = rect.height ? (clientY - rect.top) / rect.height : 0;
+        return { column: index, row: Math.min(slots - 1, Math.max(0, Math.floor(offset * slots))) };
+      }
     }
-    return layout;
+    return { column: columns.length, row: 0 };
   }
 
+  function highlightDropTarget(target) {
+    app.querySelectorAll('.pane-column.drop-target').forEach((element) => {
+      element.classList.remove('drop-target');
+      element.style.removeProperty('--drop-row');
+    });
+    const column = target ? app.querySelector(`[data-column="${target.column}"]`) : null;
+    if (column) {
+      column.classList.add('drop-target');
+      column.style.setProperty('--drop-row', target.row + 1);
+    }
+  }
+
+  async function saveColumn(tabId, index, patch) {
+    try {
+      await api(`/api/tabs/${tabId}/columns/${index}`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch)
+      });
+      return true;
+    } catch (error) {
+      showToast(error.message);
+      return false;
+    }
+  }
+
+  // Only a column's trailing edge is draggable now: pane height follows the
+  // column's slot count, so there is nothing vertical left to drag.
   function startPaneResize(event) {
     event.preventDefault();
     event.stopPropagation();
     const handle = event.currentTarget;
-    const paneId = handle.dataset.paneResize;
-    const paneElement = handle.closest('[data-pane]');
-    const found = findPaneState(paneId);
-    if (!paneElement || !found) {
+    const columnElement = handle.closest('[data-column]');
+    const tab = activeTab(activeSession());
+    if (!columnElement || !tab) {
       return;
     }
 
-    const direction = handle.dataset.paneResizeDirection || 'se';
-    const scale = activeCamera().scale;
+    const index = Number(columnElement.dataset.column);
+    const startWidth = tabColumns(tab)[index].width;
     const startX = event.clientX;
-    const startY = event.clientY;
-    const startLayout = normalizePaneLayout(found.pane.layout);
-    let nextLayout = bringPaneToFront(found.tab, found.pane, paneElement);
+    let nextWidth = startWidth;
 
     handle.setPointerCapture(event.pointerId);
     const onMove = (moveEvent) => {
-      const dx = (moveEvent.clientX - startX) / scale;
-      const dy = (moveEvent.clientY - startY) / scale;
-      const candidate = { ...startLayout, z: nextLayout.z };
-      if (direction.includes('e')) candidate.w = startLayout.w + dx;
-      if (direction.includes('w')) {
-        candidate.x = startLayout.x + dx;
-        candidate.w = startLayout.w - dx;
-      }
-      if (direction.includes('s')) candidate.h = startLayout.h + dy;
-      if (direction.includes('n')) {
-        candidate.y = startLayout.y + dy;
-        candidate.h = startLayout.h - dy;
-      }
-      // keep the anchored (west/north) edge fixed when clamped to the minimum size
-      if (direction.includes('w') && candidate.w < MIN_PANE_WIDTH) {
-        candidate.x = startLayout.x + startLayout.w - MIN_PANE_WIDTH;
-      }
-      if (direction.includes('n') && candidate.h < MIN_PANE_HEIGHT) {
-        candidate.y = startLayout.y + startLayout.h - MIN_PANE_HEIGHT;
-      }
-      nextLayout = normalizePaneLayout(candidate);
-      applyPaneLayoutStyle(paneElement, nextLayout);
+      nextWidth = Math.max(MIN_COLUMN_WIDTH, startWidth + (moveEvent.clientX - startX));
+      columnElement.style.setProperty('--column-width', `${nextWidth}px`);
     };
     const onUp = async () => {
       handle.removeEventListener('pointermove', onMove);
       handle.removeEventListener('pointerup', onUp);
       handle.removeEventListener('pointercancel', onUp);
-      const saved = await savePaneLayoutLocal(paneId, nextLayout);
-      if (!saved) {
-        applyPaneLayoutStyle(paneElement, startLayout);
-      }
-      paneTerminal(paneId)?.sendResize();
+      const width = normalizeColumn({ width: nextWidth }).width;
+      columnElement.style.setProperty('--column-width', `${width}px`);
+      tab.columns = tabColumns(tab).map((column, position) => (
+        position === index ? { ...column, width } : column
+      ));
+      await saveColumn(tab.id, index, { width });
+      panesInColumn(tab, index).forEach((pane) => paneTerminal(pane.id)?.sendResize());
     };
     handle.addEventListener('pointermove', onMove);
     handle.addEventListener('pointerup', onUp);
@@ -5552,11 +5466,10 @@
       return;
     }
 
-    const scale = activeCamera().scale;
     const startX = event.clientX;
     const startY = event.clientY;
     const startLayout = normalizePaneLayout(found.pane.layout);
-    let nextLayout = startLayout;
+    let target = startLayout;
     let moved = false;
 
     title.setPointerCapture(event.pointerId);
@@ -5567,25 +5480,25 @@
       if (!moved) {
         moved = true;
         cancelClick();
-        nextLayout = bringPaneToFront(found.tab, found.pane, paneElement);
+        paneElement.classList.add('dragging');
       }
-      nextLayout = normalizePaneLayout({
-        ...nextLayout,
-        x: startLayout.x + (moveEvent.clientX - startX) / scale,
-        y: startLayout.y + (moveEvent.clientY - startY) / scale
-      });
-      applyPaneLayoutStyle(paneElement, nextLayout);
+      target = dropTargetAt(moveEvent.clientX, moveEvent.clientY);
+      highlightDropTarget(target);
     };
     const onUp = async () => {
       title.removeEventListener('pointermove', onMove);
       title.removeEventListener('pointerup', onUp);
+      paneElement.classList.remove('dragging');
+      highlightDropTarget(null);
       if (!moved) {
         return;
       }
-      const saved = await savePaneLayoutLocal(paneId, nextLayout);
-      if (!saved) {
-        applyPaneLayoutStyle(paneElement, startLayout);
-        return;
+      if (target.column !== startLayout.column || target.row !== startLayout.row) {
+        // Moving between columns can add or empty one, so the board is rebuilt
+        // rather than patched in place.
+        if (await savePaneLayoutLocal(paneId, target)) {
+          render();
+        }
       }
       await setActivePane(paneId);
     };
@@ -5602,6 +5515,9 @@
       const found = findPaneState(paneId);
       if (found) {
         found.pane.layout = result.layout || layout;
+        if (Array.isArray(result.columns)) {
+          found.tab.columns = result.columns;
+        }
       }
       return true;
     } catch (error) {
@@ -5622,11 +5538,14 @@
   }
 
   function applyPaneLayoutStyle(paneElement, layout) {
-    paneElement.style.left = `${layout.x}px`;
-    paneElement.style.top = `${layout.y}px`;
-    paneElement.style.width = `${layout.w}px`;
-    paneElement.style.height = `${layout.h}px`;
-    paneElement.style.zIndex = layout.z || 1;
+    if (!paneElement) {
+      return;
+    }
+    const column = app.querySelector(`[data-column="${layout.column}"]`);
+    if (column && paneElement.parentElement !== column) {
+      column.insertBefore(paneElement, column.querySelector('.column-resize'));
+    }
+    paneElement.style.gridRow = layout.row + 1;
     syncPaneTitleWidth(paneElement);
     paneElement.querySelectorAll('[data-paged-toolbar]').forEach(updatePagedToolbar);
   }
@@ -5642,7 +5561,7 @@
       const next = normalizePaneLayout(update.layout);
       pane.layout = next;
       applyPaneLayoutStyle(document.querySelector(`[data-pane="${pane.id}"]`), next);
-      if (previous.w !== next.w || previous.h !== next.h) {
+      if (previous.column !== next.column || previous.row !== next.row) {
         paneTerminal(pane.id)?.sendResize();
       }
     }
@@ -5656,10 +5575,18 @@
     session.activeTabId = tab.id;
     state.activeSessionId = session.id;
     state.activePaneId = pane.id;
+    if (Array.isArray(response.columns)) {
+      tab.columns = response.columns;
+    }
 
-    const canvas = app.querySelector('[data-pane-canvas]');
-    canvas?.insertAdjacentHTML('beforeend', renderPane(pane));
-    const paneElement = canvas?.querySelector(`[data-pane="${pane.id}"]`);
+    const column = ensurePaneColumn(tab, normalizePaneLayout(pane.layout).column);
+    // A column created just now is rendered from tab.panes, which already holds
+    // this pane; only a column that already existed still needs it inserted.
+    // The resize handle is always last, so the pane goes before it.
+    if (column && !column.querySelector(`[data-pane="${pane.id}"]`)) {
+      column.querySelector('.column-resize')?.insertAdjacentHTML('beforebegin', renderPane(pane));
+    }
+    const paneElement = column?.querySelector(`[data-pane="${pane.id}"]`);
     if (paneElement) {
       wirePaneControls(paneElement);
       wireFilesPane(paneElement);
@@ -5674,1439 +5601,93 @@
   }
 
   const GRID_UNIT = 120;
-  // Sixteen dashed cells (4 x 4) fill one solid grid square.
-  const GRID_MINOR_UNIT = 30;
-  const GRID_DASH_PERIOD = GRID_MINOR_UNIT / 5;
-  const GRID_DASH_LENGTH = 2;
-  const MIN_PANE_WIDTH = GRID_UNIT;
-  const MIN_PANE_HEIGHT = GRID_UNIT;
-  const DEFAULT_PANE_WIDTH = 720;
-  const DEFAULT_PANE_HEIGHT = 480;
-  const MIN_ZOOM = 0.2;
-  const MAX_ZOOM = 4;
-
-  function paneLayoutStyle(layout) {
-    return `left: ${layout.x}px; top: ${layout.y}px; width: ${layout.w}px; height: ${layout.h}px; z-index: ${layout.z || 1};`;
-  }
-
-  // Panes snap to the dashed minor grid, which also covers every solid grid line.
-  function snapUnit(value) {
-    return Math.round(value / GRID_MINOR_UNIT) * GRID_MINOR_UNIT;
-  }
+  const MIN_COLUMN_WIDTH = GRID_UNIT;
+  const DEFAULT_COLUMN_WIDTH = 720;
+  const MAX_COLUMN_SLOTS = 6;
 
   function normalizePaneLayout(layout) {
-    const w = Math.max(GRID_UNIT, snapUnit(Math.round(Number(layout?.w)) || DEFAULT_PANE_WIDTH));
-    const h = Math.max(GRID_UNIT, snapUnit(Math.round(Number(layout?.h)) || DEFAULT_PANE_HEIGHT));
-    const x = snapUnit(Math.round(Number(layout?.x)) || 0);
-    const y = snapUnit(Math.round(Number(layout?.y)) || 0);
-    const z = Math.max(0, Math.round(Number(layout?.z)) || 0);
-    return { x, y, w, h, z };
+    return {
+      column: Math.max(0, Math.round(Number(layout?.column)) || 0),
+      row: Math.max(0, Math.round(Number(layout?.row)) || 0)
+    };
   }
 
-  function nextPaneZ(tab) {
-    return (tab?.panes || []).reduce((max, pane) => Math.max(max, Number(pane.layout?.z) || 0), 0) + 1;
+  // Mirrors sanitizeColumn in src/state.js so a column the client builds already
+  // matches what the server will store.
+  function normalizeColumn(column) {
+    const width = Math.round(Number(column?.width)) || DEFAULT_COLUMN_WIDTH;
+    const slots = Math.round(Number(column?.slots)) || 1;
+    return {
+      width: Math.max(MIN_COLUMN_WIDTH, Math.round(width / GRID_UNIT) * GRID_UNIT),
+      slots: Math.min(MAX_COLUMN_SLOTS, Math.max(1, slots))
+    };
   }
 
-  function activeCamera() {
-    const tab = activeTab(activeSession());
-    if (!tab) {
-      return { x: 0, y: 0, scale: 1 };
-    }
-    if (!tab.camera || typeof tab.camera !== 'object') {
-      tab.camera = { x: 0, y: 0, scale: 1 };
-    }
-    return tab.camera;
+  // The board always has at least one column, and never fewer than the panes
+  // themselves claim.
+  function tabColumns(tab) {
+    const layouts = (tab?.panes || []).map((pane) => normalizePaneLayout(pane.layout));
+    const count = layouts.reduce((max, layout) => Math.max(max, layout.column + 1), 1);
+    return Array.from({ length: count }, (_, index) => normalizeColumn(tab?.columns?.[index]));
   }
 
-  function clampZoom(scale) {
-    return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, scale));
+  function panesInColumn(tab, columnIndex) {
+    return (tab?.panes || [])
+      .filter((pane) => normalizePaneLayout(pane.layout).column === columnIndex)
+      .sort((a, b) => normalizePaneLayout(a.layout).row - normalizePaneLayout(b.layout).row);
   }
 
-  function applyCameraTransform() {
-    const cam = activeCamera();
-    const canvas = app.querySelector('[data-pane-canvas]');
-    const grid = app.querySelector('.pane-grid');
-    const scene = app.querySelector('[data-draw-scene]');
-    if (isMobileLayout()) {
-      // Mobile shows the active pane filling the grid, so the camera must not
-      // offset the canvas: it would push that pane outside the viewport.
-      if (canvas) {
-        canvas.style.transform = '';
-      }
-      if (grid) {
-        grid.style.backgroundSize = '';
-        grid.style.backgroundPosition = '';
-      }
-      updateDrawHandles();
-      return;
-    }
-    if (canvas) {
-      canvas.style.transform = `translate(${cam.x}px, ${cam.y}px) scale(${cam.scale})`;
-    }
-    if (scene) {
-      scene.setAttribute('transform', `translate(${cam.x} ${cam.y}) scale(${cam.scale})`);
-    }
-    if (grid) {
-      const solid = GRID_UNIT * cam.scale;
-      const minor = GRID_MINOR_UNIT * cam.scale;
-      const dash = GRID_DASH_PERIOD * cam.scale;
-      grid.style.backgroundSize = `${solid}px ${solid}px, ${solid}px ${solid}px, ${minor}px ${dash}px, ${dash}px ${minor}px`;
-      grid.style.backgroundPosition = `${cam.x}px ${cam.y}px`;
-      grid.style.setProperty('--grid-dash-length', `${GRID_DASH_LENGTH * cam.scale}px`);
-      // Zoomed far out the dashed cells collapse into a haze, so drop them.
-      grid.classList.toggle('minor-grid-hidden', minor < 12);
-    }
-    updateDrawHandles();
-  }
-
-  function ensureActivePaneVisible() {
+  // The board only scrolls horizontally, so bringing a pane into view is just
+  // scrolling to the column that holds it.
+  function ensureActivePaneVisible(behavior = 'smooth') {
     if (isMobileLayout()) {
       return; // the active pane already fills the grid
     }
-    const found = findPaneState(state.activePaneId);
+    const column = app.querySelector(`[data-pane="${state.activePaneId}"]`)?.closest('[data-column]');
+    if (!column) {
+      return;
+    }
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    column.scrollIntoView({
+      behavior: reduceMotion ? 'auto' : behavior,
+      inline: 'nearest',
+      block: 'nearest'
+    });
+  }
+
+  // Each column is its own grid of `slots` equal rows, so a pane lands on the
+  // row its layout names and unused slots simply stay empty.
+  function renderPaneColumn(tab, index, column) {
+    return `
+      <div class="pane-column" data-column="${index}" style="--column-width: ${column.width}px; --column-slots: ${column.slots};">
+        ${panesInColumn(tab, index).map((pane) => renderPane(pane)).join('')}
+        <div class="column-resize" data-column-resize="${index}" role="separator" aria-orientation="vertical"
+          aria-label="Resize column ${index + 1}" tabindex="0"></div>
+      </div>
+    `;
+  }
+
+  function renderPaneColumns(tab) {
+    return tabColumns(tab).map((column, index) => renderPaneColumn(tab, index, column)).join('');
+  }
+
+  // A new pane usually lands in a column that is not on the board yet; columns
+  // only ever get appended, so the new one belongs at the end.
+  function ensurePaneColumn(tab, index) {
     const grid = app.querySelector('.pane-grid');
-    if (!found || !grid || !grid.clientWidth || !grid.clientHeight) {
-      return;
+    if (!grid) {
+      return null;
     }
-    const cam = activeCamera();
-    const layout = normalizePaneLayout(found.pane.layout);
-    const margin = 16;
-    // Smallest camera shift that brings the pane back on screen. Panes larger
-    // than the viewport align to their top-left corner instead of centering.
-    const nudge = (start, size, viewSize) => {
-      if (size + margin * 2 >= viewSize || start < margin) {
-        return margin - start;
-      }
-      if (start + size > viewSize - margin) {
-        return viewSize - margin - size - start;
-      }
-      return 0;
-    };
-    const dx = nudge(layout.x * cam.scale + cam.x, layout.w * cam.scale, grid.clientWidth);
-    const dy = nudge(layout.y * cam.scale + cam.y, layout.h * cam.scale, grid.clientHeight);
-    if (!dx && !dy) {
-      return;
-    }
-    cam.x += dx;
-    cam.y += dy;
-    applyCameraTransform();
-    saveCameraSoon();
-  }
-
-  function pointerToWorld(clientX, clientY, gridRect, cam) {
-    return {
-      x: (clientX - gridRect.left - cam.x) / cam.scale,
-      y: (clientY - gridRect.top - cam.y) / cam.scale
-    };
-  }
-
-  let cameraSaveTimer = 0;
-  function saveCameraSoon() {
-    const tab = activeTab(activeSession());
-    if (!tab) {
-      return;
-    }
-    const cam = activeCamera();
-    window.clearTimeout(cameraSaveTimer);
-    cameraSaveTimer = window.setTimeout(() => {
-      api(`/api/tabs/${tab.id}/camera`, {
-        method: 'PATCH',
-        body: JSON.stringify({ camera: cam })
-      }).catch(() => {});
-    }, 400);
-  }
-
-  // --- Style model (mirrors src/state.js so client-built elements already
-  // match what the server will sanitize them to). ---
-  const DRAW_STYLE_FIELDS = {
-    rectangle: ['strokeColor', 'backgroundColor', 'fillStyle', 'strokeWidth', 'strokeStyle', 'roundness', 'opacity'],
-    diamond: ['strokeColor', 'backgroundColor', 'fillStyle', 'strokeWidth', 'strokeStyle', 'roundness', 'opacity'],
-    ellipse: ['strokeColor', 'backgroundColor', 'fillStyle', 'strokeWidth', 'strokeStyle', 'opacity'],
-    arrow: ['strokeColor', 'strokeWidth', 'strokeStyle', 'startArrowhead', 'endArrowhead', 'opacity'],
-    line: ['strokeColor', 'strokeWidth', 'strokeStyle', 'opacity'],
-    draw: ['strokeColor', 'strokeWidth', 'opacity'],
-    text: ['strokeColor', 'fontFamily', 'fontSize', 'textAlign', 'opacity']
-  };
-  const DRAW_STYLE_DEFAULTS = {
-    strokeColor: 'auto', backgroundColor: 'transparent', fillStyle: 'hachure', strokeWidth: 1, strokeStyle: 'solid',
-    roundness: 'sharp', opacity: 100, startArrowhead: 'none', endArrowhead: 'arrow',
-    fontFamily: 'normal', fontSize: 20, textAlign: 'left'
-  };
-  const DRAW_FONT_FAMILY_STACKS = {
-    'hand-drawn': '"Segoe Print", "Comic Sans MS", cursive',
-    normal: '"Segoe UI", system-ui, sans-serif',
-    code: '"Cascadia Mono", Consolas, monospace'
-  };
-  const DRAW_STROKE_COLORS = ['auto', '#e03131', '#2f9e44', '#1971c2', '#f08c00'];
-  const DRAW_BACKGROUND_COLORS = ['transparent', '#ffc9c9', '#b2f2bb', '#a5d8ff', '#ffec99'];
-  const DRAW_FILL_STYLE_OPTIONS = [
-    { value: 'hachure', icon: 'fill-hachure', label: 'Hachure' },
-    { value: 'cross-hatch', icon: 'fill-cross-hatch', label: 'Cross-hatch' },
-    { value: 'solid', icon: 'fill-solid', label: 'Solid' }
-  ];
-  const DRAW_STROKE_WIDTH_OPTIONS = [
-    { value: 1, icon: 'stroke-thin', label: 'Thin' },
-    { value: 2, icon: 'stroke-bold', label: 'Bold' },
-    { value: 4, icon: 'stroke-extrabold', label: 'Extra bold' }
-  ];
-  const DRAW_STROKE_STYLE_OPTIONS = [
-    { value: 'solid', icon: 'stroke-solid', label: 'Solid' },
-    { value: 'dashed', icon: 'stroke-dashed', label: 'Dashed' },
-    { value: 'dotted', icon: 'stroke-dotted', label: 'Dotted' }
-  ];
-  const DRAW_ROUNDNESS_OPTIONS = [
-    { value: 'sharp', icon: 'edge-sharp', label: 'Sharp' },
-    { value: 'round', icon: 'edge-round', label: 'Round' }
-  ];
-  const DRAW_TEXT_ALIGN_OPTIONS = [
-    { value: 'left', icon: 'align-left', label: 'Left' },
-    { value: 'center', icon: 'align-center', label: 'Center' },
-    { value: 'right', icon: 'align-right', label: 'Right' }
-  ];
-  // Only "arrow" can have arrowheads in Excalidraw (canHaveArrowheads = type => type === 'arrow'); "line" never does.
-  const DRAW_ARROWHEAD_OPTIONS = [
-    ['none', 'None'], ['arrow', 'Arrow'], ['triangle', 'Triangle'], ['triangle_outline', 'Triangle outline'],
-    ['diamond', 'Diamond'], ['diamond_outline', 'Diamond outline'], ['circle', 'Circle'], ['circle_outline', 'Circle outline'], ['bar', 'Bar']
-  ];
-  const DRAW_NUMERIC_STYLE_PROPS = new Set(['strokeWidth', 'opacity', 'fontSize']);
-  const ARROWHEAD_BACK = 14;
-  const ARROWHEAD_HALF = 7;
-
-  function activeDrawings() {
-    const tab = activeTab(activeSession());
-    if (!tab) {
-      return [];
-    }
-    if (!Array.isArray(tab.drawings)) {
-      tab.drawings = [];
-    }
-    return tab.drawings;
-  }
-
-  function drawElementId() {
-    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  }
-
-  // Style prefs persist across tool switches, same as Excalidraw's currentItemXxx
-  // appState fields: the last color/width/etc picked applies to the next new element.
-  function defaultDrawStyle(type) {
-    const fields = DRAW_STYLE_FIELDS[type] || [];
-    const style = {};
-    for (const field of fields) {
-      style[field] = state.drawStyles[field] !== undefined ? state.drawStyles[field] : DRAW_STYLE_DEFAULTS[field];
-    }
-    return style;
-  }
-
-  function resolveDrawColor(value, fallback) {
-    return !value || value === 'auto' ? fallback : value;
-  }
-
-  function drawDasharray(style, strokeWidth) {
-    if (style === 'dashed') {
-      return `${8} ${8 + strokeWidth}`;
-    }
-    if (style === 'dotted') {
-      return `${1.5} ${6 + strokeWidth}`;
-    }
-    return '';
-  }
-
-  function fillPatternId(color, style) {
-    const safe = /^#[0-9a-f]{6}$/i.test(color) ? color.slice(1) : '000000';
-    return `draw-fill-${style}-${safe}`;
-  }
-
-  function fillPatternMarkup(id, color, style) {
-    const size = 8;
-    const safeColor = /^#[0-9a-f]{6}$/i.test(color) ? color : '#000000';
-    const diagonal = `<path d="M0 ${size}L${size} 0" stroke="${safeColor}" stroke-width="1.5"/>`;
-    const cross = style === 'cross-hatch' ? `<path d="M0 0L${size} ${size}" stroke="${safeColor}" stroke-width="1.5"/>` : '';
-    return `<pattern id="${id}" patternUnits="userSpaceOnUse" width="${size}" height="${size}">${diagonal}${cross}</pattern>`;
-  }
-
-  // Lazily registers the <pattern> a hachure/cross-hatch fill needs into the live
-  // <defs>. Safe to call before the defs element exists (e.g. while building the
-  // very first render() string) - it just returns the id without touching the DOM.
-  function ensureFillPattern(color, style) {
-    const id = fillPatternId(color, style);
-    const defs = app.querySelector('[data-draw-defs]');
-    if (defs && !defs.querySelector(`#${CSS.escape(id)}`)) {
-      defs.insertAdjacentHTML('beforeend', fillPatternMarkup(id, color, style));
-    }
-    return id;
-  }
-
-  // render() rebuilds app.innerHTML wholesale, so the fresh <defs> it creates
-  // starts empty even though the freshly-built shape markup already references
-  // pattern ids. Re-sync right after so every referenced pattern actually exists.
-  function syncDrawFillPatterns() {
-    for (const element of activeDrawings()) {
-      if (element.backgroundColor && element.backgroundColor !== 'transparent' && element.fillStyle !== 'solid') {
-        ensureFillPattern(element.backgroundColor, element.fillStyle);
+    let column = grid.querySelector(`[data-column="${index}"]`);
+    if (!column) {
+      grid.insertAdjacentHTML('beforeend', renderPaneColumn(tab, index, tabColumns(tab)[index]));
+      column = grid.querySelector(`[data-column="${index}"]`);
+      const handle = column?.querySelector('[data-column-resize]');
+      if (handle) {
+        handle.onpointerdown = startPaneResize;
       }
     }
-  }
-
-  function drawFillAttr(element) {
-    if (!element.backgroundColor || element.backgroundColor === 'transparent') {
-      return 'none';
-    }
-    if (element.fillStyle === 'solid') {
-      return element.backgroundColor;
-    }
-    return `url(#${ensureFillPattern(element.backgroundColor, element.fillStyle || 'hachure')})`;
-  }
-
-  function shapeStrokeAttrs(element, className) {
-    if (className === 'draw-hit') {
-      return '';
-    }
-    if (className === 'draw-selection-outline') {
-      return ' stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="4 3"';
-    }
-    const stroke = resolveDrawColor(element.strokeColor, 'var(--text)');
-    const strokeWidth = element.strokeWidth || 1;
-    const dasharray = drawDasharray(element.strokeStyle, strokeWidth);
-    return ` stroke="${stroke}" stroke-width="${strokeWidth}"${dasharray ? ` stroke-dasharray="${dasharray}"` : ''}`;
-  }
-
-  function shapeFillAttrs(element, className) {
-    if (className === 'draw-selection-outline') {
-      return ' fill="none"';
-    }
-    if (className === 'draw-hit') {
-      const filled = element.backgroundColor && element.backgroundColor !== 'transparent';
-      return filled ? ' fill="transparent"' : ' fill="none"';
-    }
-    return ` fill="${drawFillAttr(element)}"`;
-  }
-
-  // Filled shapes need their hit region to opt back into pointer events across
-  // the whole interior, not just the fat stroke .draw-hit normally picks with.
-  function hitClass(element, className) {
-    if (className !== 'draw-hit') {
-      return className;
-    }
-    const filled = element.backgroundColor && element.backgroundColor !== 'transparent';
-    return filled ? 'draw-hit draw-hit-filled' : 'draw-hit';
-  }
-
-  function pullToward(from, to, distance) {
-    const dx = to[0] - from[0];
-    const dy = to[1] - from[1];
-    const length = Math.hypot(dx, dy) || 1;
-    const ratio = Math.min(distance, length / 2) / length;
-    return [from[0] + dx * ratio, from[1] + dy * ratio];
-  }
-
-  // Rounds every corner of a polygon by pulling each vertex in along both its
-  // edges and joining the cut corners with a quadratic curve through the vertex.
-  function roundedPolygonPath(points, radius) {
-    const n = points.length;
-    let d = '';
-    for (let i = 0; i < n; i++) {
-      const prev = points[(i - 1 + n) % n];
-      const curr = points[i];
-      const next = points[(i + 1) % n];
-      const start = pullToward(curr, prev, radius);
-      const end = pullToward(curr, next, radius);
-      d += `${i === 0 ? 'M' : 'L'}${start[0].toFixed(1)} ${start[1].toFixed(1)}`;
-      d += `Q${curr[0].toFixed(1)} ${curr[1].toFixed(1)} ${end[0].toFixed(1)} ${end[1].toFixed(1)}`;
-    }
-    return `${d}Z`;
-  }
-
-  function drawElementInnerMarkup(element) {
-    const selected = state.drawSelection.has(element.id);
-    const outline = selected && element.type !== 'text' ? drawShapeMarkup(element, 'draw-selection-outline') : '';
-    return `${drawShapeMarkup(element, 'draw-hit')}${drawShapeMarkup(element, 'draw-shape')}${outline}`;
-  }
-
-  function drawElementMarkup(element) {
-    const selected = state.drawSelection.has(element.id);
-    const opacityValue = Number.isFinite(element.opacity) ? element.opacity : 100;
-    return `<g class="draw-element${selected ? ' selected' : ''}" data-draw-element="${escapeAttr(element.id)}" opacity="${opacityValue / 100}">${drawElementInnerMarkup(element)}</g>`;
-  }
-
-  function drawShapeMarkup(element, className) {
-    const x = Math.min(element.x, element.x + element.w);
-    const y = Math.min(element.y, element.y + element.h);
-    const w = Math.abs(element.w);
-    const h = Math.abs(element.h);
-    if (element.type === 'rectangle' || element.type === 'diamond' || element.type === 'ellipse') {
-      const strokeAttrs = shapeStrokeAttrs(element, className);
-      const fillAttrs = shapeFillAttrs(element, className);
-      const cls = hitClass(element, className);
-      if (element.type === 'rectangle') {
-        const radius = element.roundness === 'round' ? Math.min(32, w / 4, h / 4) : 0;
-        return `<rect class="${cls}" x="${x}" y="${y}" width="${w}" height="${h}" rx="${radius}"${strokeAttrs}${fillAttrs}/>`;
-      }
-      if (element.type === 'ellipse') {
-        return `<ellipse class="${cls}" cx="${x + w / 2}" cy="${y + h / 2}" rx="${w / 2}" ry="${h / 2}"${strokeAttrs}${fillAttrs}/>`;
-      }
-      if (element.roundness === 'round') {
-        const points = [[x + w / 2, y], [x + w, y + h / 2], [x + w / 2, y + h], [x, y + h / 2]];
-        return `<path class="${cls}" d="${roundedPolygonPath(points, Math.min(20, w / 4, h / 4))}"${strokeAttrs}${fillAttrs}/>`;
-      }
-      return `<polygon class="${cls}" points="${x + w / 2},${y} ${x + w},${y + h / 2} ${x + w / 2},${y + h} ${x},${y + h / 2}"${strokeAttrs}${fillAttrs}/>`;
-    }
-    if (element.type === 'line' || element.type === 'arrow') {
-      const path = `<path class="${className}" d="M${element.x} ${element.y}L${element.x + element.w} ${element.y + element.h}"${shapeStrokeAttrs(element, className)} fill="none"/>`;
-      if (className !== 'draw-shape' || element.type !== 'arrow') {
-        return path;
-      }
-      const angle = Math.atan2(element.h, element.w);
-      const strokeWidth = element.strokeWidth || 1;
-      const strokeColor = resolveDrawColor(element.strokeColor, 'var(--text)');
-      const heads = [
-        arrowheadMarkup(element.startArrowhead, element.x, element.y, angle + Math.PI, strokeWidth, strokeColor, className),
-        arrowheadMarkup(element.endArrowhead, element.x + element.w, element.y + element.h, angle, strokeWidth, strokeColor, className)
-      ].join('');
-      return `${path}${heads}`;
-    }
-    if (element.type === 'draw') {
-      return `<path class="${className}" d="${freeDrawPath(element)}"${shapeStrokeAttrs(element, className)} fill="none"/>`;
-    }
-    if (element.type === 'text' && className === 'draw-shape') {
-      const family = DRAW_FONT_FAMILY_STACKS[element.fontFamily] || DRAW_FONT_FAMILY_STACKS.normal;
-      const fontSize = element.fontSize || 20;
-      const lineHeight = Math.round(fontSize * 1.25);
-      const anchor = element.textAlign === 'center' ? 'middle' : (element.textAlign === 'right' ? 'end' : 'start');
-      const fill = resolveDrawColor(element.strokeColor, 'var(--text)');
-      const lines = String(element.text || '').split('\n');
-      const spans = lines
-        .map((line, index) => `<tspan x="${element.x}" dy="${index ? lineHeight : 0}">${escapeHtml(line) || ' '}</tspan>`)
-        .join('');
-      return `<text class="${className}" x="${element.x}" y="${element.y}" font-size="${fontSize}" font-family="${escapeAttr(family)}" text-anchor="${anchor}" fill="${fill}" dominant-baseline="text-before-edge">${spans}</text>`;
-    }
-    return '';
-  }
-
-  // Generalizes the old two-line "wing" arrowhead into 9 Excalidraw endpoint
-  // styles. `angle` points outward from the segment toward the tip; each kind is
-  // built in head-local space (lx = distance back from the tip, ly = perpendicular
-  // offset) and rotated/placed at (tipX, tipY) by `at()`.
-  function arrowheadMarkup(kind, tipX, tipY, angle, strokeWidth, strokeColor, className) {
-    if (!kind || kind === 'none') {
-      return '';
-    }
-    const back = ARROWHEAD_BACK + strokeWidth;
-    const half = ARROWHEAD_HALF + strokeWidth * 0.5;
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-    const at = (lx, ly) => `${(tipX - lx * cos - ly * sin).toFixed(1)},${(tipY - lx * sin + ly * cos).toFixed(1)}`;
-    const strokeAttrs = ` stroke="${strokeColor}" stroke-width="${strokeWidth}"`;
-    if (kind === 'arrow') {
-      return `<path class="${className}" d="M${at(back, half)} L${tipX.toFixed(1)},${tipY.toFixed(1)} L${at(back, -half)}" fill="none"${strokeAttrs}/>`;
-    }
-    if (kind === 'bar') {
-      return `<path class="${className}" d="M${at(0, half)} L${at(0, -half)}" fill="none"${strokeAttrs}/>`;
-    }
-    const outline = kind.endsWith('_outline');
-    const fill = outline ? 'none' : strokeColor;
-    if (kind === 'triangle' || kind === 'triangle_outline') {
-      return `<polygon class="${className}" points="${tipX.toFixed(1)},${tipY.toFixed(1)} ${at(back, half)} ${at(back, -half)}" fill="${fill}"${strokeAttrs}/>`;
-    }
-    if (kind === 'diamond' || kind === 'diamond_outline') {
-      return `<polygon class="${className}" points="${tipX.toFixed(1)},${tipY.toFixed(1)} ${at(back / 2, half)} ${at(back, 0)} ${at(back / 2, -half)}" fill="${fill}"${strokeAttrs}/>`;
-    }
-    if (kind === 'circle' || kind === 'circle_outline') {
-      const [cx, cy] = at(half, 0).split(',');
-      return `<circle class="${className}" cx="${cx}" cy="${cy}" r="${half}" fill="${fill}"${strokeAttrs}/>`;
-    }
-    return '';
-  }
-
-  function freeDrawPath(element) {
-    return (element.points || [])
-      .map((point, index) => `${index ? 'L' : 'M'}${element.x + point[0]} ${element.y + point[1]}`)
-      .join('');
-  }
-
-  function appendDrawElement(element) {
-    const scene = app.querySelector('[data-draw-scene]');
-    scene?.insertAdjacentHTML('beforeend', drawElementMarkup(element));
-    return scene?.lastElementChild;
-  }
-
-  function redrawDrawElement(element) {
-    const node = app.querySelector(`[data-draw-element="${CSS.escape(element.id)}"]`);
-    if (!node) {
-      return;
-    }
-    const selected = state.drawSelection.has(element.id);
-    node.classList.toggle('selected', selected);
-    const opacityValue = Number.isFinite(element.opacity) ? element.opacity : 100;
-    node.setAttribute('opacity', String(opacityValue / 100));
-    node.innerHTML = drawElementInnerMarkup(element);
-    if (selected && element.type === 'text') {
-      appendTextSelectionOutline(node);
-    }
-  }
-
-  // Text has no computed bbox (see the element model), so its selection outline
-  // is measured from the live glyph via getBBox() instead of being derived from
-  // x/y/w/h like every other shape's 'draw-selection-outline' variant.
-  function appendTextSelectionOutline(node) {
-    const textNode = node.querySelector('text.draw-shape');
-    if (!textNode) {
-      return;
-    }
-    const box = textNode.getBBox();
-    const pad = 4;
-    const x = (box.x - pad).toFixed(1);
-    const y = (box.y - pad).toFixed(1);
-    const w = (box.width + pad * 2).toFixed(1);
-    const h = (box.height + pad * 2).toFixed(1);
-    node.insertAdjacentHTML('beforeend', `<rect class="draw-selection-outline" x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-dasharray="4 3"/>`);
-  }
-
-  // render() rebuilds the whole scene as a string, so a selected text element's
-  // outline (which needs a live getBBox()) can only be added once the fresh DOM exists.
-  function syncTextSelectionOutline() {
-    activeDrawings().forEach((element) => {
-      if (element.type !== 'text' || !state.drawSelection.has(element.id)) {
-        return;
-      }
-      const node = app.querySelector(`[data-draw-element="${CSS.escape(element.id)}"]`);
-      if (node) {
-        appendTextSelectionOutline(node);
-      }
-    });
-  }
-
-  function commitDrawElement(element) {
-    const before = beginDrawHistoryEntry();
-    activeDrawings().push(element);
-    commitDrawHistoryEntry(before);
-    saveDrawingsSoon();
-    setDrawTool('selection');
-    replaceDrawSelection([element.id]);
-  }
-
-  function deleteSelectedDrawElements() {
-    if (!state.drawSelection.size) {
-      return;
-    }
-    const drawings = activeDrawings();
-    const ids = state.drawSelection;
-    const before = beginDrawHistoryEntry();
-    for (let i = drawings.length - 1; i >= 0; i--) {
-      if (ids.has(drawings[i].id)) {
-        app.querySelector(`[data-draw-element="${CSS.escape(drawings[i].id)}"]`)?.remove();
-        drawings.splice(i, 1);
-      }
-    }
-    commitDrawHistoryEntry(before);
-    state.drawSelection = new Set();
-    saveDrawingsSoon();
-    updateDrawProps();
-    updateDrawHandles();
-  }
-
-  let drawingsSaveTimer = 0;
-  function saveDrawingsSoon() {
-    const tab = activeTab(activeSession());
-    if (!tab) {
-      return;
-    }
-    window.clearTimeout(drawingsSaveTimer);
-    drawingsSaveTimer = window.setTimeout(() => {
-      api(`/api/tabs/${tab.id}/drawings`, {
-        method: 'PATCH',
-        body: JSON.stringify({ drawings: tab.drawings })
-      }).catch(() => {});
-    }, 400);
-  }
-
-  // --- Undo/redo: an in-memory, per-tab snapshot stack. Snapshots are plain
-  // JSON strings of the whole drawings array (mirrors what saveDrawingsSoon
-  // already sends), so undo/redo never needs server-side support beyond the
-  // existing PATCH /api/tabs/:id/drawings route. ---
-  const drawHistories = new Map(); // tabId -> { undo: string[], redo: string[] }
-  const DRAW_HISTORY_LIMIT = 50;
-
-  function drawHistoryFor(tabId) {
-    if (!drawHistories.has(tabId)) {
-      drawHistories.set(tabId, { undo: [], redo: [] });
-    }
-    return drawHistories.get(tabId);
-  }
-
-  // Call before a mutation; pair with commitDrawHistoryEntry after it actually
-  // happens. Discrete actions call both back-to-back; drag gestures capture the
-  // "before" snapshot at gesture start and only commit it if something moved.
-  function beginDrawHistoryEntry() {
-    const tab = activeTab(activeSession());
-    return tab ? JSON.stringify(activeDrawings()) : null;
-  }
-
-  function commitDrawHistoryEntry(beforeSnapshot) {
-    if (beforeSnapshot === null || beforeSnapshot === undefined) {
-      return;
-    }
-    const tab = activeTab(activeSession());
-    if (!tab) {
-      return;
-    }
-    const history = drawHistoryFor(tab.id);
-    history.undo.push(beforeSnapshot);
-    if (history.undo.length > DRAW_HISTORY_LIMIT) {
-      history.undo.shift();
-    }
-    history.redo.length = 0;
-  }
-
-  function undoDraw() {
-    const tab = activeTab(activeSession());
-    if (!tab) {
-      return;
-    }
-    const history = drawHistoryFor(tab.id);
-    const previous = history.undo.pop();
-    if (previous === undefined) {
-      return;
-    }
-    history.redo.push(JSON.stringify(tab.drawings || []));
-    tab.drawings = JSON.parse(previous);
-    state.drawSelection = new Set();
-    render();
-    saveDrawingsSoon();
-  }
-
-  function redoDraw() {
-    const tab = activeTab(activeSession());
-    if (!tab) {
-      return;
-    }
-    const history = drawHistoryFor(tab.id);
-    const next = history.redo.pop();
-    if (next === undefined) {
-      return;
-    }
-    history.undo.push(JSON.stringify(tab.drawings || []));
-    tab.drawings = JSON.parse(next);
-    state.drawSelection = new Set();
-    render();
-    saveDrawingsSoon();
-  }
-
-  // --- Properties panel: a floating island (top-left of the canvas) that shows
-  // the style of the current selection, or the defaults for the active drawing
-  // tool when nothing is selected. ---
-  function drawPropGroup(label, contentHtml) {
-    return `<div class="draw-prop-group"><span class="draw-prop-label">${label}</span><div class="draw-prop-row">${contentHtml}</div></div>`;
-  }
-
-  function drawColorSwatchesMarkup(prop, colors, current) {
-    const swatches = colors.map((color) => {
-      const active = current === color;
-      const swatchColor = color === 'auto' ? 'var(--text)' : color;
-      const label = color === 'auto' ? 'Auto' : (color === 'transparent' ? 'Transparent' : color);
-      const extra = color === 'transparent' ? ' draw-swatch-transparent' : '';
-      return `<button type="button" class="draw-swatch${extra} ${active ? 'active' : ''}" data-draw-style="${prop}" data-draw-value="${color}" style="--draw-swatch-color: ${swatchColor}" aria-label="${label}" aria-pressed="${active}" title="${label}"></button>`;
-    }).join('');
-    const seed = /^#[0-9a-f]{6}$/i.test(current) ? current : '#000000';
-    const picker = `<input type="color" class="draw-swatch-custom" data-draw-style="${prop}" value="${seed}" aria-label="Custom ${prop === 'strokeColor' ? 'stroke' : 'background'} color">`;
-    return `${swatches}${picker}`;
-  }
-
-  function drawOptionButtonsMarkup(prop, options, current) {
-    return options.map((opt) => `<button type="button" class="draw-prop-btn ${current === opt.value ? 'active' : ''}" data-draw-style="${prop}" data-draw-value="${opt.value}" aria-label="${opt.label}" aria-pressed="${current === opt.value}" title="${opt.label}">${fileActionIcon(opt.icon)}</button>`).join('');
-  }
-
-  function drawFontFamilyMarkup(current) {
-    const families = [['hand-drawn', 'Hand-drawn'], ['normal', 'Normal'], ['code', 'Code']];
-    return families.map(([value, label]) => `<button type="button" class="draw-prop-btn draw-font-sample draw-font-${value} ${current === value ? 'active' : ''}" data-draw-style="fontFamily" data-draw-value="${value}" aria-label="${label} font" aria-pressed="${current === value}" title="${label}">Aa</button>`).join('');
-  }
-
-  function drawFontSizeMarkup(current) {
-    const sizes = [['S', 16], ['M', 20], ['L', 28], ['XL', 36]];
-    return sizes.map(([label, value]) => `<button type="button" class="draw-prop-btn draw-prop-btn-label ${current === value ? 'active' : ''}" data-draw-style="fontSize" data-draw-value="${value}" aria-label="Font size ${label}" aria-pressed="${current === value}" title="${label}">${label}</button>`).join('');
-  }
-
-  function drawArrowheadSelectMarkup(prop, current) {
-    const options = DRAW_ARROWHEAD_OPTIONS.map(([value, label]) => `<option value="${value}"${current === value ? ' selected' : ''}>${label}</option>`).join('');
-    const label = prop === 'startArrowhead' ? 'Start' : 'End';
-    return `<label class="draw-arrowhead-field"><span>${label}</span><select class="draw-prop-select" data-draw-style="${prop}" aria-label="${label} arrowhead">${options}</select></label>`;
-  }
-
-  function drawPropsMarkup(fieldList, style) {
-    const fields = fieldList instanceof Set ? fieldList : new Set(fieldList || []);
-    const groups = [];
-    if (fields.has('strokeColor')) {
-      groups.push(drawPropGroup('Stroke', drawColorSwatchesMarkup('strokeColor', DRAW_STROKE_COLORS, style.strokeColor)));
-    }
-    if (fields.has('backgroundColor')) {
-      groups.push(drawPropGroup('Background', drawColorSwatchesMarkup('backgroundColor', DRAW_BACKGROUND_COLORS, style.backgroundColor)));
-    }
-    if (fields.has('fillStyle')) {
-      groups.push(drawPropGroup('Fill', drawOptionButtonsMarkup('fillStyle', DRAW_FILL_STYLE_OPTIONS, style.fillStyle)));
-    }
-    if (fields.has('strokeWidth')) {
-      groups.push(drawPropGroup('Stroke width', drawOptionButtonsMarkup('strokeWidth', DRAW_STROKE_WIDTH_OPTIONS, style.strokeWidth)));
-    }
-    if (fields.has('strokeStyle')) {
-      groups.push(drawPropGroup('Stroke style', drawOptionButtonsMarkup('strokeStyle', DRAW_STROKE_STYLE_OPTIONS, style.strokeStyle)));
-    }
-    if (fields.has('roundness')) {
-      groups.push(drawPropGroup('Edges', drawOptionButtonsMarkup('roundness', DRAW_ROUNDNESS_OPTIONS, style.roundness)));
-    }
-    if (fields.has('startArrowhead')) {
-      groups.push(drawPropGroup('Arrowheads', `${drawArrowheadSelectMarkup('startArrowhead', style.startArrowhead)}${drawArrowheadSelectMarkup('endArrowhead', style.endArrowhead)}`));
-    }
-    if (fields.has('fontFamily')) {
-      groups.push(drawPropGroup('Font family', drawFontFamilyMarkup(style.fontFamily)));
-    }
-    if (fields.has('fontSize')) {
-      groups.push(drawPropGroup('Font size', drawFontSizeMarkup(style.fontSize)));
-    }
-    if (fields.has('textAlign')) {
-      groups.push(drawPropGroup('Align', drawOptionButtonsMarkup('textAlign', DRAW_TEXT_ALIGN_OPTIONS, style.textAlign)));
-    }
-    if (fields.has('opacity')) {
-      groups.push(`<div class="draw-prop-group draw-prop-opacity"><span class="draw-prop-label">Opacity</span><input type="range" class="draw-prop-range" min="0" max="100" step="10" value="${style.opacity}" data-draw-style="opacity" aria-label="Opacity"></div>`);
-    }
-    return groups.join('');
-  }
-
-  function wireDrawProps(panel) {
-    // Style edits only need a history entry when a selection actually exists to
-    // mutate (otherwise setDrawStyle only updates the "next new element" defaults).
-    const withHistory = (apply) => {
-      if (!state.drawSelection.size) {
-        apply();
-        return;
-      }
-      const before = beginDrawHistoryEntry();
-      apply();
-      commitDrawHistoryEntry(before);
-    };
-    panel.querySelectorAll('[data-draw-style]').forEach((control) => {
-      const prop = control.dataset.drawStyle;
-      if (control.tagName === 'SELECT') {
-        control.onchange = () => withHistory(() => setDrawStyle(prop, control.value));
-      } else if (control.type === 'range' || control.type === 'color') {
-        let pendingSnapshot;
-        let hasPending = false;
-        control.addEventListener('pointerdown', () => {
-          if (state.drawSelection.size) {
-            pendingSnapshot = beginDrawHistoryEntry();
-            hasPending = true;
-          }
-        });
-        control.oninput = () => {
-          if (hasPending) {
-            commitDrawHistoryEntry(pendingSnapshot);
-            hasPending = false;
-          }
-          setDrawStyle(prop, DRAW_NUMERIC_STYLE_PROPS.has(prop) ? Number(control.value) : control.value);
-        };
-      } else {
-        control.onclick = () => {
-          const raw = control.dataset.drawValue;
-          withHistory(() => setDrawStyle(prop, DRAW_NUMERIC_STYLE_PROPS.has(prop) ? Number(raw) : raw));
-        };
-      }
-    });
-  }
-
-  // Shows the selected element's style (or the fields common to every selected
-  // element's type, for a mixed multi-select), or the pending defaults for the
-  // active drawing tool when nothing is selected.
-  function updateDrawProps() {
-    const panel = app.querySelector('[data-draw-props]');
-    if (!panel) {
-      return;
-    }
-    const selectedElements = [...state.drawSelection].map(findDrawElementById).filter(Boolean);
-    let fields;
-    let styleSource;
-    if (!selectedElements.length) {
-      fields = DRAW_STYLE_FIELDS[state.drawTool];
-      styleSource = fields ? defaultDrawStyle(state.drawTool) : null;
-    } else if (selectedElements.length === 1) {
-      fields = DRAW_STYLE_FIELDS[selectedElements[0].type];
-      styleSource = selectedElements[0];
-    } else {
-      const fieldSets = selectedElements.map((el) => new Set(DRAW_STYLE_FIELDS[el.type] || []));
-      fields = fieldSets.length ? [...fieldSets[0]].filter((field) => fieldSets.every((set) => set.has(field))) : [];
-      styleSource = selectedElements[0];
-    }
-    if (!fields || !fields.length) {
-      panel.hidden = true;
-      panel.innerHTML = '';
-      return;
-    }
-    panel.hidden = false;
-    panel.innerHTML = drawPropsMarkup(fields, styleSource);
-    wireDrawProps(panel);
-  }
-
-  function setDrawStyle(prop, value) {
-    state.drawStyles[prop] = value;
-    localStorage.setItem('wps7.drawStyles', JSON.stringify(state.drawStyles));
-    if (state.drawSelection.size) {
-      const drawings = activeDrawings();
-      let changed = false;
-      state.drawSelection.forEach((id) => {
-        const element = drawings.find((item) => item.id === id);
-        if (element && prop in element) {
-          element[prop] = value;
-          redrawDrawElement(element);
-          changed = true;
-        }
-      });
-      if (changed) {
-        saveDrawingsSoon();
-      }
-    }
-    updateDrawProps();
-  }
-
-  function wireDrawTools(root) {
-    root.querySelectorAll('[data-draw-tool-button]').forEach((button) => {
-      button.onclick = () => setDrawTool(button.dataset.drawToolButton);
-    });
-  }
-
-  function setDrawTool(tool) {
-    state.drawTool = tool;
-    if (tool !== 'selection') {
-      clearDrawSelection();
-    }
-    app.querySelector('.pane-grid')?.setAttribute('data-draw-tool', tool);
-    app.querySelectorAll('[data-draw-tool-button]').forEach((button) => {
-      const active = button.dataset.drawToolButton === tool;
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-pressed', String(active));
-    });
-    updateDrawProps();
-  }
-
-  // --- Selection: a Set of element ids so multiple drawings can be selected at
-  // once (Excalidraw-style: plain click replaces, Shift+click adds, Ctrl/Cmd+click
-  // toggles). Clicking any member of a group selects every element sharing its
-  // groupId. ---
-  function groupMembers(element) {
-    if (!element?.groupId) {
-      return element ? [element] : [];
-    }
-    return activeDrawings().filter((el) => el.groupId === element.groupId);
-  }
-
-  function findDrawElementById(id) {
-    return activeDrawings().find((el) => el.id === id);
-  }
-
-  function applyDrawSelectionChange(nextIds) {
-    const previous = state.drawSelection;
-    const next = new Set(nextIds);
-    const touched = new Set([...previous, ...next]);
-    state.drawSelection = next;
-    touched.forEach((id) => {
-      const el = findDrawElementById(id);
-      if (el) {
-        redrawDrawElement(el);
-      }
-    });
-    updateDrawProps();
-    updateDrawHandles();
-  }
-
-  function replaceDrawSelection(ids) {
-    applyDrawSelectionChange(ids);
-  }
-
-  function addDrawSelection(id) {
-    const additions = groupMembers(findDrawElementById(id)).map((el) => el.id);
-    applyDrawSelectionChange([...state.drawSelection, ...additions]);
-  }
-
-  function toggleDrawSelection(id) {
-    const ids = groupMembers(findDrawElementById(id)).map((el) => el.id);
-    const has = ids.some((itemId) => state.drawSelection.has(itemId));
-    const next = new Set(state.drawSelection);
-    ids.forEach((itemId) => (has ? next.delete(itemId) : next.add(itemId)));
-    applyDrawSelectionChange([...next]);
-  }
-
-  function clearDrawSelection() {
-    applyDrawSelectionChange([]);
-  }
-
-  function onDrawPointerDown(grid, event) {
-    if (event.button !== 0 || isMobileLayout()) {
-      return;
-    }
-    if (event.target.closest?.('.draw-props')) {
-      return; // clicks inside the floating properties panel are not canvas gestures
-    }
-    if (event.target.closest?.('[data-pane]')) {
-      return; // clicks inside a pane belong to the pane, not the canvas
-    }
-    const openText = grid.querySelector('.draw-text-input');
-    if (openText) {
-      openText.blur(); // commit the text being typed instead of starting a gesture
-      return;
-    }
-    if (state.drawTool === 'hand') {
-      startCanvasPan(grid, event);
-      return;
-    }
-    if (state.drawTool === 'selection') {
-      const node = event.target.closest?.('[data-draw-element]');
-      if (node) {
-        const id = node.dataset.drawElement;
-        if (event.shiftKey) {
-          addDrawSelection(id);
-        } else if (event.ctrlKey || event.metaKey) {
-          toggleDrawSelection(id);
-        } else if (!state.drawSelection.has(id)) {
-          replaceDrawSelection(groupMembers(findDrawElementById(id)).map((el) => el.id));
-        }
-        startDrawElementsMove(event, node);
-      } else {
-        startDrawMarquee(grid, event);
-      }
-      return;
-    }
-    if (state.drawTool === 'eraser') {
-      startDrawErase(grid, event);
-      return;
-    }
-    if (state.drawTool === 'text') {
-      startDrawText(grid, event);
-      return;
-    }
-    if (state.drawTool === 'draw') {
-      startFreeDraw(grid, event);
-      return;
-    }
-    startDrawShape(grid, event);
-  }
-
-  // Shapes are anchored to the dashed grid the same way Excalidraw snaps to its
-  // grid: both the start corner and the dragged corner land on a grid point.
-  function startDrawShape(grid, event) {
-    event.preventDefault();
-    const rect = grid.getBoundingClientRect();
-    const cam = activeCamera();
-    const start = pointerToWorld(event.clientX, event.clientY, rect, cam);
-    const element = { id: drawElementId(), type: state.drawTool, x: snapUnit(start.x), y: snapUnit(start.y), w: 0, h: 0, ...defaultDrawStyle(state.drawTool) };
-    const node = appendDrawElement(element);
-    trackDrawPointer(grid, event, (moveEvent) => {
-      const point = pointerToWorld(moveEvent.clientX, moveEvent.clientY, rect, cam);
-      element.w = snapUnit(point.x) - element.x;
-      element.h = snapUnit(point.y) - element.y;
-      redrawDrawElement(element);
-    }, () => {
-      if (!element.w && !element.h) {
-        node?.remove();
-        setDrawTool('selection');
-        return;
-      }
-      commitDrawElement(element);
-    });
-  }
-
-  // Freehand strokes follow the pointer exactly, as Excalidraw never snaps them.
-  function startFreeDraw(grid, event) {
-    event.preventDefault();
-    const rect = grid.getBoundingClientRect();
-    const cam = activeCamera();
-    const start = pointerToWorld(event.clientX, event.clientY, rect, cam);
-    const element = { id: drawElementId(), type: 'draw', x: Math.round(start.x), y: Math.round(start.y), w: 0, h: 0, points: [[0, 0]], ...defaultDrawStyle('draw') };
-    const node = appendDrawElement(element);
-    trackDrawPointer(grid, event, (moveEvent) => {
-      const point = pointerToWorld(moveEvent.clientX, moveEvent.clientY, rect, cam);
-      element.points.push([Math.round(point.x - element.x), Math.round(point.y - element.y)]);
-      redrawDrawElement(element);
-    }, () => {
-      if (element.points.length < 2) {
-        node?.remove();
-        setDrawTool('selection');
-        return;
-      }
-      commitDrawElement(element);
-    });
-  }
-
-  function startDrawErase(grid, event) {
-    event.preventDefault();
-    const before = beginDrawHistoryEntry();
-    let erasedAny = false;
-    const eraseAt = (clientX, clientY) => {
-      const node = document.elementsFromPoint(clientX, clientY)
-        .map((element) => element.closest?.('[data-draw-element]'))
-        .find(Boolean);
-      if (!node) {
-        return;
-      }
-      const drawings = activeDrawings();
-      const id = node.dataset.drawElement;
-      const index = drawings.findIndex((element) => element.id === id);
-      if (index >= 0) {
-        drawings.splice(index, 1);
-        erasedAny = true;
-        state.drawSelection.delete(id);
-      }
-      node.remove();
-    };
-    eraseAt(event.clientX, event.clientY);
-    trackDrawPointer(grid, event, (moveEvent) => eraseAt(moveEvent.clientX, moveEvent.clientY), () => {
-      if (erasedAny) {
-        commitDrawHistoryEntry(before);
-        saveDrawingsSoon();
-        updateDrawProps();
-        updateDrawHandles();
-      }
-    });
-  }
-
-  function startDrawText(grid, event) {
-    event.preventDefault();
-    const cam = activeCamera();
-    const world = pointerToWorld(event.clientX, event.clientY, grid.getBoundingClientRect(), cam);
-    const origin = { x: snapUnit(world.x), y: snapUnit(world.y) };
-    const style = defaultDrawStyle('text');
-    const input = document.createElement('textarea');
-    input.className = 'draw-text-input';
-    input.rows = 1;
-    input.spellcheck = false;
-    input.setAttribute('aria-label', 'Drawing text');
-    input.style.left = `${origin.x * cam.scale + cam.x}px`;
-    input.style.top = `${origin.y * cam.scale + cam.y}px`;
-    input.style.fontSize = `${style.fontSize * cam.scale}px`;
-    input.style.lineHeight = `${Math.round(style.fontSize * 1.25) * cam.scale}px`;
-    input.style.fontFamily = DRAW_FONT_FAMILY_STACKS[style.fontFamily] || DRAW_FONT_FAMILY_STACKS.normal;
-    input.style.textAlign = style.textAlign;
-    input.style.color = resolveDrawColor(style.strokeColor, 'var(--text)');
-    grid.append(input);
-    input.focus();
-    input.oninput = () => {
-      input.style.height = 'auto';
-      input.style.height = `${input.scrollHeight}px`;
-    };
-    input.onkeydown = (keyEvent) => {
-      if (keyEvent.key === 'Escape') {
-        keyEvent.preventDefault();
-        input.value = '';
-        input.blur();
-      }
-    };
-    input.onblur = () => {
-      const text = input.value.replace(/\s+$/, '');
-      input.remove();
-      if (!text) {
-        setDrawTool('selection');
-        return;
-      }
-      const element = { id: drawElementId(), type: 'text', x: origin.x, y: origin.y, w: 0, h: 0, text, ...style };
-      appendDrawElement(element);
-      commitDrawElement(element);
-    };
-  }
-
-  // Moves every selected element together (falling back to just the clicked
-  // node if nothing was selected yet, e.g. a stale pointer capture edge case).
-  function startDrawElementsMove(event, node) {
-    const ids = state.drawSelection.size ? [...state.drawSelection] : [node.dataset.drawElement];
-    const drawings = activeDrawings();
-    const elements = ids.map((id) => drawings.find((item) => item.id === id)).filter(Boolean);
-    if (!elements.length) {
-      return;
-    }
-    event.preventDefault();
-    const before = beginDrawHistoryEntry();
-    const scale = activeCamera().scale;
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const origins = elements.map((el) => ({ el, x: el.x, y: el.y }));
-    let moved = false;
-    node.setPointerCapture(event.pointerId);
-    const onMove = (moveEvent) => {
-      const dx = (moveEvent.clientX - startX) / scale;
-      const dy = (moveEvent.clientY - startY) / scale;
-      origins.forEach(({ el, x, y }) => {
-        el.x = snapUnit(x + dx);
-        el.y = snapUnit(y + dy);
-        redrawDrawElement(el);
-      });
-      moved = true;
-      updateDrawHandles();
-    };
-    const onUp = () => {
-      node.removeEventListener('pointermove', onMove);
-      node.removeEventListener('pointerup', onUp);
-      node.removeEventListener('pointercancel', onUp);
-      if (moved) {
-        commitDrawHistoryEntry(before);
-        saveDrawingsSoon();
-      }
-    };
-    node.addEventListener('pointermove', onMove);
-    node.addEventListener('pointerup', onUp);
-    node.addEventListener('pointercancel', onUp);
-  }
-
-  function trackDrawPointer(grid, event, onMove, onFinish) {
-    const layer = grid.querySelector('[data-draw-layer]');
-    layer.setPointerCapture(event.pointerId);
-    const onUp = () => {
-      layer.removeEventListener('pointermove', onMove);
-      layer.removeEventListener('pointerup', onUp);
-      layer.removeEventListener('pointercancel', onUp);
-      onFinish();
-    };
-    layer.addEventListener('pointermove', onMove);
-    layer.addEventListener('pointerup', onUp);
-    layer.addEventListener('pointercancel', onUp);
-  }
-
-  // --- Shared bounding box helper (marquee hit-testing + resize handle
-  // placement). Freehand and text have no stored w/h, so their bounds are
-  // derived: freehand from its points, text from a live getBBox() when
-  // available, else a rough character-count heuristic. ---
-  function elementBounds(element) {
-    if (element.type === 'draw') {
-      const xs = element.points.map((point) => point[0]);
-      const ys = element.points.map((point) => point[1]);
-      const minX = Math.min(...xs);
-      const minY = Math.min(...ys);
-      return { x: element.x + minX, y: element.y + minY, w: Math.max(...xs) - minX, h: Math.max(...ys) - minY };
-    }
-    if (element.type === 'text') {
-      const node = app.querySelector(`[data-draw-element="${CSS.escape(element.id)}"] text.draw-shape`);
-      if (node) {
-        const box = node.getBBox();
-        return { x: box.x, y: box.y, w: box.width, h: box.height };
-      }
-      const fontSize = element.fontSize || 20;
-      const lines = String(element.text || '').split('\n');
-      const widestLine = Math.max(...lines.map((line) => line.length), 1);
-      return { x: element.x, y: element.y, w: widestLine * fontSize * 0.6, h: lines.length * fontSize * 1.25 };
-    }
-    return {
-      x: Math.min(element.x, element.x + element.w),
-      y: Math.min(element.y, element.y + element.h),
-      w: Math.abs(element.w),
-      h: Math.abs(element.h)
-    };
-  }
-
-  function elementIntersectsBox(element, box) {
-    const bounds = elementBounds(element);
-    return !(box.maxX < bounds.x || box.minX > bounds.x + bounds.w || box.maxY < bounds.y || box.minY > bounds.y + bounds.h);
-  }
-
-  // Marquee/rubber-band select: drag on empty canvas. Ctrl/Cmd/Shift held down
-  // makes it additive (keeps the existing selection and adds whatever the box
-  // overlaps) instead of replacing it. Captures on the grid, not the (pointer-
-  // events:none in selection mode) draw-layer.
-  function startDrawMarquee(grid, event) {
-    event.preventDefault();
-    const additive = event.ctrlKey || event.metaKey || event.shiftKey;
-    const rect = grid.getBoundingClientRect();
-    const cam = activeCamera();
-    const start = pointerToWorld(event.clientX, event.clientY, rect, cam);
-    const baseSelection = additive ? new Set(state.drawSelection) : new Set();
-    const box = document.createElement('div');
-    box.className = 'draw-marquee';
-    grid.append(box);
-    let moved = false;
-    const onMove = (moveEvent) => {
-      moved = true;
-      const world = pointerToWorld(moveEvent.clientX, moveEvent.clientY, rect, cam);
-      const minX = Math.min(start.x, world.x);
-      const minY = Math.min(start.y, world.y);
-      const maxX = Math.max(start.x, world.x);
-      const maxY = Math.max(start.y, world.y);
-      box.style.left = `${minX * cam.scale + cam.x}px`;
-      box.style.top = `${minY * cam.scale + cam.y}px`;
-      box.style.width = `${(maxX - minX) * cam.scale}px`;
-      box.style.height = `${(maxY - minY) * cam.scale}px`;
-      const testBox = { minX, minY, maxX, maxY };
-      const next = new Set(baseSelection);
-      activeDrawings().forEach((element) => {
-        if (elementIntersectsBox(element, testBox)) {
-          groupMembers(element).forEach((el) => next.add(el.id));
-        }
-      });
-      applyDrawSelectionChange([...next]);
-    };
-    const onUp = () => {
-      grid.removeEventListener('pointermove', onMove);
-      grid.removeEventListener('pointerup', onUp);
-      grid.removeEventListener('pointercancel', onUp);
-      box.remove();
-      if (!moved && !additive) {
-        clearDrawSelection();
-      }
-    };
-    grid.setPointerCapture(event.pointerId);
-    grid.addEventListener('pointermove', onMove);
-    grid.addEventListener('pointerup', onUp);
-    grid.addEventListener('pointercancel', onUp);
-  }
-
-  // --- Grouping ---
-  function groupSelectedDrawElements() {
-    if (state.drawSelection.size < 2) {
-      return;
-    }
-    const before = beginDrawHistoryEntry();
-    const groupId = drawElementId();
-    activeDrawings().forEach((el) => {
-      if (state.drawSelection.has(el.id)) {
-        el.groupId = groupId;
-      }
-    });
-    commitDrawHistoryEntry(before);
-    saveDrawingsSoon();
-  }
-
-  function ungroupSelectedDrawElements() {
-    const ids = new Set();
-    state.drawSelection.forEach((id) => {
-      groupMembers(findDrawElementById(id)).forEach((el) => ids.add(el.id));
-    });
-    if (!ids.size) {
-      return;
-    }
-    const before = beginDrawHistoryEntry();
-    activeDrawings().forEach((el) => {
-      if (ids.has(el.id)) {
-        delete el.groupId;
-      }
-    });
-    commitDrawHistoryEntry(before);
-    saveDrawingsSoon();
-  }
-
-  // --- Copy / paste (in-app clipboard; not the OS clipboard, since these are
-  // structured element objects rather than text). ---
-  function copySelectedDrawElements() {
-    if (!state.drawSelection.size) {
-      return;
-    }
-    const drawings = activeDrawings();
-    state.drawClipboard = [...state.drawSelection]
-      .map((id) => drawings.find((el) => el.id === id))
-      .filter(Boolean)
-      .map((el) => JSON.parse(JSON.stringify(el)));
-  }
-
-  function pasteDrawElementsAt(offset = 20) {
-    if (!state.drawClipboard?.length) {
-      return;
-    }
-    const before = beginDrawHistoryEntry();
-    const groupIdMap = new Map();
-    const pasted = state.drawClipboard.map((source) => {
-      const clone = JSON.parse(JSON.stringify(source));
-      clone.id = drawElementId();
-      clone.x += offset;
-      clone.y += offset;
-      if (clone.groupId) {
-        if (!groupIdMap.has(clone.groupId)) {
-          groupIdMap.set(clone.groupId, drawElementId());
-        }
-        clone.groupId = groupIdMap.get(clone.groupId);
-      }
-      return clone;
-    });
-    activeDrawings().push(...pasted);
-    commitDrawHistoryEntry(before);
-    render(); // multiple new elements at once - a full re-render is simplest and safe
-    replaceDrawSelection(pasted.map((el) => el.id));
-    saveDrawingsSoon();
-  }
-
-  function duplicateSelectedDrawElements() {
-    copySelectedDrawElements();
-    pasteDrawElementsAt(20);
-  }
-
-  // --- Resize handles: a screen-space HTML overlay (same technique as
-  // .draw-text-input) rather than SVG, so handle size doesn't need to fight the
-  // scene's camera transform. Only shown for a single non-freehand, non-text
-  // selection: rectangle/diamond/ellipse get 8 box handles, arrow/line get 2
-  // endpoint handles. ---
-  function worldToScreen(x, y, cam) {
-    return { x: x * cam.scale + cam.x, y: y * cam.scale + cam.y };
-  }
-
-  function updateDrawHandles() {
-    const container = app.querySelector('[data-draw-handles]');
-    if (!container) {
-      return;
-    }
-    container.innerHTML = '';
-    if (isMobileLayout() || state.drawSelection.size !== 1) {
-      return;
-    }
-    const element = findDrawElementById([...state.drawSelection][0]);
-    if (!element || element.type === 'draw' || element.type === 'text') {
-      return;
-    }
-    const cam = activeCamera();
-    const addHandle = (dir, wx, wy) => {
-      const point = worldToScreen(wx, wy, cam);
-      const div = document.createElement('div');
-      div.className = `draw-handle draw-handle-${dir}`;
-      div.dataset.dir = dir;
-      div.style.left = `${point.x}px`;
-      div.style.top = `${point.y}px`;
-      div.onpointerdown = (handleEvent) => startDrawResize(handleEvent, element, dir);
-      container.appendChild(div);
-    };
-    if (element.type === 'line' || element.type === 'arrow') {
-      addHandle('start', element.x, element.y);
-      addHandle('end', element.x + element.w, element.y + element.h);
-      return;
-    }
-    const bounds = elementBounds(element);
-    [['nw', 0, 0], ['n', .5, 0], ['ne', 1, 0], ['e', 1, .5], ['se', 1, 1], ['s', .5, 1], ['sw', 0, 1], ['w', 0, .5]]
-      .forEach(([dir, fx, fy]) => addHandle(dir, bounds.x + bounds.w * fx, bounds.y + bounds.h * fy));
-  }
-
-  // Lighter-weight than updateDrawHandles(): repositions the EXISTING handle
-  // divs instead of clearing and recreating them. Vital for a resize/move drag
-  // in progress, since the dragged handle itself holds the pointer capture -
-  // destroying and recreating it mid-drag (via innerHTML='') would silently
-  // end the gesture.
-  function repositionDrawHandles() {
-    const container = app.querySelector('[data-draw-handles]');
-    if (!container || !container.children.length || state.drawSelection.size !== 1) {
-      return;
-    }
-    const element = findDrawElementById([...state.drawSelection][0]);
-    if (!element) {
-      return;
-    }
-    const cam = activeCamera();
-    let positions;
-    if (element.type === 'line' || element.type === 'arrow') {
-      positions = { start: [element.x, element.y], end: [element.x + element.w, element.y + element.h] };
-    } else {
-      const bounds = elementBounds(element);
-      const factors = { nw: [0, 0], n: [.5, 0], ne: [1, 0], e: [1, .5], se: [1, 1], s: [.5, 1], sw: [0, 1], w: [0, .5] };
-      positions = Object.fromEntries(Object.entries(factors).map(([dir, [fx, fy]]) => [dir, [bounds.x + bounds.w * fx, bounds.y + bounds.h * fy]]));
-    }
-    container.querySelectorAll('.draw-handle').forEach((div) => {
-      const point = positions[div.dataset.dir];
-      if (!point) {
-        return;
-      }
-      const screen = worldToScreen(point[0], point[1], cam);
-      div.style.left = `${screen.x}px`;
-      div.style.top = `${screen.y}px`;
-    });
-  }
-
-  function startDrawResize(event, element, direction) {
-    event.preventDefault();
-    event.stopPropagation();
-    const handle = event.currentTarget;
-    const before = beginDrawHistoryEntry();
-    const cam = activeCamera();
-    const startX = event.clientX;
-    const startY = event.clientY;
-    let moved = false;
-
-    const finish = (onMove, onUp) => {
-      handle.setPointerCapture(event.pointerId);
-      handle.addEventListener('pointermove', onMove);
-      handle.addEventListener('pointerup', onUp);
-      handle.addEventListener('pointercancel', onUp);
-    };
-
-    if (direction === 'start' || direction === 'end') {
-      const originX = direction === 'start' ? element.x : element.x + element.w;
-      const originY = direction === 'start' ? element.y : element.y + element.h;
-      const onMove = (moveEvent) => {
-        const dx = (moveEvent.clientX - startX) / cam.scale;
-        const dy = (moveEvent.clientY - startY) / cam.scale;
-        const nx = snapUnit(originX + dx);
-        const ny = snapUnit(originY + dy);
-        if (direction === 'start') {
-          element.w += element.x - nx;
-          element.h += element.y - ny;
-          element.x = nx;
-          element.y = ny;
-        } else {
-          element.w = nx - element.x;
-          element.h = ny - element.y;
-        }
-        moved = true;
-        redrawDrawElement(element);
-        repositionDrawHandles();
-      };
-      const onUp = () => {
-        handle.removeEventListener('pointermove', onMove);
-        handle.removeEventListener('pointerup', onUp);
-        handle.removeEventListener('pointercancel', onUp);
-        if (moved) {
-          commitDrawHistoryEntry(before);
-          saveDrawingsSoon();
-        }
-      };
-      finish(onMove, onUp);
-      return;
-    }
-
-    // Box resize (rectangle/diamond/ellipse): normalize to a non-negative
-    // baseline first (stored w/h can be negative from a right-to-left drag),
-    // then reuse the exact direction math startPaneResize uses for panes.
-    const startLayout = {
-      x: Math.min(element.x, element.x + element.w),
-      y: Math.min(element.y, element.y + element.h),
-      w: Math.abs(element.w),
-      h: Math.abs(element.h)
-    };
-    const MIN_SIZE = GRID_MINOR_UNIT;
-    const onMove = (moveEvent) => {
-      const dx = (moveEvent.clientX - startX) / cam.scale;
-      const dy = (moveEvent.clientY - startY) / cam.scale;
-      const candidate = { ...startLayout };
-      if (direction.includes('e')) candidate.w = startLayout.w + dx;
-      if (direction.includes('w')) {
-        candidate.x = startLayout.x + dx;
-        candidate.w = startLayout.w - dx;
-      }
-      if (direction.includes('s')) candidate.h = startLayout.h + dy;
-      if (direction.includes('n')) {
-        candidate.y = startLayout.y + dy;
-        candidate.h = startLayout.h - dy;
-      }
-      candidate.w = Math.max(MIN_SIZE, candidate.w);
-      candidate.h = Math.max(MIN_SIZE, candidate.h);
-      if (direction.includes('w') && candidate.w === MIN_SIZE) {
-        candidate.x = startLayout.x + startLayout.w - MIN_SIZE;
-      }
-      if (direction.includes('n') && candidate.h === MIN_SIZE) {
-        candidate.y = startLayout.y + startLayout.h - MIN_SIZE;
-      }
-      element.x = snapUnit(candidate.x);
-      element.y = snapUnit(candidate.y);
-      element.w = snapUnit(candidate.x + candidate.w) - element.x;
-      element.h = snapUnit(candidate.y + candidate.h) - element.y;
-      moved = true;
-      redrawDrawElement(element);
-      repositionDrawHandles();
-    };
-    const onUp = () => {
-      handle.removeEventListener('pointermove', onMove);
-      handle.removeEventListener('pointerup', onUp);
-      handle.removeEventListener('pointercancel', onUp);
-      if (moved) {
-        commitDrawHistoryEntry(before);
-        saveDrawingsSoon();
-      }
-    };
-    finish(onMove, onUp);
+    return column;
   }
 
   function mountTerminal(paneId, terminalTabId) {
@@ -8234,10 +6815,9 @@
               </div>
             </section>
             <section class="settings-section" id="settings-workspace">
-              <div class="section-heading"><div><h2>Workspace</h2><p>Sidebar size and pane grid limits.</p></div></div>
+              <div class="section-heading"><div><h2>Workspace</h2><p>Sidebar size and how new columns are split.</p></div></div>
               <div class="settings-grid">
-                <label>Max pane columns<input name="ui.max_pane_columns" type="number" min="1" max="12" value="${escapeAttr(settings.ui.max_pane_columns)}"></label>
-                <label>Max pane rows<input name="ui.max_pane_rows" type="number" min="1" max="12" value="${escapeAttr(settings.ui.max_pane_rows)}"></label>
+                <label>Rows per new column<input name="ui.default_column_slots" type="number" min="1" max="6" value="${escapeAttr(settings.ui.default_column_slots)}"></label>
               </div>
             </section>
             <section class="settings-section" id="settings-persistence">
@@ -8553,8 +7133,7 @@
       },
       ui: {
         sidebar_width: numberOrUndefined(form.get('ui.sidebar_width')),
-        max_pane_columns: numberOrUndefined(form.get('ui.max_pane_columns')),
-        max_pane_rows: numberOrUndefined(form.get('ui.max_pane_rows')),
+        default_column_slots: numberOrUndefined(form.get('ui.default_column_slots')),
         terminal_font_family: form.get('ui.terminal_font_family'),
         terminal_font_size: numberOrUndefined(form.get('ui.terminal_font_size')),
         mobile_terminal_font_size: numberOrUndefined(form.get('ui.mobile_terminal_font_size')),
@@ -8664,7 +7243,6 @@
     const tab = activeTab(session);
     const grid = document.querySelector('.pane-grid');
     if (grid && tab) {
-      applyCameraTransform();
       for (const pane of tab.panes) {
         pane.layout = normalizePaneLayout(pane.layout);
         applyPaneLayoutStyle(document.querySelector(`[data-pane="${pane.id}"]`), pane.layout);
