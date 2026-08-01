@@ -529,6 +529,12 @@ test('usage panes auto-refresh on the configured interval and stop when set to z
   assert.match(mainSource, /function usageRefreshMinutes\(config\)[\s\S]*?minutes >= 0 && minutes <= 999 \? minutes : 10/);
 });
 
+test('usage cards reflow to fit the pane width and refreshing keeps the current cards visible', () => {
+  assert.match(styles, /\.usage-content\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fit, minmax\(240px, 1fr\)\)/s);
+  const loadUsagePaneSource = appSource.slice(appSource.indexOf('async function loadUsagePane'), appSource.indexOf('const mobileKeybarModifierOptions'));
+  assert.match(loadUsagePaneSource, /if \(!refresh\) \{\s*content\.innerHTML = '<div class="usage-loading">Reading provider usage…<\/div>';\s*\}/);
+});
+
 test('mobile terminal sends touch movement through the xterm scroll surface with a compact virtual key row', () => {
   assert.match(appSource, /function installMobileTerminalTouchScroll\(element, term\)/);
   assert.match(appSource, /new WheelEvent\('wheel'/);
