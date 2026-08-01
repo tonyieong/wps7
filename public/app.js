@@ -7746,7 +7746,9 @@
     }
     refreshButton.onclick = () => loadUsagePane(paneId, true);
     refreshButton.disabled = true;
-    content.innerHTML = '<div class="usage-loading">Reading provider usage…</div>';
+    if (!refresh) {
+      content.innerHTML = '<div class="usage-loading">Reading provider usage…</div>';
+    }
     try {
       const result = refresh ? await api('/api/usage?refresh=1') : await api('/api/usage');
       const providers = result.providers || [];

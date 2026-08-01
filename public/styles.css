@@ -4007,7 +4007,7 @@ textarea:focus-visible {
   overflow: auto;
   padding: 12px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   align-content: start;
   gap: 10px;
 }
@@ -4118,10 +4118,6 @@ textarea:focus-visible {
   .app.mode-auto .terminal {
     touch-action: none;
     overscroll-behavior: contain;
-  }
-
-  .usage-content {
-    grid-template-columns: minmax(0, 1fr);
   }
 }
 

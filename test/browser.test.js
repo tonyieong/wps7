@@ -10,11 +10,13 @@ const {
   BrowserManager,
   RemoteBrowserPage,
   chromeArguments,
+  chromiumProfileCleanupCommand,
   findChromiumExecutable,
   isOwnServerWebsite,
   mobileUserAgent,
   normalizeEmulationMode,
-  normalizeViewport
+  normalizeViewport,
+  terminateStaleChromium
 } = require('../src/browser');
 
 test('remote browser launches an isolated headless Chromium profile', () => {
@@ -30,6 +32,28 @@ test('remote browser launches an isolated headless Chromium profile', () => {
   assert.ok(args.includes('--auto-accept-this-tab-capture'));
   assert.ok(args.includes('--auto-select-tab-capture-source-by-title=WPS7 Capture Target'));
   assert.ok(args.includes('--autoplay-policy=no-user-gesture-required'));
+});
+
+test('starting Chromium first clears out any stale process still holding the profile lock', async () => {
+  const command = chromiumProfileCleanupCommand('C:\\wps7\\data\\browser-profile');
+  assert.match(command, /Name='chrome\.exe' OR Name='msedge\.exe'/);
+  assert.match(command, /CommandLine\.Contains\('C:\\wps7\\data\\browser-profile'\)/);
+  assert.match(command, /Stop-Process -Id \$_\.ProcessId -Force/);
+
+  const calls = [];
+  const run = (file, args, options, callback) => {
+    calls.push({ file, args, options });
+    callback(null, '', '');
+  };
+  await terminateStaleChromium('C:\\wps7\\data\\browser-profile', run);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].file, 'powershell.exe');
+  assert.match(calls[0].args.join(' '), /browser-profile/);
+
+  // A prior instance's stale-cleanup attempt must never block a fresh launch,
+  // even if the check itself fails (e.g. powershell.exe missing from PATH).
+  const failingRun = (file, args, options, callback) => callback(new Error('spawn failed'));
+  await assert.doesNotReject(terminateStaleChromium('C:\\wps7\\data\\browser-profile', failingRun));
 });
 
 test('remote browser viewport is bounded for safe screencasting', () => {
