@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const http = require('http');
 const os = require('os');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 const WebSocket = require('ws');
 
 const CHROME_CANDIDATES = [
@@ -32,6 +32,26 @@ function chromeArguments(profilePath) {
     '--autoplay-policy=no-user-gesture-required',
     '--window-size=1280,720'
   ];
+}
+
+function chromiumProfileCleanupCommand(profilePath) {
+  const escaped = String(profilePath).replace(/'/g, "''");
+  return `Get-CimInstance Win32_Process -Filter "Name='chrome.exe' OR Name='msedge.exe'" | ` +
+    `Where-Object { $_.CommandLine -and $_.CommandLine.Contains('${escaped}') } | ` +
+    `ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`;
+}
+
+function terminateStaleChromium(profilePath, run = execFile) {
+  // A prior WPS7 process that exited without calling shutdown() (crash, forced
+  // kill, service restart) can leave its headless Chromium still running.
+  // Chromium's own profile lock then refuses every future launch against the
+  // same --user-data-dir, so every Browser pane fails forever. Best-effort
+  // clear out anything still holding our profile before starting a fresh one.
+  return new Promise((resolve) => {
+    run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', chromiumProfileCleanupCommand(profilePath)],
+      { windowsHide: true, timeout: 10000 },
+      () => resolve());
+  });
 }
 
 function normalizeEmulationMode(value) {
@@ -920,11 +940,16 @@ class BrowserManager {
     }
   }
 
-  startChromium() {
+  terminateStaleChromium(profilePath) {
+    return terminateStaleChromium(profilePath);
+  }
+
+  async startChromium() {
     const executable = findChromiumExecutable();
     if (!executable) return Promise.reject(new Error('Google Chrome or Microsoft Edge is not installed on the WPS7 server.'));
     const profilePath = path.join(this.root, 'data', 'browser-profile');
     fs.mkdirSync(profilePath, { recursive: true });
+    await this.terminateStaleChromium(profilePath);
     this.chrome = spawn(executable, chromeArguments(profilePath), {
       cwd: this.root,
       windowsHide: true,
@@ -1180,9 +1205,11 @@ module.exports = {
   BrowserManager,
   RemoteBrowserPage,
   chromeArguments,
+  chromiumProfileCleanupCommand,
   findChromiumExecutable,
   isOwnServerWebsite,
   mobileUserAgent,
   normalizeEmulationMode,
-  normalizeViewport
+  normalizeViewport,
+  terminateStaleChromium
 };
