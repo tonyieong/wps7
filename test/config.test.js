@@ -125,7 +125,7 @@ test('updates known config values while preserving loadability', () => {
       mobile_terminal_font_size: 11,
       file_pane_font_size: 14,
       system_font_size: 15,
-      max_pane_columns: 4,
+      default_column_slots: 3,
       notepad_word_wrap: true,
       notepad_indent_guides: true,
       notepad_autosave: true
@@ -199,7 +199,7 @@ test('updates known config values while preserving loadability', () => {
   assert.equal(config.ui.mobile_terminal_font_size, 11);
   assert.equal(config.ui.file_pane_font_size, 14);
   assert.equal(config.ui.system_font_size, 15);
-  assert.equal(config.ui.max_pane_columns, 4);
+  assert.equal(config.ui.default_column_slots, 3);
   assert.equal(config.ui.notepad_word_wrap, true);
   assert.equal(config.ui.notepad_indent_guides, true);
   assert.equal(config.ui.notepad_autosave, true);

@@ -82,16 +82,17 @@ test('sidebar brand is the dedicated collapse control', () => {
   assert.match(appSource, /<span class="rail-brand-mark" aria-hidden="true">W7<\/span><span class="rail-label">WPS7<\/span>/);
 });
 
-test('sidebar keeps only a divider above session panes and lists every pane as a workspace tree', () => {
+test('sidebar keeps only a divider above session panes and lists every pane on a flat row', () => {
   assert.doesNotMatch(appSource, /class="sidebar-header"/);
   assert.doesNotMatch(appSource, />Sessions<|>Persistent workspaces</);
   assert.match(appSource, /class="sidebar-divider" aria-hidden="true"/);
   assert.match(appSource, /function sidebarPaneRows\(\)/);
   const rowsSource = appSource.slice(appSource.indexOf('function sidebarPaneRows'), appSource.indexOf('function renderSidebarPaneItem'));
-  assert.match(rowsSource, /index === 0 \? '' : \(index === panes\.length - 1 \? ' └─' : ' ├─'\)/);
-  assert.match(rowsSource, /index === 0 \? `\$\{session\.name\}\/\$\{pane\.title\}` : pane\.title/);
-  assert.match(appSource, /class="session-branch" aria-hidden="true">\$\{branch\}<\/span>` : ''\}<span data-pane-label>/);
-  assert.match(styles, /\.session-item \.session-branch\s*\{[^}]*white-space:\s*pre/s);
+  // Every row names its own workspace, with no indent or tree branch to decode.
+  assert.match(rowsSource, /label: `\$\{session\.name\}\/\$\{pane\.title\}`/);
+  assert.doesNotMatch(rowsSource, /└─|├─|branch/);
+  assert.doesNotMatch(appSource, /session-branch/);
+  assert.doesNotMatch(styles, /session-branch/);
 });
 
 test('sidebar actions use shared icons for new PowerShell and new file', () => {
@@ -101,7 +102,7 @@ test('sidebar actions use shared icons for new PowerShell and new file', () => {
 });
 
 test('pane titles reuse the same pane-type icons as the sidebar', () => {
-  assert.match(appSource, /class="pane-kind-icon"[^>]*>\$\{fileActionIcon\('usage'\)\}<\/span>/);
+  assert.match(appSource, /class="pane-kind-icon"[^>]*>\$\{fileActionIcon\(pane\.type === 'whiteboard' \? 'line' : 'usage'\)\}<\/span>/);
   assert.match(appSource, /class="pane-kind-icon"[^>]*>\$\{fileActionIcon\(pane\.type === 'files' \? 'file' : 'terminal'\)\}<\/span>/);
   assert.match(styles, /\.pane-kind-icon \.file-action-icon\s*\{[^}]*width:\s*14px[^}]*height:\s*14px/s);
   assert.match(styles, /\.pane-title::before\s*\{[^}]*content:\s*none/s);
@@ -121,7 +122,7 @@ test('long pane titles keep the close button visible immediately while resizing'
 test('each pane supports independent Ctrl zoom controls', () => {
   assert.match(appSource, /function paneFontSize\(pane\)/);
   assert.match(appSource, /function changePaneFontSize\(paneId, delta\)/);
-  assert.match(appSource, /event\.shiftKey && paneEl[\s\S]*?changePaneFontSize\(paneEl\.dataset\.pane, event\.deltaY/);
+  assert.match(appSource, /event\.ctrlKey && event\.shiftKey \? event\.target\.closest\?\.\('\[data-pane\]'\)[\s\S]*?changePaneFontSize\(paneEl\.dataset\.pane, event\.deltaY/);
   assert.match(appSource, /key === '\+' \|\| key === '='/);
   assert.match(appSource, /--pane-font-size/);
   assert.match(appSource, /body:\s*JSON\.stringify\(\{ fontSize: nextSize \}\)/);
@@ -374,19 +375,18 @@ test('the layout panel is fully removed from script and styles', () => {
   assert.doesNotMatch(styles, /\.layout-panel|\.layout-header|\.layout-controls|\.layout-list|\.mini-grid|\.mini-pane|\.mode-switch|\.mobile-sheet/);
 });
 
-test('mobile layout neutralises the canvas camera so the active pane fills the grid', () => {
-  const cameraSource = appSource.slice(appSource.indexOf('function applyCameraTransform'), appSource.indexOf('function ensureActivePaneVisible'));
-  assert.match(cameraSource, /if \(isMobileLayout\(\)\) \{/);
-  assert.match(cameraSource, /canvas\.style\.transform = '';/);
-  assert.match(styles, /\.app\.mode-mobile \.pane-canvas,\s*\.app\.mobile-device \.pane-canvas\s*\{[^}]*inset:\s*0[^}]*width:\s*100%[^}]*height:\s*100%/s);
+test('mobile layout collapses the board so the active pane fills the grid', () => {
+  assert.match(styles, /\.app\.mode-mobile \.pane-column,\s*\.app\.mobile-device \.pane-column\s*\{[^}]*width:\s*100%/s);
+  assert.match(styles, /\.app\.mode-mobile \.pane-grid,\s*\.app\.mobile-device \.pane-grid\s*\{[^}]*overflow-x:\s*hidden/s);
 });
 
-test('the active pane is nudged back into the viewport', () => {
-  assert.match(appSource, /function ensureActivePaneVisible\(\)/);
-  const source = appSource.slice(appSource.indexOf('function ensureActivePaneVisible'), appSource.indexOf('function pointerToWorld'));
+test('activating a pane scrolls its column into view, honouring reduced motion', () => {
+  const source = appSource.slice(appSource.indexOf('function ensureActivePaneVisible'), appSource.indexOf('function renderPaneColumns'));
   assert.match(source, /if \(isMobileLayout\(\)\) \{\s*return;/);
-  assert.match(source, /cam\.x \+= dx;\s*cam\.y \+= dy;/);
-  assert.match(appSource, /applyCameraTransform\(\);\s*ensureActivePaneVisible\(\);\s*updateDesktopModeBanner\(\)/);
+  assert.match(source, /closest\('\[data-column\]'\)/);
+  assert.match(source, /matchMedia\?\.\('\(prefers-reduced-motion: reduce\)'\)\.matches/);
+  assert.match(source, /behavior: reduceMotion \? 'auto' : behavior/);
+  assert.match(source, /inline: 'nearest'/);
   assert.match(appSource, /button\.dataset\.paneLink === state\.activePaneId\);\s*\}\);\s*ensureActivePaneVisible\(\);/);
   assert.match(appSource, /window\.addEventListener\('resize', updateVisualViewport\)/);
 });
@@ -714,167 +714,62 @@ test('terminal title and bell sequences update pane names and browser notificati
   assert.match(appSource, /notificationInput\?\.disabled/);
 });
 
-test('panes expose invisible resize targets on every edge and corner over an aligned grid canvas', () => {
-  for (const direction of ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw']) {
-    assert.match(appSource, new RegExp(`data-pane-resize-direction="${direction}"`));
-  }
-  assert.match(appSource, /function bringPaneToFront\(tab, pane, paneElement\)/);
-  assert.match(appSource, /savePaneLayoutLocal\(paneId, nextLayout\)/);
-  assert.match(styles, /\.pane-grid\s*\{[^}]*linear-gradient[^}]*\}/s);
-  assert.match(styles, /\.pane-canvas\s*\{[^}]*transform-origin:\s*0 0/s);
-  assert.doesNotMatch(styles, /\.pane-resize::after\s*\{[^}]*border-/s);
+test('the board renders one grid per column with a slot for every row', () => {
+  assert.match(appSource, /function renderPaneColumns\(tab\)/);
+  assert.match(appSource, /--column-width: \$\{column\.width\}px; --column-slots: \$\{column\.slots\};/);
+  assert.match(appSource, /grid-row: \$\{layout\.row \+ 1\}/);
+  assert.match(styles, /\.pane-column\s*\{[^}]*grid-template-rows:\s*repeat\(var\(--column-slots, 1\), 1fr\)/s);
+  assert.match(styles, /\.pane-column\s*\{[^}]*width:\s*var\(--column-width, 720px\)/s);
+  assert.match(styles, /\.pane-grid\s*\{[^}]*overflow-x:\s*auto/s);
 });
 
-test('pane layouts snap to the dashed grid cell so panes can rest between solid lines', () => {
-  assert.match(appSource, /function snapUnit\(value\)/);
-  assert.match(appSource, /const GRID_UNIT = 120/);
-  assert.match(appSource, /const GRID_MINOR_UNIT = 30/);
-  assert.match(appSource, /Math\.round\(value \/ GRID_MINOR_UNIT\) \* GRID_MINOR_UNIT/);
-  assert.match(appSource, /const w = Math\.max\(GRID_UNIT, snapUnit\(/);
-  assert.match(appSource, /const x = snapUnit\(/);
-});
-
-test('the canvas paints dashed 30px cells inside every 120px solid square', () => {
-  assert.match(styles, /\.pane-grid\s*\{[^}]*background-size:\s*120px 120px, 120px 120px, 30px 6px, 6px 30px/s);
-  assert.match(styles, /\.pane-grid\s*\{[^}]*conic-gradient\(at 1px var\(--grid-dash-length\)[^}]*conic-gradient\(at var\(--grid-dash-length\) 1px/s);
-  assert.match(styles, /\.pane-grid\.minor-grid-hidden\s*\{[^}]*background-image:[^}]*\}/s);
-  assert.doesNotMatch(styles, /\.pane-grid\.minor-grid-hidden\s*\{[^}]*conic-gradient/s);
-  assert.match(appSource, /const GRID_DASH_PERIOD = GRID_MINOR_UNIT \/ 5/);
-  assert.match(appSource, /grid\.style\.backgroundSize = `\$\{solid\}px \$\{solid\}px, \$\{solid\}px \$\{solid\}px, \$\{minor\}px \$\{dash\}px, \$\{dash\}px \$\{minor\}px`/);
-  assert.match(appSource, /grid\.classList\.toggle\('minor-grid-hidden', minor < 12\)/);
-});
-
-test('drawing tools sit between the brand row and the pane actions, and reflow to fit the sidebar width', () => {
-  const railStart = appSource.indexOf('class="rail-button sidebar-brand"');
-  const toolbarStart = appSource.indexOf('class="draw-toolbar"');
-  const newPaneStart = appSource.indexOf('data-action="new-powershell"');
-  assert.ok(railStart < toolbarStart && toolbarStart < newPaneStart);
-  for (const tool of ['hand', 'selection', 'rectangle', 'diamond', 'ellipse', 'arrow', 'line', 'draw', 'text', 'eraser']) {
-    assert.match(appSource, new RegExp(`\\{ id: '${tool}', label: '[^']+', icon: '[^']+' \\}`));
-  }
-  assert.match(appSource, /data-draw-tool-button="\$\{tool\.id\}"[^>]*aria-pressed="\$\{state\.drawTool === tool\.id\}"/);
-  assert.match(styles, /\.draw-toolbar\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:\s*repeat\(auto-fit, minmax\(28px, 1fr\)\)/s);
-  assert.match(styles, /\.draw-tool\s*\{[^}]*width:\s*28px[^}]*height:\s*28px[^}]*justify-self:\s*center/s);
-  assert.match(styles, /\.app\.sidebar-closed \.draw-toolbar\s*\{[^}]*grid-template-columns:\s*1fr/s);
-});
-
-test('drawing gestures snap to the grid and stay on the tab that owns them', () => {
-  assert.match(appSource, /element\.w = snapUnit\(point\.x\) - element\.x/);
-  assert.match(appSource, /el\.x = snapUnit\(x \+ dx\)/);
-  // freehand strokes follow the pointer without snapping, as in Excalidraw
-  const freeDraw = appSource.slice(appSource.indexOf('function startFreeDraw'), appSource.indexOf('function startDrawErase'));
-  assert.doesNotMatch(freeDraw, /snapUnit/);
-  assert.match(appSource, /api\(`\/api\/tabs\/\$\{tab\.id\}\/drawings`/);
-  assert.match(mainSource, /app\.patch\('\/api\/tabs\/:tabId\/drawings'/);
-  assert.match(styles, /\.pane-grid:not\(\[data-draw-tool="selection"\]\) \.draw-layer\s*\{[^}]*pointer-events:\s*auto/s);
-  assert.match(styles, /\.draw-hit\s*\{[^}]*pointer-events:\s*stroke/s);
-});
-
-test('drawing elements carry per-element style attributes instead of a fixed look', () => {
-  assert.match(appSource, /data-draw-props/);
-  assert.match(appSource, /wps7\.drawStyles/);
-  const stylesFieldsSource = appSource.slice(appSource.indexOf('const DRAW_STYLE_FIELDS'), appSource.indexOf('const DRAW_STYLE_DEFAULTS'));
-  for (const prop of ['strokeColor', 'backgroundColor', 'fillStyle', 'strokeWidth', 'strokeStyle', 'roundness', 'startArrowhead', 'endArrowhead', 'fontFamily', 'fontSize', 'textAlign', 'opacity']) {
-    assert.match(stylesFieldsSource, new RegExp(`'${prop}'`));
-  }
-  // only "arrow" has arrowheads in Excalidraw; "line" must not list them
-  const lineFields = stylesFieldsSource.match(/line: \[([^\]]+)\]/)[1];
-  assert.doesNotMatch(lineFields, /Arrowhead/);
-  for (const kind of ['none', 'arrow', 'triangle', 'triangle_outline', 'diamond', 'diamond_outline', 'circle', 'circle_outline', 'bar']) {
-    assert.match(appSource, new RegExp(`'${kind}'`));
-  }
-  // shapes render presentation attributes per element instead of a fixed CSS look
-  assert.match(appSource, /stroke="\$\{stroke\}" stroke-width="\$\{strokeWidth\}"/);
-  assert.match(appSource, /function ensureFillPattern\(color, style\)/);
-  // .draw-hit keeps a constant screen-space pick width regardless of zoom, but
-  // the visible shape's stroke now scales with zoom like Excalidraw's does
-  assert.doesNotMatch(styles, /\.draw-shape\s*\{[^}]*vector-effect/s);
-  assert.match(styles, /\.draw-hit\s*\{[^}]*vector-effect:\s*non-scaling-stroke/s);
-  assert.match(styles, /\.draw-props\s*\{/);
-  assert.match(styles, /\.draw-hit-filled\s*\{[^}]*pointer-events:\s*all/s);
-});
-
-test('drawing selection is a Set supporting multi-select, marquee drag, and grouping', () => {
-  assert.match(appSource, /drawSelection: new Set\(\)/);
-  assert.match(appSource, /function groupMembers\(element\)/);
-  assert.match(appSource, /function findDrawElementById\(id\)/);
-  assert.match(appSource, /function applyDrawSelectionChange\(nextIds\)/);
-  assert.match(appSource, /function replaceDrawSelection\(ids\)/);
-  assert.match(appSource, /function addDrawSelection\(id\)/);
-  assert.match(appSource, /function toggleDrawSelection\(id\)/);
-  assert.match(appSource, /function clearDrawSelection\(\)/);
-  // click conventions: Shift = additive add, Ctrl/Cmd = toggle, plain click on an
-  // element not already selected replaces the selection
-  const onDrawPointerDown = appSource.slice(appSource.indexOf('function onDrawPointerDown'), appSource.indexOf('function startDrawShape'));
-  assert.match(onDrawPointerDown, /event\.shiftKey\)\s*\{\s*addDrawSelection\(id\)/);
-  assert.match(onDrawPointerDown, /event\.ctrlKey \|\| event\.metaKey\)\s*\{\s*toggleDrawSelection\(id\)/);
-  assert.match(onDrawPointerDown, /!state\.drawSelection\.has\(id\)\)\s*\{?\s*replaceDrawSelection/);
-  assert.match(onDrawPointerDown, /startDrawMarquee\(grid, event\)/);
-  // marquee drag-select and its AABB hit test
-  assert.match(appSource, /function startDrawMarquee\(grid, event\)/);
-  assert.match(appSource, /function elementIntersectsBox\(element, box\)/);
-  assert.match(appSource, /function elementBounds\(element\)/);
-  assert.match(styles, /\.draw-marquee\s*\{/);
-  // grouping: click any member selects the whole group; Ctrl+G / Ctrl+Shift+G
-  assert.match(appSource, /function groupSelectedDrawElements\(\)/);
-  assert.match(appSource, /function ungroupSelectedDrawElements\(\)/);
-  assert.match(appSource, /event\.ctrlKey && key === 'g'/);
-});
-
-test('clicks inside a pane never start a draw gesture on the canvas behind it', () => {
-  const onDrawPointerDown = appSource.slice(appSource.indexOf('function onDrawPointerDown'), appSource.indexOf('function startDrawShape'));
-  const guardIndex = onDrawPointerDown.search(/event\.target\.closest\?\.\('\[data-pane\]'\)\)\s*\{\s*return;/);
-  const marqueeIndex = onDrawPointerDown.indexOf('startDrawMarquee(grid, event)');
-  assert.ok(guardIndex !== -1, 'onDrawPointerDown must bail out when the click target is inside a pane');
-  assert.ok(guardIndex < marqueeIndex, 'the [data-pane] guard must run before the marquee/selection gesture starts');
-});
-
-test('undo/redo tracks whiteboard mutations per tab without polluting history on no-op drags', () => {
-  assert.match(appSource, /const drawHistories = new Map\(\)/);
-  assert.match(appSource, /const DRAW_HISTORY_LIMIT = 50/);
-  assert.match(appSource, /function drawHistoryFor\(tabId\)/);
-  assert.match(appSource, /function beginDrawHistoryEntry\(\)/);
-  assert.match(appSource, /function commitDrawHistoryEntry\(beforeSnapshot\)/);
-  assert.match(appSource, /function undoDraw\(\)/);
-  assert.match(appSource, /function redoDraw\(\)/);
-  assert.match(appSource, /event\.ctrlKey && !event\.shiftKey && key === 'z'/);
-  assert.match(appSource, /key === 'y' \|\| \(event\.shiftKey && key === 'z'\)/);
-  // drag gestures only commit a history entry when something actually moved
-  const move = appSource.slice(appSource.indexOf('function startDrawElementsMove'), appSource.indexOf('function trackDrawPointer'));
-  assert.match(move, /if \(moved\)\s*\{\s*commitDrawHistoryEntry\(before\)/);
-});
-
-test('copy/paste/duplicate work on the whiteboard clipboard without stealing pane shortcuts', () => {
-  assert.match(appSource, /drawClipboard: \[\]/);
-  assert.match(appSource, /function copySelectedDrawElements\(\)/);
-  assert.match(appSource, /function pasteDrawElementsAt\(offset = 20\)/);
-  assert.match(appSource, /function duplicateSelectedDrawElements\(\)/);
-  const shortcuts = appSource.slice(appSource.indexOf('function installKeyboardShortcuts'), appSource.indexOf('function installKeyboardShortcuts') + 3000);
-  assert.match(shortcuts, /event\.ctrlKey && !event\.target\.closest\?\.\('\[data-pane\]'\)/);
-  assert.match(shortcuts, /duplicateSelectedDrawElements\(\)/);
-});
-
-test('resize handles cover box shapes and linear endpoints, but not freehand or text', () => {
-  assert.match(appSource, /function updateDrawHandles\(\)/);
-  assert.match(appSource, /function startDrawResize\(event, element, direction\)/);
-  assert.match(appSource, /function worldToScreen\(x, y, cam\)/);
-  const handles = appSource.slice(appSource.indexOf('function updateDrawHandles'), appSource.indexOf('function startDrawResize'));
-  assert.match(handles, /state\.drawSelection\.size !== 1/);
-  assert.match(handles, /element\.type === 'draw' \|\| element\.type === 'text'/);
-  assert.match(handles, /'nw'.*'n'.*'ne'.*'e'.*'se'.*'s'.*'sw'.*'w'/);
-  assert.match(appSource, /data-draw-handles/);
-  assert.match(styles, /\.draw-handle\s*\{/);
-  assert.match(styles, /\.draw-handle-start,\s*\n\.draw-handle-end\s*\{[^}]*cursor:\s*move/s);
-});
-
-test('pane resize uses free world-pixel deltas scaled by the camera zoom', () => {
+test('columns resize from their trailing edge and snap to the solid grid', () => {
   const source = appSource.slice(appSource.indexOf('function startPaneResize'), appSource.indexOf('function startPaneMove'));
-  assert.match(source, /const scale = activeCamera\(\)\.scale/);
-  assert.match(source, /const dx = \(moveEvent\.clientX - startX\) \/ scale/);
-  assert.match(source, /candidate\.w = startLayout\.w \+ dx/);
-  assert.match(source, /candidate\.h = startLayout\.h \+ dy/);
-  assert.match(source, /candidate\.w < MIN_PANE_WIDTH/);
-  assert.doesNotMatch(source, /findAdjacentResizePane|resizePairIsFree/);
+  assert.match(source, /startWidth \+ \(moveEvent\.clientX - startX\)/);
+  assert.match(source, /Math\.max\(MIN_COLUMN_WIDTH/);
+  assert.match(source, /normalizeColumn\(\{ width: nextWidth \}\)\.width/);
+  assert.match(source, /saveColumn\(tab\.id, index, \{ width \}\)/);
+  // Pane height follows the column's slot count, so there is nothing to drag vertically.
+  assert.doesNotMatch(source, /clientY|candidate\.h/);
+});
+
+test('dragging a pane targets a slot, and dropping past the last column opens a new one', () => {
+  assert.match(appSource, /function dropTargetAt\(clientX, clientY\)/);
+  assert.match(appSource, /Math\.floor\(offset \* slots\)/);
+  assert.match(appSource, /return \{ column: columns\.length, row: 0 \}/);
+  assert.match(appSource, /function highlightDropTarget\(target\)/);
+  assert.match(styles, /\.pane-column\.drop-target/);
+});
+
+test('the whiteboard pane lazy-loads a fully offline Excalidraw', () => {
+  // Without EXCALIDRAW_ASSET_PATH the bundle silently falls back to unpkg.com,
+  // which would break a portable, offline install.
+  assert.match(appSource, /window\.EXCALIDRAW_ASSET_PATH = '\/vendor\/excalidraw\/'/);
+  assert.match(appSource, /\['react\.js', 'react-dom\.js', 'jsx-runtime\.js', 'excalidraw\.js'\]/);
+  assert.match(appSource, /window\.ReactDOM\.createRoot\(host\)/);
+  assert.match(appSource, /window\.ExcalidrawLib\.Excalidraw/);
+  // 4 MB of vendor code must not load until a whiteboard pane exists
+  assert.match(appSource, /if \(!excalidrawLoader\)/);
+  assert.match(appSource, /else if \(pane\.type === 'whiteboard'\) mountWhiteboard\(pane\)/);
+  assert.match(appSource, /disposeWhiteboards\(\);/);
+  for (const file of ['excalidraw.js', 'react.js', 'react-dom.js', 'jsx-runtime.js']) {
+    assert.ok(
+      fs.existsSync(path.join(__dirname, '..', 'public', 'vendor', 'excalidraw', file)),
+      `vendored ${file} is missing`
+    );
+  }
+});
+
+test('the freeform canvas, its camera, and the in-house drawing layer are gone', () => {
+  for (const symbol of [
+    'activeCamera', 'clampZoom', 'applyCameraTransform', 'pointerToWorld', 'saveCameraSoon',
+    'bringPaneToFront', 'nextPaneZ', 'snapUnit', 'GRID_MINOR_UNIT', 'MIN_ZOOM',
+    'drawTool', 'drawSelection', 'DRAW_STYLE_FIELDS', 'activeDrawings', 'updateDrawHandles'
+  ]) {
+    assert.doesNotMatch(appSource, new RegExp(symbol), `${symbol} should be gone`);
+  }
+  assert.doesNotMatch(appSource, /data-pane-resize-direction/);
+  assert.doesNotMatch(styles, /\.draw-layer|\.draw-toolbar|\.pane-canvas/);
 });
 
 test('switching panes clears file selections and their range anchors', () => {

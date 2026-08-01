@@ -249,26 +249,27 @@ textarea {
   font-size: 12px;
 }
 
+/* The board grows to the right only; its height is always the viewport's. */
 .pane-grid {
   min-height: 0;
   height: 100%;
   background: var(--terminal);
   position: relative;
   padding: 0;
-  overflow: hidden;
-  touch-action: none;
+  display: flex;
+  align-items: stretch;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
-.pane-canvas {
-  position: absolute;
-  top: 0;
-  left: 0;
-  transform-origin: 0 0;
-  will-change: transform;
-}
-
-.pane-grid.panning {
-  cursor: grabbing;
+/* One column: a fixed-width strip divided into `slots` equal rows. */
+.pane-column {
+  position: relative;
+  flex: none;
+  width: var(--column-width, 720px);
+  min-height: 0;
+  display: grid;
+  grid-template-rows: repeat(var(--column-slots, 1), 1fr);
 }
 
 .pane {
@@ -279,12 +280,15 @@ textarea {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
-  position: absolute;
-  z-index: 1;
+  position: relative;
 }
 
 .pane.active {
   border-color: var(--accent);
+}
+
+.pane.dragging {
+  opacity: 0.5;
 }
 
 .pane-title {
@@ -502,46 +506,35 @@ textarea {
   cursor: default;
 }
 
-.pane-resize {
+/* A column's trailing edge is the only resize target: pane height follows the
+   column's slot count, so there is nothing vertical to drag. */
+.column-resize {
   position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
   z-index: 5;
+  cursor: col-resize;
   touch-action: none;
 }
 
-.pane-resize-n,
-.pane-resize-s {
-  left: 8px;
-  right: 8px;
-  height: 8px;
-  cursor: ns-resize;
+.column-resize:hover,
+.column-resize:focus-visible {
+  background: var(--accent-soft);
+  outline: none;
 }
 
-.pane-resize-n { top: -4px; }
-.pane-resize-s { bottom: -4px; }
-
-.pane-resize-e,
-.pane-resize-w {
-  top: 8px;
-  bottom: 8px;
-  width: 8px;
-  cursor: ew-resize;
-}
-
-.pane-resize-e { right: -4px; }
-.pane-resize-w { left: -4px; }
-
-.pane-resize-ne,
-.pane-resize-se,
-.pane-resize-sw,
-.pane-resize-nw {
-  width: 12px;
-  height: 12px;
-}
-
-.pane-resize-ne { top: -4px; right: -4px; cursor: nesw-resize; }
-.pane-resize-se { right: -4px; bottom: -4px; cursor: nwse-resize; }
-.pane-resize-sw { bottom: -4px; left: -4px; cursor: nesw-resize; }
-.pane-resize-nw { top: -4px; left: -4px; cursor: nwse-resize; }
+.pane-column.drop-target::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc((var(--drop-row, 1) - 1) / var(--column-slots, 1) * 100%);
+  height: calc(100% / var(--column-slots, 1));
+  border: 2px dashed var(--accent);
+  background: var(--accent-soft);
+  pointer-events: none;
 }
 
 .terminal {
@@ -1042,10 +1035,6 @@ textarea {
 
 .app.mode-mobile .pane-grid .pane {
   display: none;
-  left: 0 !important;
-  top: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
 }
 
 .app.mode-mobile .pane-grid .pane.active {
@@ -1099,12 +1088,21 @@ textarea {
     margin-left: 0;
   }
 
+  .app.mode-auto .pane-grid {
+    overflow-x: hidden;
+  }
+
+  .app.mode-auto .pane-column {
+    width: 100%;
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .app.mode-auto .pane-column:not(:has(.pane.active)) {
+    display: none;
+  }
+
   .app.mode-auto .pane-grid .pane {
     display: none;
-    left: 2px !important;
-    top: 2px !important;
-    width: calc(100% - 4px) !important;
-    height: calc(100% - 4px) !important;
   }
 
   .app.mode-auto .pane-grid .pane.active {
@@ -1123,7 +1121,7 @@ textarea {
     height: var(--pane-toolbar-height);
   }
 
-  .pane-resize {
+  .column-resize {
     display: none;
   }
 
@@ -1337,21 +1335,26 @@ textarea {
   display: none;
 }
 
-/* The canvas is sized by its absolutely positioned panes on desktop, so it
-   needs explicit bounds here for the active pane's 100% to resolve against. */
-.app.mode-mobile .pane-canvas,
-.app.mobile-device .pane-canvas {
-  inset: 0;
+/* Mobile shows one pane at a time: the board stops scrolling sideways and the
+   column holding the active pane fills it. */
+.app.mode-mobile .pane-grid,
+.app.mobile-device .pane-grid {
+  overflow-x: hidden;
+}
+
+.app.mode-mobile .pane-column,
+.app.mobile-device .pane-column {
   width: 100%;
-  height: 100%;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.app.mode-mobile .pane-column:not(:has(.pane.active)),
+.app.mobile-device .pane-column:not(:has(.pane.active)) {
+  display: none;
 }
 
 .app.mobile-device .pane-grid .pane {
   display: none;
-  left: 0 !important;
-  top: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
 }
 
 .app.mobile-device .pane-grid .pane.active {
@@ -1731,13 +1734,6 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   gap: 0;
-}
-
-.session-item .session-branch {
-  flex: none;
-  white-space: pre;
-  font-family: "Cascadia Mono", Consolas, monospace;
-  color: var(--muted);
 }
 
 .session-item:hover {
@@ -2935,10 +2931,6 @@ textarea:focus-visible {
   border-bottom: 0;
 }
 
-.app.sidebar-closed .draw-toolbar {
-  grid-template-columns: 1fr;
-}
-
 .app.sidebar-closed .rail-button {
   justify-content: center;
   padding: 0;
@@ -3007,37 +2999,25 @@ textarea:focus-visible {
   grid-template-rows: 44px minmax(0, 1fr);
 }
 
-/* Solid squares are 120px; each holds a 4 x 4 block of 30px dashed cells. The
-   conic gradients paint one dash per minor cell: the quadrant left of and above
-   the gradient centre is the only painted part of each tile. */
 .pane-grid {
   height: 100%;
   margin: 0;
   border: 0;
   border-radius: 0;
-  --grid-dash-length: 2px;
-  --grid-solid: color-mix(in srgb, var(--line) 45%, transparent);
-  --grid-dashed: color-mix(in srgb, var(--line) 32%, transparent);
   background-color: var(--terminal-bg);
-  background-image:
-    linear-gradient(to right, var(--grid-solid) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--grid-solid) 1px, transparent 1px),
-    conic-gradient(at 1px var(--grid-dash-length), transparent 0deg 270deg, var(--grid-dashed) 270deg 360deg),
-    conic-gradient(at var(--grid-dash-length) 1px, transparent 0deg 270deg, var(--grid-dashed) 270deg 360deg);
-  background-repeat: repeat;
-  background-size: 120px 120px, 120px 120px, 30px 6px, 6px 30px;
-  background-position: 0 0;
-}
-
-.pane-grid.minor-grid-hidden {
-  background-image:
-    linear-gradient(to right, var(--grid-solid) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--grid-solid) 1px, transparent 1px);
 }
 
 .terminal {
   padding: 0;
   background: var(--terminal-bg);
+}
+
+/* Excalidraw measures its own canvas, so the host has to be a real box. */
+.whiteboard {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 .terminal .xterm,
@@ -5096,338 +5076,3 @@ a:focus-visible {
   outline: none;
 }
 
-/* Whiteboard drawing tools. */
-.draw-toolbar {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(28px, 1fr));
-  gap: 6px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--line);
-}
-
-.draw-tool {
-  width: 28px;
-  height: 28px;
-  justify-self: center;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.draw-tool:hover,
-.draw-tool:focus-visible {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.draw-tool.active {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.draw-tool .file-action-icon {
-  width: 16px;
-  height: 16px;
-}
-
-.draw-layer {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-
-.pane-grid:not([data-draw-tool="selection"]) .draw-layer {
-  pointer-events: auto;
-  cursor: crosshair;
-}
-
-.pane-grid[data-draw-tool="hand"] .draw-layer {
-  cursor: grab;
-}
-
-.pane-grid[data-draw-tool="text"] .draw-layer {
-  cursor: text;
-}
-
-.pane-grid[data-draw-tool="eraser"] .draw-layer {
-  cursor: cell;
-}
-
-/* Stroke/fill/width/dash are now per-element attributes (see drawShapeMarkup in
-   app.js) so a drawing can carry its own color, line style and fill instead of
-   this fixed look; only the line cap/join stay as shared CSS. */
-.draw-shape {
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-/* Invisible fat stroke so thin shapes stay easy to pick and erase. */
-.draw-hit {
-  fill: none;
-  stroke: transparent;
-  stroke-width: 14;
-  vector-effect: non-scaling-stroke;
-  pointer-events: stroke;
-}
-
-/* A filled shape's interior should be clickable too, not just its outline. */
-.draw-hit-filled {
-  pointer-events: all;
-}
-
-.pane-grid[data-draw-tool="selection"] .draw-hit {
-  cursor: move;
-}
-
-/* Selection is shown as a dashed accent outline traced over the shape's own
-   geometry (see drawShapeMarkup's 'draw-selection-outline' variant, or
-   appendTextSelectionOutline's getBBox()-measured rect for text) rather than
-   recoloring the shape's stroke, which would hide the color the user picked. */
-.draw-selection-outline {
-  fill: none;
-  vector-effect: non-scaling-stroke;
-  pointer-events: none;
-}
-
-.draw-text-input {
-  position: absolute;
-  z-index: 3;
-  min-width: 140px;
-  padding: 0;
-  border: 0;
-  outline: 1px dashed var(--accent);
-  background: transparent;
-  color: var(--text);
-  font-family: "Segoe UI", system-ui, sans-serif;
-  overflow: hidden;
-  resize: none;
-  white-space: pre;
-}
-
-/* Floating properties panel: shows the style of the current selection, or the
-   pending defaults for the active drawing tool. */
-.draw-props {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  z-index: 3;
-  width: 200px;
-  max-height: calc(100% - 24px);
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface-soft);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, .18);
-  pointer-events: auto;
-}
-
-.draw-props[hidden] {
-  display: none;
-}
-
-.draw-prop-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.draw-prop-label {
-  font: 11px "Segoe UI", system-ui, sans-serif;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: .04em;
-}
-
-.draw-prop-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
-
-.draw-swatch {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  border: 1px solid var(--line);
-  background: var(--draw-swatch-color, transparent);
-  padding: 0;
-  cursor: pointer;
-}
-
-.draw-swatch-transparent {
-  background-image:
-    linear-gradient(45deg, var(--line) 25%, transparent 25%, transparent 75%, var(--line) 75%),
-    linear-gradient(45deg, var(--line) 25%, transparent 25%, transparent 75%, var(--line) 75%);
-  background-size: 8px 8px;
-  background-position: 0 0, 4px 4px;
-}
-
-.draw-swatch.active,
-.draw-prop-btn.active {
-  border-color: var(--accent);
-  outline: 2px solid var(--accent-soft);
-  outline-offset: 1px;
-}
-
-.draw-swatch-custom {
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: none;
-  cursor: pointer;
-}
-
-.draw-prop-btn {
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-}
-
-.draw-prop-btn:hover,
-.draw-prop-btn:focus-visible {
-  background: var(--accent-soft);
-  color: var(--accent);
-  outline: none;
-}
-
-.draw-prop-btn .file-action-icon {
-  width: 16px;
-  height: 16px;
-}
-
-.draw-prop-btn-label {
-  width: auto;
-  min-width: 28px;
-  padding: 0 6px;
-  font: 12px "Segoe UI", system-ui, sans-serif;
-}
-
-.draw-font-sample {
-  font-size: 14px;
-}
-
-.draw-font-hand-drawn {
-  font-family: "Segoe Print", "Comic Sans MS", cursive;
-}
-
-.draw-font-normal {
-  font-family: "Segoe UI", system-ui, sans-serif;
-}
-
-.draw-font-code {
-  font-family: "Cascadia Mono", Consolas, monospace;
-}
-
-.draw-prop-range {
-  flex: 1 1 auto;
-  accent-color: var(--accent);
-}
-
-.draw-arrowhead-field {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1 1 auto;
-  font: 11px "Segoe UI", system-ui, sans-serif;
-  color: var(--muted);
-}
-
-.draw-prop-select {
-  padding: 4px 6px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--terminal-bg);
-  color: var(--text);
-  font: 12px "Segoe UI", system-ui, sans-serif;
-}
-
-/* Rubber-band drag-select rectangle. */
-.draw-marquee {
-  position: absolute;
-  z-index: 3;
-  border: 1px solid var(--accent);
-  background: var(--accent-soft);
-  opacity: .5;
-  pointer-events: none;
-}
-
-/* Resize handles: a screen-space overlay positioned in JS (see updateDrawHandles),
-   not SVG, so their on-screen size stays constant regardless of camera zoom. */
-.draw-handles {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  pointer-events: none;
-}
-
-.draw-handle {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  margin: -5px 0 0 -5px;
-  border-radius: 50%;
-  background: var(--surface-raised);
-  border: 1.5px solid var(--accent);
-  pointer-events: auto;
-  touch-action: none;
-}
-
-.draw-handle-n,
-.draw-handle-s {
-  cursor: ns-resize;
-}
-
-.draw-handle-e,
-.draw-handle-w {
-  cursor: ew-resize;
-}
-
-.draw-handle-ne,
-.draw-handle-sw {
-  cursor: nesw-resize;
-}
-
-.draw-handle-nw,
-.draw-handle-se {
-  cursor: nwse-resize;
-}
-
-.draw-handle-start,
-.draw-handle-end {
-  cursor: move;
-  border-radius: 3px;
-}
-
-.app.mobile-device .draw-toolbar,
-.app.mode-mobile .draw-toolbar,
-.app.mobile-device .draw-layer,
-.app.mode-mobile .draw-layer,
-.app.mobile-device .draw-props,
-.app.mode-mobile .draw-props,
-.app.mobile-device .draw-handles,
-.app.mode-mobile .draw-handles {
-  display: none;
-}

@@ -191,8 +191,7 @@ function settingsConfig(config, runtimeConfig) {
     },
     ui: {
       sidebar_width: positiveInteger(config.ui.sidebar_width, runtimeConfig.ui.sidebar_width),
-      max_pane_columns: positiveInteger(config.ui.max_pane_columns, runtimeConfig.ui.max_pane_columns),
-      max_pane_rows: positiveInteger(config.ui.max_pane_rows, runtimeConfig.ui.max_pane_rows),
+      default_column_slots: positiveInteger(config.ui.default_column_slots, runtimeConfig.ui.default_column_slots),
       terminal_font_family: config.ui.terminal_font_family,
       terminal_font_size: positiveInteger(config.ui.terminal_font_size, runtimeConfig.ui.terminal_font_size),
       mobile_terminal_font_size: positiveInteger(config.ui.mobile_terminal_font_size, runtimeConfig.ui.mobile_terminal_font_size),
@@ -346,11 +345,8 @@ function sanitizeSettingsUpdates(updates) {
     if (positiveInteger(updates.ui.sidebar_width, 0)) {
       next.ui.sidebar_width = Number(updates.ui.sidebar_width);
     }
-    if (positiveInteger(updates.ui.max_pane_columns, 0)) {
-      next.ui.max_pane_columns = Number(updates.ui.max_pane_columns);
-    }
-    if (positiveInteger(updates.ui.max_pane_rows, 0)) {
-      next.ui.max_pane_rows = Number(updates.ui.max_pane_rows);
+    if (positiveInteger(updates.ui.default_column_slots, 0)) {
+      next.ui.default_column_slots = Number(updates.ui.default_column_slots);
     }
     if (typeof updates.ui.terminal_font_family === 'string' && updates.ui.terminal_font_family.trim()) {
       next.ui.terminal_font_family = updates.ui.terminal_font_family.trim();
@@ -571,7 +567,7 @@ function main() {
   let shell = resolveShell(config);
   let configReloadError = '';
   let restartRequired = false;
-  const store = new StateStore(root, config.persistence.scrollback_lines);
+  const store = new StateStore(root, config.persistence.scrollback_lines, config.ui.default_column_slots);
   store.load();
 
   const app = express();
@@ -846,7 +842,8 @@ function main() {
     }
     res.status(201).json({
       ...pane,
-      paneLayouts: found.tab.panes.map((candidate) => ({ id: candidate.id, layout: candidate.layout }))
+      paneLayouts: found.tab.panes.map((candidate) => ({ id: candidate.id, layout: candidate.layout })),
+      columns: found.tab.columns
     });
   });
 
@@ -863,7 +860,8 @@ function main() {
     }
     res.status(201).json({
       ...pane,
-      paneLayouts: found.tab.panes.map((candidate) => ({ id: candidate.id, layout: candidate.layout }))
+      paneLayouts: found.tab.panes.map((candidate) => ({ id: candidate.id, layout: candidate.layout })),
+      columns: found.tab.columns
     });
   });
 
@@ -880,8 +878,35 @@ function main() {
     }
     res.status(201).json({
       ...pane,
-      paneLayouts: found.tab.panes.map((candidate) => ({ id: candidate.id, layout: candidate.layout }))
+      paneLayouts: found.tab.panes.map((candidate) => ({ id: candidate.id, layout: candidate.layout })),
+      columns: found.tab.columns
     });
+  });
+
+  app.post('/api/panes/:paneId/whiteboard', requireAuth(config), (req, res) => {
+    const found = store.findPane(req.params.paneId);
+    if (!found) {
+      res.status(404).json({ error: 'Pane not found.' });
+      return;
+    }
+    const pane = store.createWhiteboardPane(req.params.paneId);
+    if (!pane) {
+      res.status(400).json({ error: 'Unable to create pane.' });
+      return;
+    }
+    res.status(201).json({
+      ...pane,
+      paneLayouts: found.tab.panes.map((candidate) => ({ id: candidate.id, layout: candidate.layout })),
+      columns: found.tab.columns
+    });
+  });
+
+  app.patch('/api/panes/:paneId/whiteboard', requireAuth(config), (req, res) => {
+    if (!store.setWhiteboard(req.params.paneId, req.body.whiteboard)) {
+      res.status(404).json({ error: 'Whiteboard pane not found.' });
+      return;
+    }
+    res.json({ ok: true });
   });
 
   app.patch('/api/panes/:paneId/files/path', requireFileAuth(config), (req, res) => {
@@ -989,7 +1014,8 @@ function main() {
     }
     res.status(201).json({
       ...pane,
-      paneLayouts: found.tab.panes.map((candidate) => ({ id: candidate.id, layout: candidate.layout }))
+      paneLayouts: found.tab.panes.map((candidate) => ({ id: candidate.id, layout: candidate.layout })),
+      columns: found.tab.columns
     });
   });
 
@@ -1028,7 +1054,8 @@ function main() {
     }
     res.status(201).json({
       ...pane,
-      paneLayouts: found.tab.panes.map((candidate) => ({ id: candidate.id, layout: candidate.layout }))
+      paneLayouts: found.tab.panes.map((candidate) => ({ id: candidate.id, layout: candidate.layout })),
+      columns: found.tab.columns
     });
   });
 
@@ -1113,25 +1140,22 @@ function main() {
       res.status(404).json({ error: 'Pane not found.' });
       return;
     }
-    if (!store.resizePane(req.params.paneId, req.body.layout)) {
+    if (!store.placePane(req.params.paneId, req.body.layout)) {
       res.status(400).json({ error: 'Unable to update pane layout.' });
       return;
     }
-    const { pane } = store.findPane(req.params.paneId);
-    res.json({ id: pane.id, layout: pane.layout });
+    const { tab, pane } = store.findPane(req.params.paneId);
+    res.json({ id: pane.id, layout: pane.layout, columns: tab.columns });
   });
 
-  app.patch('/api/tabs/:tabId/camera', requireAuth(config), (req, res) => {
-    if (!store.setCamera(req.params.tabId, req.body.camera)) {
-      res.status(404).json({ error: 'Tab not found.' });
-      return;
-    }
-    res.json({ ok: true });
-  });
-
-  app.patch('/api/tabs/:tabId/drawings', requireAuth(config), (req, res) => {
-    if (!store.setDrawings(req.params.tabId, req.body.drawings)) {
-      res.status(404).json({ error: 'Tab not found.' });
+  app.patch('/api/tabs/:tabId/columns/:index', requireAuth(config), (req, res) => {
+    const { width, slots } = req.body || {};
+    const index = req.params.index;
+    const updated = width !== undefined
+      ? store.setColumnWidth(req.params.tabId, index, width)
+      : store.setColumnSlots(req.params.tabId, index, slots);
+    if (!updated) {
+      res.status(404).json({ error: 'Column not found.' });
       return;
     }
     res.json({ ok: true });
