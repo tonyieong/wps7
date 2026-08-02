@@ -165,11 +165,11 @@ textarea {
 
 .tabs {
   background: var(--panel);
-  border-bottom: 1px solid var(--line);
+  border-top: 1px solid var(--line);
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 6px 8px 0;
+  padding: 0 8px 6px;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
@@ -184,8 +184,8 @@ textarea {
   min-width: 132px;
   max-width: 220px;
   border: 1px solid transparent;
-  border-bottom: 0;
-  border-radius: 8px 8px 0 0;
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
   background: #11151c;
   color: var(--muted);
   cursor: pointer;
@@ -231,6 +231,85 @@ textarea {
   justify-content: center;
   padding: 0;
   font-size: 18px;
+}
+
+/* Mirrors the board's horizontal scroll position; stands in for the native
+   scrollbar the tab bar now covers. */
+.board-hscroll {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 60px;
+  max-width: 520px;
+  margin-left: auto;
+  padding: 0 4px;
+}
+
+.board-hscroll-arrow {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.board-hscroll-arrow:hover {
+  color: var(--text);
+  background: var(--surface-soft);
+}
+
+.board-hscroll-arrow:disabled {
+  opacity: 0.35;
+  cursor: default;
+  pointer-events: none;
+}
+
+.board-hscroll-arrow .file-action-icon {
+  width: 13px;
+  height: 13px;
+}
+
+.board-hscroll-track {
+  position: relative;
+  flex: 1 1 auto;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.board-hscroll-track::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-soft);
+}
+
+.board-hscroll-thumb {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  height: 6px;
+  min-width: 24px;
+  border-radius: 3px;
+  background: var(--line);
+  cursor: grab;
+  transform: translateY(-50%);
+}
+
+.board-hscroll-thumb:hover,
+.board-hscroll-thumb.dragging {
+  background: var(--accent);
+  cursor: grabbing;
 }
 
 .toolbar {
@@ -1772,7 +1851,7 @@ textarea:focus-visible {
 
 .tabs {
   gap: 4px;
-  padding: 8px 10px 0;
+  padding: 0 10px 8px;
   background: var(--panel);
   border-color: var(--line);
 }
@@ -1782,8 +1861,8 @@ textarea:focus-visible {
   min-width: 128px;
   padding: 0 8px 0 13px;
   border: 1px solid var(--line);
-  border-bottom: 0;
-  border-radius: 8px 8px 0 0;
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
   background: var(--surface-soft);
   color: var(--muted);
 }
@@ -1797,7 +1876,7 @@ textarea:focus-visible {
   color: var(--text);
   border-color: var(--line);
   background: var(--terminal);
-  box-shadow: inset 0 2px var(--accent);
+  box-shadow: inset 0 -2px var(--accent);
 }
 
 .tab-close:hover {
@@ -3011,8 +3090,18 @@ textarea:focus-visible {
   display: none;
 }
 
+/* Tabs sit at the bottom, WPS-sheet style: the banner (when shown) tops the
+   content area, the board fills what's left, and tabs anchor the bottom. */
 .workspace {
-  grid-template-rows: 44px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) 44px;
+}
+
+.desktop-mode-banner {
+  grid-row: 1;
+}
+
+.tabs {
+  grid-row: 3;
 }
 
 /* Dashed cell rules. Each conic-gradient paints only its top-left quadrant, so
@@ -3021,6 +3110,7 @@ textarea:focus-visible {
    (a horizontal rule). background-attachment: local keeps them nailed to the
    cells while the board scrolls. */
 .pane-grid {
+  grid-row: 2;
   height: 100%;
   margin: 0;
   border: 0;
@@ -3037,6 +3127,17 @@ textarea:focus-visible {
     var(--grid-period) calc(100% / var(--vertical-slots, 12));
   background-repeat: repeat;
   background-attachment: local;
+  scrollbar-width: none;
+}
+
+.pane-grid::-webkit-scrollbar {
+  display: none;
+}
+
+/* Keeps the last pane from ever butting flush against the scroll edge. */
+.board-reserve {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .terminal {
@@ -3059,7 +3160,7 @@ textarea:focus-visible {
 }
 
 .tabs {
-  padding: 4px 8px 0;
+  padding: 0 8px 4px;
 }
 
 .tab {
@@ -3093,7 +3194,7 @@ textarea:focus-visible {
   .workspace,
   .app.mode-auto .workspace,
   .app.mode-mobile .workspace {
-    grid-template-rows: 42px minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) 42px;
   }
 }
 

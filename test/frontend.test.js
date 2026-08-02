@@ -70,10 +70,24 @@ test('the sidebar shortcuts feature has been removed', () => {
 });
 
 test('workspace tabs and terminal grid use the compact edge-to-edge layout', () => {
-  assert.match(styles, /\.workspace\s*\{\s*grid-template-rows:\s*44px minmax\(0, 1fr\)/);
-  assert.match(styles, /\.tabs\s*\{\s*padding:\s*4px 8px 0/);
+  assert.match(styles, /\.workspace\s*\{\s*grid-template-rows:\s*auto minmax\(0, 1fr\) 44px/);
+  assert.match(styles, /\.tabs\s*\{\s*padding:\s*0 8px 4px/);
   assert.match(styles, /\.tab\s*\{[^}]*width:\s*max-content[^}]*min-width:\s*0[^}]*flex:\s*0 1 auto/s);
   assert.match(styles, /\.pane-grid\s*\{[^}]*border:\s*0/s);
+});
+
+test('workspace tabs sit below the board, WPS-sheet style, with a scrollbar mirroring its scroll position', () => {
+  assert.match(styles, /\.tabs\s*\{\s*grid-row:\s*3/);
+  assert.match(styles, /\.pane-grid\s*\{\s*grid-row:\s*2/);
+  assert.match(styles, /\.desktop-mode-banner\s*\{\s*grid-row:\s*1/);
+  assert.match(appSource, /<div class="pane-grid" data-pane-grid[^>]*>[\s\S]*<\/div>\s*<header class="tabs">/);
+  assert.match(appSource, /data-board-hscroll-track[\s\S]*?data-board-hscroll-thumb/);
+});
+
+test('the board always keeps a few empty columns past the rightmost pane', () => {
+  assert.match(appSource, /function boardExtent\(panes\)/);
+  assert.match(appSource, /class="board-reserve"[^>]*grid-column:\s*\$\{boardExtent\(tab\.panes\) \+ BOARD_RESERVE_COLUMNS\}/);
+  assert.match(appSource, /function syncBoardMetrics\(tab\)/);
 });
 
 test('sidebar brand is the dedicated collapse control', () => {
