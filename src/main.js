@@ -611,6 +611,9 @@ function main() {
     replaceObject(config, nextConfig);
     shell = resolveShell(config);
     store.scrollbackLimit = config.persistence.scrollback_lines;
+    // A new slot count rescales every pane, so the client is told to take the
+    // fresh layout rather than repaint the one it already has.
+    const layoutChanged = store.applyGrid(config.ui.grid_size, config.ui.vertical_slots);
     terminalManager.updateConfig(config, shell);
     clearInterval(autosaveTimer);
     autosaveTimer = startAutosave(store, config);
@@ -619,7 +622,7 @@ function main() {
     if (passwordChanged) {
       queueMicrotask(revokeWebSocketSessions);
     }
-    return publicConfig(config, shell, restartRequired, configReloadError);
+    return { ...publicConfig(config, shell, restartRequired, configReloadError), layoutChanged };
   }
 
   function revokeWebSocketSessions() {
@@ -1148,7 +1151,7 @@ function main() {
       return;
     }
     if (!store.placePane(req.params.paneId, req.body.layout)) {
-      res.status(400).json({ error: 'Unable to update pane layout.' });
+      res.status(409).json({ error: 'That space is taken by another pane.' });
       return;
     }
     const { tab, pane } = store.findPane(req.params.paneId);

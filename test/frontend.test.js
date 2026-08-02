@@ -751,6 +751,28 @@ test('panes resize from every edge and snap to whole cells', () => {
   assert.match(appSource, /clientX - rect\.left \+ grid\.scrollLeft\) \/ gridSize\(\)/);
 });
 
+test('panes share one plane: an overlapping drop is shown and refused', () => {
+  assert.match(appSource, /function layoutsOverlap\(a, b\)/);
+  assert.match(appSource, /a\.x < b\.x \+ b\.w && b\.x < a\.x \+ a\.w && a\.y < b\.y \+ b\.h && b\.y < a\.y \+ a\.h/);
+  assert.match(appSource, /function wouldOverlap\(tab, paneId, layout\)/);
+  // flagged live while dragging, not only after the drop is rejected
+  const move = appSource.slice(appSource.indexOf('function startPaneMove'), appSource.indexOf('async function savePaneLayoutLocal'));
+  assert.match(move, /classList\.toggle\('invalid', wouldOverlap\(found\.tab, paneId, nextLayout\)\)/);
+  assert.match(move, /if \(wouldOverlap\(found\.tab, paneId, nextLayout\)\) \{\s*applyPaneLayoutStyle\(paneElement, startLayout\)/);
+  assert.match(styles, /\.pane\.invalid\s*\{[^}]*outline:\s*2px solid var\(--danger\)/s);
+  assert.match(mainSource, /res\.status\(409\)\.json\(\{ error: 'That space is taken by another pane\.' \}\)/);
+});
+
+test('saving the grid settings reshapes the board without a reload', () => {
+  // cell width applies straight away; a new row count comes back rescaled
+  assert.match(appSource, /grid\.setAttribute\('style', boardStyle\(\)\)/);
+  // repositioned in place: a full render would drop every terminal connection
+  assert.match(appSource, /if \(state\.config\.layoutChanged\) \{\s*const loaded = await api\('\/api\/state'\)/);
+  assert.match(appSource, /applyPaneLayoutStyle\(document\.querySelector\(`\[data-pane="\$\{pane\.id\}"\]`\), pane\.layout\);\s*paneTerminal\(pane\.id\)\?\.sendResize\(\)/);
+  assert.match(mainSource, /const layoutChanged = store\.applyGrid\(config\.ui\.grid_size, config\.ui\.vertical_slots\)/);
+  assert.match(mainSource, /publicConfig\(config, shell, restartRequired, configReloadError\), layoutChanged \}/);
+});
+
 test('dragging a pane moves it by whole cells', () => {
   const source = appSource.slice(appSource.indexOf('function startPaneMove'), appSource.indexOf('async function savePaneLayoutLocal'));
   assert.match(source, /x: startLayout\.x \+ \(cell\.x - startCell\.x\)/);
