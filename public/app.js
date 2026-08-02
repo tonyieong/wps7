@@ -1315,6 +1315,15 @@
           <div class="sidebar-resizer" data-action="resize-sidebar"></div>
         </aside>
         <section class="workspace">
+          <div class="desktop-mode-banner" data-desktop-mode-banner role="status" hidden>
+            <span class="desktop-mode-banner-text">Panes are cramped on this narrow screen.</span>
+            <button type="button" class="primary" data-switch-mobile>Switch to Mobile</button>
+            <button type="button" class="desktop-mode-banner-dismiss" data-dismiss-banner aria-label="Keep desktop layout" title="Keep desktop layout">×</button>
+          </div>
+          <div class="pane-grid" data-pane-grid style="${boardStyle()}">
+            ${tab.panes.map((pane) => renderPane(pane)).join('')}
+            <div class="board-reserve" aria-hidden="true" style="grid-column: ${boardExtent(tab.panes) + BOARD_RESERVE_COLUMNS} / span 1; grid-row: 1 / span 1;"></div>
+          </div>
           <header class="tabs">
             <div class="mobile-actions">
               <button class="mobile-brand" data-action="toggle" aria-label="Toggle sidebar" aria-expanded="${state.sidebarOpen}" title="${state.sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}"><span class="rail-brand-mark" aria-hidden="true">W7</span></button>
@@ -1327,15 +1336,14 @@
             `).join('')}
             <button class="tab tab-add" data-action="new-session" title="New workspace" aria-label="New workspace">${fileActionIcon('add')}</button>
             ${state.config.shell.usingFallback ? '<span class="shell-warning">PowerShell 7 not found</span>' : ''}
+            <div class="board-hscroll" data-board-hscroll>
+              <button type="button" class="board-hscroll-arrow" data-board-scroll-dir="-1" aria-label="Scroll board left" title="Scroll board left">${fileActionIcon('browser-back')}</button>
+              <div class="board-hscroll-track" data-board-hscroll-track>
+                <div class="board-hscroll-thumb" data-board-hscroll-thumb></div>
+              </div>
+              <button type="button" class="board-hscroll-arrow" data-board-scroll-dir="1" aria-label="Scroll board right" title="Scroll board right">${fileActionIcon('browser-forward')}</button>
+            </div>
           </header>
-          <div class="desktop-mode-banner" data-desktop-mode-banner role="status" hidden>
-            <span class="desktop-mode-banner-text">Panes are cramped on this narrow screen.</span>
-            <button type="button" class="primary" data-switch-mobile>Switch to Mobile</button>
-            <button type="button" class="desktop-mode-banner-dismiss" data-dismiss-banner aria-label="Keep desktop layout" title="Keep desktop layout">×</button>
-          </div>
-          <div class="pane-grid" data-pane-grid style="${boardStyle()}">
-            ${tab.panes.map((pane) => renderPane(pane)).join('')}
-          </div>
         </section>
       </main>
     `;
@@ -1411,6 +1419,7 @@
     app.querySelector('.sidebar').addEventListener('click', closeMobileSidebarAfterAction);
     wireMobileKeybarButtons(app);
     wirePaneGrid(app);
+    wireBoardScroll(app);
     app.querySelectorAll('[data-tab-session]').forEach((button) => {
       button.onclick = (event) => {
         if (Date.now() < state.suppressSessionClickUntil) {
@@ -4998,6 +5007,7 @@
       state.notepadAutosaveTimers.delete(tab.id);
     });
     document.querySelector(`[data-pane="${paneId}"]`)?.remove();
+    syncBoardMetrics(found.tab);
     renderSidebarPaneList();
     updateActivePaneUi();
     paneTerminal(state.activePaneId)?.term.focus();
@@ -5341,6 +5351,77 @@
     }, { passive: false, capture: true });
   }
 
+  // Stands in for the native scrollbar the bottom tab bar now covers: a track
+  // + thumb that mirrors and drives .pane-grid's scrollLeft.
+  function wireBoardScroll(root) {
+    const grid = root.querySelector?.('.pane-grid');
+    const bar = root.querySelector?.('[data-board-hscroll]');
+    if (!grid || !bar) {
+      return;
+    }
+    const track = bar.querySelector('[data-board-hscroll-track]');
+    const thumb = bar.querySelector('[data-board-hscroll-thumb]');
+    const arrows = bar.querySelectorAll('[data-board-scroll-dir]');
+
+    const updateThumb = () => {
+      const trackWidth = track.clientWidth;
+      const overflow = grid.scrollWidth - grid.clientWidth;
+      const scrollable = overflow > 1;
+      arrows.forEach((button) => { button.disabled = !scrollable; });
+      if (!scrollable) {
+        thumb.style.width = `${trackWidth}px`;
+        thumb.style.left = '0px';
+        return;
+      }
+      const thumbWidth = Math.max(24, trackWidth * (grid.clientWidth / grid.scrollWidth));
+      const maxThumbLeft = trackWidth - thumbWidth;
+      thumb.style.width = `${thumbWidth}px`;
+      thumb.style.left = `${(grid.scrollLeft / overflow) * maxThumbLeft}px`;
+    };
+
+    grid._updateBoardScrollbar = updateThumb;
+    grid.addEventListener('scroll', updateThumb, { passive: true });
+    const observer = new ResizeObserver(updateThumb);
+    observer.observe(grid);
+    observer.observe(track);
+
+    arrows.forEach((button) => {
+      button.onclick = () => {
+        grid.scrollBy({ left: Number(button.dataset.boardScrollDir) * gridSize(), behavior: 'smooth' });
+      };
+    });
+
+    track.onpointerdown = (event) => {
+      const rect = track.getBoundingClientRect();
+      const target = ((event.clientX - rect.left) / rect.width) * grid.scrollWidth;
+      grid.scrollTo({ left: target - grid.clientWidth / 2, behavior: 'smooth' });
+    };
+
+    thumb.onpointerdown = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      thumb.classList.add('dragging');
+      thumb.setPointerCapture(event.pointerId);
+      const trackRect = track.getBoundingClientRect();
+      const overflow = grid.scrollWidth - grid.clientWidth;
+      thumb.onpointermove = (moveEvent) => {
+        const maxThumbLeft = trackRect.width - thumb.offsetWidth;
+        if (maxThumbLeft <= 0) {
+          return;
+        }
+        const left = Math.min(maxThumbLeft, Math.max(0, moveEvent.clientX - trackRect.left - thumb.offsetWidth / 2));
+        grid.scrollLeft = (left / maxThumbLeft) * overflow;
+      };
+      thumb.onpointerup = () => {
+        thumb.classList.remove('dragging');
+        thumb.onpointermove = null;
+        thumb.onpointerup = null;
+      };
+    };
+
+    updateThumb();
+  }
+
   async function createPane(preferredLayout) {
     const session = activeSession();
     const tab = activeTab(session);
@@ -5442,6 +5523,8 @@
       }
       if (!await savePaneLayoutLocal(paneId, nextLayout)) {
         applyPaneLayoutStyle(paneElement, startLayout);
+      } else {
+        syncBoardMetrics(found.tab);
       }
       paneTerminal(paneId)?.sendResize();
     };
@@ -5506,6 +5589,8 @@
       }
       if (!await savePaneLayoutLocal(paneId, nextLayout)) {
         applyPaneLayoutStyle(paneElement, startLayout);
+      } else {
+        syncBoardMetrics(found.tab);
       }
       await setActivePane(paneId);
     };
@@ -5588,6 +5673,7 @@
       wirePaneTabStrips(paneElement);
       wireMobileKeybarButtons(paneElement);
     }
+    syncBoardMetrics(tab);
     renderSidebarPaneList();
     updateActivePaneUi();
     mountPaneContent(pane);
@@ -5597,6 +5683,7 @@
   const DEFAULT_VERTICAL_SLOTS = 12;
   const MAX_VERTICAL_SLOTS = 24;
   const DEFAULT_PANE_CELLS = 6;
+  const BOARD_RESERVE_COLUMNS = 4;
 
   // Cell width is a fixed pixel size because the board scrolls sideways; cell
   // height is the viewport divided by the configured slot count, so it is only
@@ -5639,6 +5726,28 @@
   function wouldOverlap(tab, paneId, layout) {
     return (tab?.panes || []).some((pane) => pane.id !== paneId
       && layoutsOverlap(layout, normalizePaneLayout(pane.layout)));
+  }
+
+  // How many columns the rightmost pane occupies, i.e. how many explicit
+  // column tracks the board currently needs.
+  function boardExtent(panes) {
+    return (panes || []).reduce((max, pane) => {
+      const layout = normalizePaneLayout(pane.layout);
+      return Math.max(max, layout.x + layout.w);
+    }, 0);
+  }
+
+  // Pane creation/removal/drag mutate the board outside the normal render
+  // path (see appendPaneToWorkspace, closePane, startPaneMove/Resize), so the
+  // reserved-column spacer and the scrollbar thumb both need an explicit
+  // refresh after each of those -- neither one is rebuilt by a full render.
+  function syncBoardMetrics(tab) {
+    const grid = app.querySelector('.pane-grid');
+    const spacer = grid?.querySelector('.board-reserve');
+    if (spacer) {
+      spacer.style.gridColumn = `${boardExtent(tab?.panes) + BOARD_RESERVE_COLUMNS} / span 1`;
+    }
+    grid?._updateBoardScrollbar?.();
   }
 
   // The board only scrolls horizontally, so bringing a pane into view is just
