@@ -375,15 +375,18 @@ test('the layout panel is fully removed from script and styles', () => {
   assert.doesNotMatch(styles, /\.layout-panel|\.layout-header|\.layout-controls|\.layout-list|\.mini-grid|\.mini-pane|\.mode-switch|\.mobile-sheet/);
 });
 
-test('mobile layout collapses the board so the active pane fills the grid', () => {
-  assert.match(styles, /\.app\.mode-mobile \.pane-column,\s*\.app\.mobile-device \.pane-column\s*\{[^}]*width:\s*100%/s);
+test('mobile layout collapses the board to one cell so the active pane fills it', () => {
+  // One cell wide and one row tall, with the dashed rules off: a grid of one.
+  assert.match(styles, /\.app\.mode-mobile \.pane-grid,\s*\.app\.mobile-device \.pane-grid\s*\{[^}]*grid-auto-columns:\s*100%/s);
   assert.match(styles, /\.app\.mode-mobile \.pane-grid,\s*\.app\.mobile-device \.pane-grid\s*\{[^}]*overflow-x:\s*hidden/s);
+  assert.match(styles, /\.app\.mode-mobile \.pane-grid,\s*\.app\.mobile-device \.pane-grid\s*\{[^}]*background-image:\s*none/s);
+  // the pane's own span must not survive the collapse
+  assert.match(styles, /\.app\.mode-mobile \.pane-grid \.pane\.active[\s\S]*?grid-column:\s*1 \/ -1 !important/s);
 });
 
-test('activating a pane scrolls its column into view, honouring reduced motion', () => {
-  const source = appSource.slice(appSource.indexOf('function ensureActivePaneVisible'), appSource.indexOf('function renderPaneColumns'));
+test('activating a pane scrolls it into view, honouring reduced motion', () => {
+  const source = appSource.slice(appSource.indexOf('function ensureActivePaneVisible'), appSource.indexOf('function boardStyle'));
   assert.match(source, /if \(isMobileLayout\(\)\) \{\s*return;/);
-  assert.match(source, /closest\('\[data-column\]'\)/);
   assert.match(source, /matchMedia\?\.\('\(prefers-reduced-motion: reduce\)'\)\.matches/);
   assert.match(source, /behavior: reduceMotion \? 'auto' : behavior/);
   assert.match(source, /inline: 'nearest'/);
@@ -714,31 +717,45 @@ test('terminal title and bell sequences update pane names and browser notificati
   assert.match(appSource, /notificationInput\?\.disabled/);
 });
 
-test('the board renders one grid per column with a slot for every row', () => {
-  assert.match(appSource, /function renderPaneColumns\(tab\)/);
-  assert.match(appSource, /--column-width: \$\{column\.width\}px; --column-slots: \$\{column\.slots\};/);
-  assert.match(appSource, /grid-row: \$\{layout\.row \+ 1\}/);
-  assert.match(styles, /\.pane-column\s*\{[^}]*grid-template-rows:\s*repeat\(var\(--column-slots, 1\), 1fr\)/s);
-  assert.match(styles, /\.pane-column\s*\{[^}]*width:\s*var\(--column-width, 720px\)/s);
+test('the board is one grid: fixed-width columns, rows dividing the viewport', () => {
+  // The pane placement and the dashed backdrop must read the same two
+  // variables, or a pane would snap to cells that are not the ones drawn.
+  assert.match(appSource, /--grid-size: \$\{gridSize\(\)\}px; --vertical-slots: \$\{verticalSlots\(\)\};/);
+  assert.match(appSource, /grid-column: \$\{layout\.x \+ 1\} \/ span \$\{layout\.w\}; grid-row: \$\{layout\.y \+ 1\} \/ span \$\{layout\.h\}/);
+  assert.match(styles, /\.pane-grid\s*\{[^}]*grid-auto-columns:\s*var\(--grid-size, 120px\)/s);
+  assert.match(styles, /\.pane-grid\s*\{[^}]*grid-template-rows:\s*repeat\(var\(--vertical-slots, 12\), 1fr\)/s);
   assert.match(styles, /\.pane-grid\s*\{[^}]*overflow-x:\s*auto/s);
 });
 
-test('columns resize from their trailing edge and snap to the solid grid', () => {
-  const source = appSource.slice(appSource.indexOf('function startPaneResize'), appSource.indexOf('function startPaneMove'));
-  assert.match(source, /startWidth \+ \(moveEvent\.clientX - startX\)/);
-  assert.match(source, /Math\.max\(MIN_COLUMN_WIDTH/);
-  assert.match(source, /normalizeColumn\(\{ width: nextWidth \}\)\.width/);
-  assert.match(source, /saveColumn\(tab\.id, index, \{ width \}\)/);
-  // Pane height follows the column's slot count, so there is nothing to drag vertically.
-  assert.doesNotMatch(source, /clientY|candidate\.h/);
+test('the board paints dashed cell rules that scroll with it', () => {
+  assert.match(styles, /\.pane-grid\s*\{[^}]*conic-gradient\(at 1px var\(--grid-dash\)[^}]*conic-gradient\(at var\(--grid-dash\) 1px/s);
+  assert.match(styles, /background-size:\s*\n?\s*var\(--grid-size, 120px\) var\(--grid-period\),\s*\n?\s*var\(--grid-period\) calc\(100% \/ var\(--vertical-slots, 12\)\)/s);
+  // local keeps the rules nailed to the cells instead of the viewport
+  assert.match(styles, /\.pane-grid\s*\{[^}]*background-attachment:\s*local/s);
 });
 
-test('dragging a pane targets a slot, and dropping past the last column opens a new one', () => {
-  assert.match(appSource, /function dropTargetAt\(clientX, clientY\)/);
-  assert.match(appSource, /Math\.floor\(offset \* slots\)/);
-  assert.match(appSource, /return \{ column: columns\.length, row: 0 \}/);
-  assert.match(appSource, /function highlightDropTarget\(target\)/);
-  assert.match(styles, /\.pane-column\.drop-target/);
+test('panes resize from every edge and snap to whole cells', () => {
+  const source = appSource.slice(appSource.indexOf('function startPaneResize'), appSource.indexOf('function startPaneMove'));
+  for (const direction of ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw']) {
+    assert.match(appSource, new RegExp(`data-pane-resize-direction="\\\$\\{direction\\}"|'${direction}'`));
+  }
+  // Whole-cell deltas, so a pane can never land between cells
+  assert.match(source, /const cell = pointerCell\(grid, moveEvent\.clientX, moveEvent\.clientY\)/);
+  assert.match(source, /const dx = cell\.x - startCell\.x/);
+  assert.match(source, /const dy = cell\.y - startCell\.y/);
+  assert.match(source, /candidate\.w = startLayout\.w \+ dx/);
+  assert.match(source, /candidate\.h = startLayout\.h \+ dy/);
+  assert.match(source, /candidate\.w < 1/);
+  assert.match(appSource, /function pointerCell\(grid, clientX, clientY\)/);
+  // the board scrolls, so the pointer must be resolved in board coordinates
+  assert.match(appSource, /clientX - rect\.left \+ grid\.scrollLeft\) \/ gridSize\(\)/);
+});
+
+test('dragging a pane moves it by whole cells', () => {
+  const source = appSource.slice(appSource.indexOf('function startPaneMove'), appSource.indexOf('async function savePaneLayoutLocal'));
+  assert.match(source, /x: startLayout\.x \+ \(cell\.x - startCell\.x\)/);
+  assert.match(source, /y: startLayout\.y \+ \(cell\.y - startCell\.y\)/);
+  assert.match(source, /paneElement\.classList\.add\('dragging'\)/);
 });
 
 test('the whiteboard pane lazy-loads a fully offline Excalidraw', () => {
@@ -768,8 +785,11 @@ test('the freeform canvas, its camera, and the in-house drawing layer are gone',
   ]) {
     assert.doesNotMatch(appSource, new RegExp(symbol), `${symbol} should be gone`);
   }
-  assert.doesNotMatch(appSource, /data-pane-resize-direction/);
-  assert.doesNotMatch(styles, /\.draw-layer|\.draw-toolbar|\.pane-canvas/);
+  // the column model that briefly replaced the canvas is gone too
+  for (const symbol of ['tabColumns', 'panesInColumn', 'ensurePaneColumn', 'dropTargetAt', 'saveColumn']) {
+    assert.doesNotMatch(appSource, new RegExp(symbol), `${symbol} should be gone`);
+  }
+  assert.doesNotMatch(styles, /\.draw-layer|\.draw-toolbar|\.pane-canvas|\.pane-column|\.column-resize/);
 });
 
 test('switching panes clears file selections and their range anchors', () => {
