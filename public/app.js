@@ -5428,11 +5428,18 @@
       }
       nextLayout = normalizePaneLayout(candidate);
       applyPaneLayoutStyle(paneElement, nextLayout);
+      paneElement.classList.toggle('invalid', wouldOverlap(found.tab, paneId, nextLayout));
     };
     const onUp = async () => {
       handle.removeEventListener('pointermove', onMove);
       handle.removeEventListener('pointerup', onUp);
       handle.removeEventListener('pointercancel', onUp);
+      paneElement.classList.remove('invalid');
+      // Snapping back locally avoids a round trip the server would only refuse.
+      if (wouldOverlap(found.tab, paneId, nextLayout)) {
+        applyPaneLayoutStyle(paneElement, startLayout);
+        return;
+      }
       if (!await savePaneLayoutLocal(paneId, nextLayout)) {
         applyPaneLayoutStyle(paneElement, startLayout);
       }
@@ -5482,12 +5489,19 @@
         y: startLayout.y + (cell.y - startCell.y)
       });
       applyPaneLayoutStyle(paneElement, nextLayout);
+      paneElement.classList.toggle('invalid', wouldOverlap(found.tab, paneId, nextLayout));
     };
     const onUp = async () => {
       title.removeEventListener('pointermove', onMove);
       title.removeEventListener('pointerup', onUp);
-      paneElement.classList.remove('dragging');
+      paneElement.classList.remove('dragging', 'invalid');
       if (!moved) {
+        return;
+      }
+      // Snapping back locally avoids a round trip the server would only refuse.
+      if (wouldOverlap(found.tab, paneId, nextLayout)) {
+        applyPaneLayoutStyle(paneElement, startLayout);
+        await setActivePane(paneId);
         return;
       }
       if (!await savePaneLayoutLocal(paneId, nextLayout)) {
@@ -5612,6 +5626,19 @@
       w,
       h
     };
+  }
+
+  // Mirrors overlaps() in src/state.js: sharing a cell is a collision, merely
+  // touching edges is not.
+  function layoutsOverlap(a, b) {
+    return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  }
+
+  // Checked while dragging so an illegal drop shows up under the cursor rather
+  // than as a rejection after the fact.
+  function wouldOverlap(tab, paneId, layout) {
+    return (tab?.panes || []).some((pane) => pane.id !== paneId
+      && layoutsOverlap(layout, normalizePaneLayout(pane.layout)));
   }
 
   // The board only scrolls horizontally, so bringing a pane into view is just
@@ -7023,6 +7050,19 @@
         savedDisplayMode = state.displayMode;
         savedTerminalDensity = state.mobileTerminalDensity;
         applyConfigLive();
+        // A new row count rescales every pane on the server. Only the geometry
+        // moved, so the panes are repositioned in place: a full render would
+        // tear down every terminal connection to change two numbers.
+        if (state.config.layoutChanged) {
+          const loaded = await api('/api/state');
+          state.sessions = loaded.sessions;
+          state.persistedActiveSessionId = loaded.activeSessionId;
+          for (const pane of activeTab(activeSession())?.panes || []) {
+            pane.layout = normalizePaneLayout(pane.layout);
+            applyPaneLayoutStyle(document.querySelector(`[data-pane="${pane.id}"]`), pane.layout);
+            paneTerminal(pane.id)?.sendResize();
+          }
+        }
         document.querySelectorAll('[data-pane-type="usage"]').forEach((pane) => loadUsagePane(pane.dataset.pane, true));
         if (state.config.restarting) {
           if (payload.auth?.password) {
@@ -7195,6 +7235,9 @@
     const tab = activeTab(session);
     const grid = document.querySelector('.pane-grid');
     if (grid && tab) {
+      // Cell size and row count drive both the pane placement and the dashed
+      // backdrop, so the board picks up a saved setting without a reload.
+      grid.setAttribute('style', boardStyle());
       for (const pane of tab.panes) {
         pane.layout = normalizePaneLayout(pane.layout);
         applyPaneLayoutStyle(document.querySelector(`[data-pane="${pane.id}"]`), pane.layout);

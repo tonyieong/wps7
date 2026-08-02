@@ -245,7 +245,11 @@ class StateStore {
     }
     // Column placement depends on every pane in the tab, so it is resolved once
     // here rather than per pane above.
-    const migrated = migratePaneLayouts(panes, tab.columns, this.gridSize, this.verticalSlots);
+    // Older schemas, and any hand-edited state, can leave panes on top of each
+    // other; the board only ever shows one plane, so they are pushed apart here.
+    const migrated = resolveOverlaps(
+      migratePaneLayouts(panes, tab.columns, this.gridSize, this.verticalSlots)
+    );
     panes.forEach((pane, index) => {
       pane.layout = migrated[index];
     });
@@ -847,7 +851,42 @@ class StateStore {
       return false;
     }
 
-    found.pane.layout = sanitizeLayout(layout, this.verticalSlots);
+    const next = sanitizeLayout(layout, this.verticalSlots);
+    // Refusing the move leaves the pane where it was, which the client reads as
+    // "put it back" rather than silently nudging it somewhere unasked for.
+    const collides = found.tab.panes.some((pane) => pane.id !== paneId
+      && overlaps(next, sanitizeLayout(pane.layout, this.verticalSlots)));
+    if (collides) {
+      return false;
+    }
+    found.pane.layout = next;
+    this.save();
+    return true;
+  }
+
+  // Returns true when pane geometry actually changed, so the caller knows the
+  // clients need a fresh layout rather than just a repaint.
+  applyGrid(gridSize, verticalSlots) {
+    const previous = this.verticalSlots;
+    const next = clampVerticalSlots(verticalSlots);
+    this.gridSize = clampGridSize(gridSize);
+    this.verticalSlots = next;
+    if (previous === next) {
+      return false; // only the cell width moved; cell counts are unaffected
+    }
+
+    for (const session of this.state.sessions) {
+      for (const tab of session.tabs) {
+        const rescaled = tab.panes.map((pane) => sanitizeLayout(
+          rescaleLayout(sanitizeLayout(pane.layout, previous), previous, next),
+          next
+        ));
+        const resolved = resolveOverlaps(rescaled);
+        tab.panes.forEach((pane, index) => {
+          pane.layout = resolved[index];
+        });
+      }
+    }
     this.save();
     return true;
   }
@@ -998,6 +1037,43 @@ function migratePaneLayouts(panes, columns, gridSize, verticalSlots) {
     });
   }
   return next;
+}
+
+// Panes share one plane, so two of them may never cover the same cell. Edges
+// that merely touch are fine: a pane ending at x+w does not occupy that column.
+function overlaps(a, b) {
+  return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+}
+
+// Slides overlapping panes right until each one sits clear. Working
+// left-to-right, top-to-bottom keeps the result stable and independent of the
+// order panes happen to be stored in.
+function resolveOverlaps(layouts) {
+  const placed = [];
+  const resolved = new Array(layouts.length);
+  layouts
+    .map((layout, index) => ({ layout, index }))
+    .sort((a, b) => a.layout.x - b.layout.x || a.layout.y - b.layout.y || a.index - b.index)
+    .forEach((item) => {
+      const next = { ...item.layout };
+      while (placed.some((other) => overlaps(next, other))) {
+        next.x += 1;
+      }
+      placed.push(next);
+      resolved[item.index] = next;
+    });
+  return resolved;
+}
+
+// A different slot count means a cell covers a different fraction of the
+// screen, so heights and offsets scale with it and the board keeps its shape.
+function rescaleLayout(layout, fromSlots, toSlots) {
+  const scale = toSlots / fromSlots;
+  return {
+    ...layout,
+    y: Math.round(layout.y * scale),
+    h: Math.max(1, Math.round(layout.h * scale))
+  };
 }
 
 // The board grows to the right, so a new pane opens past the rightmost edge at

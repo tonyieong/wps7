@@ -106,7 +106,7 @@ test('new sessions and panes use unique default names', () => {
   assert.deepEqual(thirdPane.layout, { x: 12, y: 0, w: 6, h: 12 });
 });
 
-test('placePane accepts any cell position, including one that overlaps', () => {
+test('placePane refuses a position that would overlap another pane', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
   const store = new StateStore(root, 100);
   store.load();
@@ -115,13 +115,72 @@ test('placePane accepts any cell position, including one that overlaps', () => {
 
   assert.deepEqual(secondPane.layout, { x: 6, y: 0, w: 6, h: 12 });
 
-  // the board is free-form within the grid, so overlapping is allowed
-  assert.equal(store.placePane(secondPane.id, { x: 3, y: 4, w: 4, h: 8 }), true);
-  assert.deepEqual(store.findPane(secondPane.id).pane.layout, { x: 3, y: 4, w: 4, h: 8 });
+  // panes share one plane: an overlapping move is rejected and nothing changes
+  assert.equal(store.placePane(secondPane.id, { x: 3, y: 4, w: 4, h: 8 }), false);
+  assert.deepEqual(store.findPane(secondPane.id).pane.layout, { x: 6, y: 0, w: 6, h: 12 });
+
+  // touching edges is not overlapping
+  assert.equal(store.placePane(secondPane.id, { x: 6, y: 0, w: 3, h: 6 }), true);
+  assert.equal(store.placePane(paneId, { x: 0, y: 0, w: 6, h: 12 }), true);
+  // and the freed space is now available
+  assert.equal(store.placePane(secondPane.id, { x: 6, y: 6, w: 6, h: 6 }), true);
+  assert.deepEqual(store.findPane(secondPane.id).pane.layout, { x: 6, y: 6, w: 6, h: 6 });
 
   const reloaded = new StateStore(root, 100);
   reloaded.load();
-  assert.deepEqual(reloaded.findPane(secondPane.id).pane.layout, { x: 3, y: 4, w: 4, h: 8 });
+  assert.deepEqual(reloaded.findPane(secondPane.id).pane.layout, { x: 6, y: 6, w: 6, h: 6 });
+});
+
+test('overlaps left by older layouts are pushed apart on load', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const dataDir = path.join(root, 'data');
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(path.join(dataDir, 'state.json'), JSON.stringify({
+    activeSessionId: 'session-1',
+    updatedAt: new Date().toISOString(),
+    sessions: [{
+      id: 'session-1',
+      name: 'Session 1',
+      activePaneId: 'pane-1',
+      tabs: [{
+        id: 'tab-1',
+        name: 'Main',
+        activePaneId: 'pane-1',
+        panes: [
+          { id: 'pane-1', title: 'A', cwd: root, split: null, layout: { x: 0, y: 0, w: 6, h: 12 } },
+          { id: 'pane-2', title: 'B', cwd: root, split: null, layout: { x: 3, y: 0, w: 6, h: 12 } }
+        ]
+      }]
+    }]
+  }));
+
+  const store = new StateStore(root, 100);
+  store.load();
+  const layouts = store.state.sessions[0].tabs[0].panes.map((pane) => pane.layout);
+  // the leftmost pane keeps its place; the other slides right until it is clear
+  assert.deepEqual(layouts[0], { x: 0, y: 0, w: 6, h: 12 });
+  assert.deepEqual(layouts[1], { x: 6, y: 0, w: 6, h: 12 });
+});
+
+test('changing vertical slots rescales every pane and keeps them apart', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100, { verticalSlots: 12 });
+  store.load();
+  const tab = store.state.sessions[0].tabs[0];
+  const first = tab.panes[0].id;
+  const second = store.splitPane(first, 'horizontal').id;
+  assert.equal(store.placePane(first, { x: 0, y: 0, w: 6, h: 6 }), true);
+  assert.equal(store.placePane(second, { x: 0, y: 6, w: 6, h: 6 }), true);
+
+  // halving the slot count halves every pane's height and offset
+  assert.equal(store.applyGrid(120, 6), true);
+  assert.deepEqual(store.findPane(first).pane.layout, { x: 0, y: 0, w: 6, h: 3 });
+  assert.deepEqual(store.findPane(second).pane.layout, { x: 0, y: 3, w: 6, h: 3 });
+
+  // cell width alone changes no cell counts
+  assert.equal(store.applyGrid(60, 6), false);
+  assert.deepEqual(store.findPane(second).pane.layout, { x: 0, y: 3, w: 6, h: 3 });
+  assert.equal(store.gridSize, 60);
 });
 
 test('new panes open past the rightmost edge at full height', () => {

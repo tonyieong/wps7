@@ -292,6 +292,13 @@ textarea {
   opacity: 0.5;
 }
 
+/* Shown while a drag or resize sits on top of another pane, since panes share
+   one plane and the drop will be refused. */
+.pane.invalid {
+  outline: 2px solid var(--danger);
+  outline-offset: -2px;
+}
+
 .pane-title {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
