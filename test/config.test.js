@@ -52,6 +52,8 @@ test('creates default config with localhost port 5000', () => {
   assert.equal(config.usage.show_weekly, true);
   assert.equal(config.usage.show_model_weekly, true);
   assert.equal(config.usage.show_credits, true);
+  assert.equal(config.usage.codex_home, '');
+  assert.equal(config.usage.claude_home, '');
 });
 
 test('rejects 0.0.0.0 without password hash', () => {
@@ -160,7 +162,9 @@ test('updates known config values while preserving loadability', () => {
       show_five_hour: false,
       show_weekly: true,
       show_model_weekly: false,
-      show_credits: false
+      show_credits: false,
+      codex_home: 'C:\\Users\\Admin\\.codex',
+      claude_home: 'C:\\Users\\Admin\\.claude'
     },
     custom_theme: {
       selected_light: 'claude-light',
@@ -228,6 +232,8 @@ test('updates known config values while preserving loadability', () => {
   assert.equal(config.usage.show_weekly, true);
   assert.equal(config.usage.show_model_weekly, false);
   assert.equal(config.usage.show_credits, false);
+  assert.equal(config.usage.codex_home, 'C:\\Users\\Admin\\.codex');
+  assert.equal(config.usage.claude_home, 'C:\\Users\\Admin\\.claude');
   assert.equal(config.custom_theme.mode, 'light');
   assert.equal(config.custom_theme.selected_light, 'claude-light');
   assert.equal(config.custom_theme.selected_dark, 'codex-dark');

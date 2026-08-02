@@ -214,7 +214,9 @@ function settingsConfig(config, runtimeConfig) {
       ...usageVisibility(config),
       refresh_minutes: usageRefreshMinutes(config),
       minimax_configured: Boolean(process.env.MINIMAX_CODING_API_KEY || process.env.MINIMAX_API_KEY || config.usage.minimax_api_key),
-      minimax_region: config.usage.minimax_region === 'china' ? 'china' : 'global'
+      minimax_region: config.usage.minimax_region === 'china' ? 'china' : 'global',
+      codex_home: typeof config.usage.codex_home === 'string' ? config.usage.codex_home : '',
+      claude_home: typeof config.usage.claude_home === 'string' ? config.usage.claude_home : ''
     },
     custom_theme: config.custom_theme
   };
@@ -402,7 +404,7 @@ function sanitizeSettingsUpdates(updates) {
   }
   if (updates.usage) {
     next.usage = {};
-    for (const key of ['minimax_api_key']) {
+    for (const key of ['minimax_api_key', 'codex_home', 'claude_home']) {
       if (Object.prototype.hasOwnProperty.call(updates.usage, key)) {
         next.usage[key] = String(updates.usage[key] || '').trim();
       }
@@ -703,8 +705,8 @@ function main() {
       const minimaxApiKey = process.env.MINIMAX_CODING_API_KEY || process.env.MINIMAX_API_KEY || config.usage.minimax_api_key;
       const usageLog = (message) => appendRuntimeLog(root, `usage ${message}`);
       const value = await usage.fetchUsageOverview({
-        codex: config.usage.show_codex !== false ? () => usage.fetchCodexUsage() : null,
-        claude: config.usage.show_claude !== false ? () => usage.fetchClaudeUsage({ log: usageLog }) : null,
+        codex: config.usage.show_codex !== false ? () => usage.fetchCodexUsage({ codexHome: config.usage.codex_home || undefined }) : null,
+        claude: config.usage.show_claude !== false ? () => usage.fetchClaudeUsage({ claudeHome: config.usage.claude_home || undefined, log: usageLog }) : null,
         minimax: config.usage.show_minimax !== false
           ? () => usage.fetchMiniMaxUsage({ apiKey: minimaxApiKey, region: config.usage.minimax_region })
           : null,
