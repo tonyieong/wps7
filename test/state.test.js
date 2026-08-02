@@ -33,7 +33,7 @@ test('saved state keeps layout only', () => {
   assert.equal(savedPane.title, 'PowerShell 1');
   assert.equal(savedPane.scrollback, undefined);
   assert.equal(savedPane.lastProgram, undefined);
-  assert.deepEqual(savedPane.layout, { column: 0, row: 0 });
+  assert.deepEqual(savedPane.layout, { x: 0, y: 0, w: 6, h: 12 });
 });
 
 test('pane font size is validated and persisted per pane', () => {
@@ -84,7 +84,7 @@ test('loading old state strips non-layout terminal data', () => {
   const pane = store.findPane('pane-1').pane;
   assert.deepEqual(pane.scrollback, []);
   assert.equal(pane.lastProgram, undefined);
-  assert.deepEqual(pane.layout, { column: 0, row: 0 });
+  assert.deepEqual(pane.layout, { x: 0, y: 0, w: 6, h: 12 });
 });
 
 test('new sessions and panes use unique default names', () => {
@@ -102,54 +102,29 @@ test('new sessions and panes use unique default names', () => {
   const thirdPane = store.splitPane(secondPane.id, 'vertical');
   assert.equal(secondPane.title, 'PowerShell 2');
   assert.equal(thirdPane.title, 'PowerShell 3');
-  assert.deepEqual(secondPane.layout, { column: 1, row: 0 });
-  assert.deepEqual(thirdPane.layout, { column: 1, row: 1 });
+  assert.deepEqual(secondPane.layout, { x: 6, y: 0, w: 6, h: 12 });
+  assert.deepEqual(thirdPane.layout, { x: 12, y: 0, w: 6, h: 12 });
 });
 
-test('placePane moves panes between columns and prunes emptied ones', () => {
+test('placePane accepts any cell position, including one that overlaps', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
   const store = new StateStore(root, 100);
   store.load();
   const paneId = store.state.sessions[0].tabs[0].panes[0].id;
-  const secondPane = store.splitPane(paneId, 'vertical');
+  const secondPane = store.splitPane(paneId, 'horizontal');
 
-  // a vertical split grows the column it came from instead of adding one
-  assert.deepEqual(store.state.sessions[0].tabs[0].columns, [{ width: 720, slots: 2 }]);
-  assert.deepEqual(store.findPane(secondPane.id).pane.layout, { column: 0, row: 1 });
+  assert.deepEqual(secondPane.layout, { x: 6, y: 0, w: 6, h: 12 });
 
-  // dropping past the last column appends exactly one, never a run of empties
-  assert.equal(store.placePane(secondPane.id, { column: 9, row: 0 }), true);
-  assert.deepEqual(store.findPane(secondPane.id).pane.layout, { column: 1, row: 0 });
-  assert.equal(store.state.sessions[0].tabs[0].columns.length, 2);
+  // the board is free-form within the grid, so overlapping is allowed
+  assert.equal(store.placePane(secondPane.id, { x: 3, y: 4, w: 4, h: 8 }), true);
+  assert.deepEqual(store.findPane(secondPane.id).pane.layout, { x: 3, y: 4, w: 4, h: 8 });
 
-  // rows clamp to the slots the target column actually has, and the column the
-  // pane left behind is dropped
-  assert.equal(store.placePane(secondPane.id, { column: 0, row: 5 }), true);
-  assert.deepEqual(store.findPane(secondPane.id).pane.layout, { column: 0, row: 1 });
-  assert.equal(store.state.sessions[0].tabs[0].columns.length, 1);
+  const reloaded = new StateStore(root, 100);
+  reloaded.load();
+  assert.deepEqual(reloaded.findPane(secondPane.id).pane.layout, { x: 3, y: 4, w: 4, h: 8 });
 });
 
-test('column slots are configurable and never strand a pane', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100);
-  store.load();
-  const tabId = store.state.sessions[0].tabs[0].id;
-  const paneId = store.state.sessions[0].tabs[0].panes[0].id;
-  store.splitPane(paneId, 'vertical');
-
-  assert.equal(store.setColumnSlots(tabId, 0, 4), true);
-  assert.equal(store.state.sessions[0].tabs[0].columns[0].slots, 4);
-
-  // shrinking below the occupied rows keeps the rows that hold panes
-  assert.equal(store.setColumnSlots(tabId, 0, 1), true);
-  assert.equal(store.state.sessions[0].tabs[0].columns[0].slots, 2);
-
-  assert.equal(store.setColumnWidth(tabId, 0, 470), true);
-  assert.equal(store.state.sessions[0].tabs[0].columns[0].width, 480);
-  assert.equal(store.setColumnWidth(tabId, 3, 480), false);
-});
-
-test('new panes open a fresh column to the right', () => {
+test('new panes open past the rightmost edge at full height', () => {
   for (const type of ['terminal', 'files']) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
     const store = new StateStore(root, 100);
@@ -162,17 +137,24 @@ test('new panes open a fresh column to the right', () => {
       : store.createFilesPane(firstPane.id, 'C:\\');
 
     assert.ok(newPane);
-    assert.deepEqual(newPane.layout, { column: 1, row: 0 });
-    assert.deepEqual(store.state.sessions[0].tabs[0].columns, [
-      { width: 720, slots: 1 },
-      { width: 720, slots: 1 }
-    ]);
+    assert.deepEqual(newPane.layout, { x: 6, y: 0, w: 6, h: 12 });
     // creating a pane never moves the panes already on the board
     assert.deepEqual(firstPane.layout, firstLayout);
   }
 });
 
-test('loading legacy cell layouts migrates them to columns', () => {
+test('a new pane clears the rightmost edge even when panes were moved', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100);
+  store.load();
+  const paneId = store.state.sessions[0].tabs[0].panes[0].id;
+
+  assert.equal(store.placePane(paneId, { x: 10, y: 0, w: 3, h: 12 }), true);
+  const next = store.splitPane(paneId, 'horizontal');
+  assert.deepEqual(next.layout, { x: 13, y: 0, w: 6, h: 12 });
+});
+
+test('loading legacy cell layouts migrates them to grid cells', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
   const dataDir = path.join(root, 'data');
   fs.mkdirSync(dataDir, { recursive: true });
@@ -199,23 +181,20 @@ test('loading legacy cell layouts migrates them to columns', () => {
   const store = new StateStore(root, 100);
   store.load();
   const tab = store.state.sessions[0].tabs[0];
-  // Cells become world pixels first, so pane-1/pane-3 share column 0 and pane-2
-  // takes column 1 with the width its two-cell span implies.
+  // A legacy cell was 720x480 world pixels, so at a 120px grid it spans 6
+  // columns. pane-1 and pane-3 share an x, so they split the 12 vertical slots.
   assert.deepEqual(
     tab.panes.map((pane) => pane.layout),
     [
-      { column: 0, row: 0 },
-      { column: 1, row: 0 },
-      { column: 0, row: 1 }
+      { x: 0, y: 0, w: 6, h: 6 },
+      { x: 6, y: 0, w: 12, h: 12 },
+      { x: 0, y: 6, w: 6, h: 6 }
     ]
   );
-  assert.deepEqual(tab.columns, [
-    { width: 720, slots: 2 },
-    { width: 1440, slots: 1 }
-  ]);
+  assert.equal(tab.columns, undefined);
 });
 
-test('loading freeform canvas layouts migrates them to columns', () => {
+test('loading freeform canvas layouts migrates them to grid cells', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
   const dataDir = path.join(root, 'data');
   fs.mkdirSync(dataDir, { recursive: true });
@@ -243,19 +222,36 @@ test('loading freeform canvas layouts migrates them to columns', () => {
   const store = new StateStore(root, 100);
   store.load();
   const tab = store.state.sessions[0].tabs[0];
-  // Columns follow ascending x; inside a column, rows follow ascending y.
+  // World pixels divide by the 120px grid. The old canvas had no vertical
+  // bound, so panes sharing an x split the 12 slots in ascending y order.
   assert.deepEqual(
     tab.panes.map((pane) => pane.layout),
     [
-      { column: 1, row: 1 },
-      { column: 0, row: 0 },
-      { column: 1, row: 0 }
+      { x: 8, y: 6, w: 4, h: 6 },
+      { x: 1, y: 0, w: 6, h: 12 },
+      { x: 8, y: 0, w: 4, h: 6 }
     ]
   );
-  assert.deepEqual(tab.columns, [
-    { width: 720, slots: 1 },
-    { width: 480, slots: 2 }
-  ]);
+});
+
+test('grid size and vertical slots are configurable and clamp pane sizes', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100, { gridSize: 60, verticalSlots: 8 });
+  store.load();
+  const paneId = store.state.sessions[0].tabs[0].panes[0].id;
+
+  // a fresh pane fills the configured height
+  assert.equal(store.findPane(paneId).pane.layout.h, 8);
+
+  // a pane can never be taller than the board, and never smaller than one cell
+  assert.equal(store.placePane(paneId, { x: 3, y: 0, w: 4, h: 99 }), true);
+  assert.deepEqual(store.findPane(paneId).pane.layout, { x: 3, y: 0, w: 4, h: 8 });
+  assert.equal(store.placePane(paneId, { x: -5, y: 0, w: 0, h: 0 }), true);
+  assert.deepEqual(store.findPane(paneId).pane.layout, { x: 0, y: 0, w: 1, h: 1 });
+
+  // y is pushed back so the pane still fits inside the board
+  assert.equal(store.placePane(paneId, { x: 0, y: 7, w: 2, h: 4 }), true);
+  assert.deepEqual(store.findPane(paneId).pane.layout, { x: 0, y: 4, w: 2, h: 4 });
 });
 
 test('pane move reorders panes inside its tab', () => {
@@ -595,35 +591,6 @@ test('loading legacy panes marks them as terminal', () => {
   const store = new StateStore(root, 10);
   store.load();
   assert.equal(store.state.sessions[0].tabs[0].panes[0].type, 'terminal');
-});
-
-test('auto placement fills a column to its configured slots before opening another', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100, 3);
-  store.load();
-  const columns = () => store.state.sessions[0].tabs[0].columns;
-  const first = store.state.sessions[0].tabs[0].panes[0];
-
-  // the seeded column holds one slot, so the next pane starts a 3-slot column
-  const second = store.splitPane(first.id, 'auto');
-  assert.deepEqual(second.layout, { column: 1, row: 0 });
-  assert.deepEqual(columns()[1], { width: 720, slots: 3 });
-
-  // the following panes fill that column rather than adding more
-  const third = store.splitPane(second.id, 'auto');
-  const fourth = store.splitPane(third.id, 'auto');
-  assert.deepEqual(third.layout, { column: 1, row: 1 });
-  assert.deepEqual(fourth.layout, { column: 1, row: 2 });
-  assert.equal(columns().length, 2);
-
-  // once full, auto moves on instead of growing past the configured size
-  const fifth = store.splitPane(fourth.id, 'auto');
-  assert.deepEqual(fifth.layout, { column: 2, row: 0 });
-  assert.equal(columns()[1].slots, 3);
-
-  // an explicit horizontal split always starts a column, even with slots free
-  const sixth = store.splitPane(fifth.id, 'horizontal');
-  assert.deepEqual(sixth.layout, { column: 3, row: 0 });
 });
 
 test('whiteboard panes store their Excalidraw scene as bounded JSON', () => {

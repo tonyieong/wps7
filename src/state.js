@@ -3,11 +3,15 @@ const path = require('path');
 const crypto = require('crypto');
 const { normalizeCwd } = require('./shell');
 
-const GRID_UNIT = 120;
-const DEFAULT_PANE_WIDTH = 720;
-const DEFAULT_PANE_HEIGHT = 480;
-const MIN_COLUMN_WIDTH = GRID_UNIT;
-const MAX_COLUMN_SLOTS = 6;
+const DEFAULT_GRID_SIZE = 120;
+const MIN_GRID_SIZE = 20;
+const MAX_GRID_SIZE = 400;
+const DEFAULT_VERTICAL_SLOTS = 12;
+const MAX_VERTICAL_SLOTS = 24;
+const DEFAULT_PANE_CELLS = 6;
+// The original grid laid panes out in 720x480 cells; only migration needs this.
+const LEGACY_CELL_WIDTH = 720;
+const LEGACY_CELL_HEIGHT = 480;
 const PANE_TYPES = new Set(['terminal', 'files', 'browser', 'notepad', 'usage', 'whiteboard']);
 const MAX_WHITEBOARD_LENGTH = 5 * 1024 * 1024;
 const NOTEPAD_ENCODINGS = new Set(['utf8', 'utf8-bom', 'utf16le', 'utf16be', 'latin1']);
@@ -119,7 +123,7 @@ function notepadTabsForPane(pane) {
   return { tabs, activeNotepadTabId };
 }
 
-function defaultSession(name = 'Workspace 1', paneTitle = 'PowerShell 1') {
+function defaultSession(name = 'Workspace 1', paneTitle = 'PowerShell 1', verticalSlots = DEFAULT_VERTICAL_SLOTS) {
   const paneId = crypto.randomUUID();
   const firstTerminalTab = terminalTab({ title: paneTitle, cwd: process.cwd() });
   return {
@@ -131,7 +135,6 @@ function defaultSession(name = 'Workspace 1', paneTitle = 'PowerShell 1') {
         id: crypto.randomUUID(),
         name: 'Main',
         activePaneId: paneId,
-        columns: [sanitizeColumn({ width: DEFAULT_PANE_WIDTH, slots: 1 })],
         panes: [
           {
             id: paneId,
@@ -139,7 +142,7 @@ function defaultSession(name = 'Workspace 1', paneTitle = 'PowerShell 1') {
             title: paneTitle,
             cwd: process.cwd(),
             split: null,
-            layout: { column: 0, row: 0 },
+            layout: { x: 0, y: 0, w: DEFAULT_PANE_CELLS, h: clampVerticalSlots(verticalSlots) },
             scrollback: [],
             terminalTabs: [{ ...firstTerminalTab, scrollback: [] }],
             activeTerminalTabId: firstTerminalTab.id
@@ -151,13 +154,14 @@ function defaultSession(name = 'Workspace 1', paneTitle = 'PowerShell 1') {
 }
 
 class StateStore {
-  constructor(root, scrollbackLimit, defaultColumnSlots = 1) {
+  constructor(root, scrollbackLimit, options = {}) {
     this.root = root;
     this.dataDir = path.join(root, 'data');
     this.statePath = path.join(this.dataDir, 'state.json');
     this.scrollbackLimit = scrollbackLimit;
-    this.defaultColumnSlots = sanitizeColumn({ slots: defaultColumnSlots }).slots;
-    const session = defaultSession();
+    this.gridSize = clampGridSize(options.gridSize);
+    this.verticalSlots = clampVerticalSlots(options.verticalSlots);
+    const session = defaultSession('Workspace 1', 'PowerShell 1', this.verticalSlots);
     this.state = {
       activeSessionId: session.id,
       sessions: [session],
@@ -241,11 +245,12 @@ class StateStore {
     }
     // Column placement depends on every pane in the tab, so it is resolved once
     // here rather than per pane above.
-    const migrated = migrateTabLayout(panes, tab.columns);
+    const migrated = migratePaneLayouts(panes, tab.columns, this.gridSize, this.verticalSlots);
     panes.forEach((pane, index) => {
-      pane.layout = migrated.layouts[index];
+      pane.layout = migrated[index];
     });
-    return { ...tab, panes, columns: migrated.columns };
+    const { columns, camera, drawings, ...rest } = tab;
+    return { ...rest, panes };
   }
 
   getPersistedState() {
@@ -255,7 +260,6 @@ class StateStore {
         ...session,
         tabs: session.tabs.map((tab) => ({
           ...tab,
-          columns: sanitizeColumns(tab.columns, tab.panes.map((pane) => sanitizeLayout(pane.layout))),
           panes: tab.panes.map((pane) => ({
             id: pane.id,
             type: paneType(pane.type),
@@ -274,7 +278,7 @@ class StateStore {
             activeNotepadTabId: pane.type === 'notepad' ? pane.activeNotepadTabId : undefined,
             fontSize: validPaneFontSize(pane.fontSize) ? pane.fontSize : undefined,
             split: pane.split,
-            layout: sanitizeLayout(pane.layout)
+            layout: sanitizeLayout(pane.layout, this.verticalSlots)
           }))
         }))
       }))
@@ -288,7 +292,6 @@ class StateStore {
         ...session,
         tabs: session.tabs.map((tab) => ({
           ...tab,
-          columns: sanitizeColumns(tab.columns, tab.panes.map((pane) => sanitizeLayout(pane.layout))),
           panes: tab.panes.map((pane) => ({
             id: pane.id,
             type: paneType(pane.type),
@@ -307,7 +310,7 @@ class StateStore {
             activeNotepadTabId: pane.type === 'notepad' ? pane.activeNotepadTabId : undefined,
             fontSize: validPaneFontSize(pane.fontSize) ? pane.fontSize : undefined,
             split: pane.split,
-            layout: sanitizeLayout(pane.layout)
+            layout: sanitizeLayout(pane.layout, this.verticalSlots)
           }))
         }))
       }))
@@ -363,7 +366,7 @@ class StateStore {
     const sessionName = String(name || '').trim() ||
       nextNumberedName('Workspace', this.state.sessions.map((session) => session.name));
     const paneTitle = nextNumberedName('PowerShell', []);
-    const session = defaultSession(sessionName, paneTitle);
+    const session = defaultSession(sessionName, paneTitle, this.verticalSlots);
     this.state.sessions.push(session);
     this.state.activeSessionId = session.id;
     this.save();
@@ -416,7 +419,7 @@ class StateStore {
       return null;
     }
 
-    const layout = appendLayout(found.tab, found.pane, direction, this.defaultColumnSlots);
+    const layout = appendLayout(found.tab.panes, this.verticalSlots);
     const title = nextNumberedName('PowerShell', found.tab.panes.map((candidate) => candidate.title));
     const firstTab = { ...terminalTab({ title, cwd: found.pane.cwd }), scrollback: [] };
     const pane = {
@@ -445,7 +448,7 @@ class StateStore {
     if (!found) {
       return null;
     }
-    const layout = appendLayout(found.tab, found.pane, 'auto', this.defaultColumnSlots);
+    const layout = appendLayout(found.tab.panes, this.verticalSlots);
     const firstTab = filesTab({ path: pathValue || '' });
     const pane = {
       id: crypto.randomUUID(),
@@ -763,7 +766,7 @@ class StateStore {
     if (!found) {
       return null;
     }
-    const layout = appendLayout(found.tab, found.pane, 'auto', this.defaultColumnSlots);
+    const layout = appendLayout(found.tab.panes, this.verticalSlots);
     if (!layout) {
       return null;
     }
@@ -806,7 +809,6 @@ class StateStore {
         const index = tab.panes.findIndex((pane) => pane.id === paneId);
         if (index !== -1) {
           tab.panes.splice(index, 1);
-          this.pruneColumns(tab);
           tab.activePaneId = tab.panes[0].id;
           session.activePaneId = tab.panes[0].id;
           this.save();
@@ -839,81 +841,15 @@ class StateStore {
     return true;
   }
 
-  // Emptying a column would otherwise leave a gap the user cannot close, so
-  // empty columns are dropped and the survivors renumbered.
-  pruneColumns(tab) {
-    const used = new Set(tab.panes.map((pane) => sanitizeLayout(pane.layout).column));
-    const kept = [];
-    const remap = new Map();
-    tab.columns.forEach((column, index) => {
-      if (used.has(index)) {
-        remap.set(index, kept.length);
-        kept.push(column);
-      }
-    });
-    tab.columns = kept.length ? kept : [sanitizeColumn({ width: DEFAULT_PANE_WIDTH, slots: 1 })];
-    tab.panes.forEach((pane) => {
-      const layout = sanitizeLayout(pane.layout);
-      pane.layout = { column: remap.get(layout.column) ?? 0, row: layout.row };
-    });
-  }
-
   placePane(paneId, layout) {
     const found = this.findPane(paneId);
     if (!found) {
       return false;
     }
 
-    const next = sanitizeLayout(layout);
-    // Dropping past the last column appends exactly one column instead of
-    // leaving a run of empty ones behind.
-    next.column = Math.min(next.column, found.tab.columns.length);
-    if (next.column === found.tab.columns.length) {
-      found.tab.columns.push(sanitizeColumn({ width: DEFAULT_PANE_WIDTH, slots: 1 }));
-    }
-    next.row = Math.min(next.row, found.tab.columns[next.column].slots - 1);
-    found.pane.layout = next;
-    this.pruneColumns(found.tab);
+    found.pane.layout = sanitizeLayout(layout, this.verticalSlots);
     this.save();
     return true;
-  }
-
-  setColumnWidth(tabId, index, width) {
-    return this.updateColumn(tabId, index, (column) => sanitizeColumn({ ...column, width }));
-  }
-
-  setColumnSlots(tabId, index, slots) {
-    return this.updateColumn(tabId, index, (column, tab) => {
-      const next = sanitizeColumn({ ...column, slots });
-      // Shrinking a column must not strand panes on rows that no longer exist.
-      const occupied = tab.panes.reduce(
-        (max, pane) => {
-          const layout = sanitizeLayout(pane.layout);
-          return layout.column === index ? Math.max(max, layout.row + 1) : max;
-        },
-        1
-      );
-      next.slots = Math.max(next.slots, occupied);
-      return next;
-    });
-  }
-
-  updateColumn(tabId, index, build) {
-    for (const session of this.state.sessions) {
-      const tab = session.tabs.find((candidate) => candidate.id === tabId);
-      if (!tab) {
-        continue;
-      }
-      const columnIndex = Math.round(Number(index));
-      const column = tab.columns[columnIndex];
-      if (!column) {
-        return false;
-      }
-      tab.columns[columnIndex] = build(column, tab);
-      this.save();
-      return true;
-    }
-    return false;
   }
 
   movePane(paneId, beforePaneId) {
@@ -957,80 +893,87 @@ module.exports = {
   nextNumberedName
 };
 
-// Column widths snap to the solid grid so neighbouring columns stay aligned.
-function snapColumnWidth(value) {
-  return Math.round(value / GRID_UNIT) * GRID_UNIT;
-}
-
-function sanitizeLayout(layout) {
+// Every pane measurement is in whole grid cells. Cell width is the configured
+// pixel size (the board scrolls sideways, so it stays fixed); cell height is
+// the viewport divided by verticalSlots, which the client resolves at render.
+function sanitizeLayout(layout, verticalSlots) {
+  const slots = clampVerticalSlots(verticalSlots);
+  const cell = (value, fallback) => {
+    const rounded = Math.round(Number(value));
+    return Number.isFinite(rounded) ? rounded : fallback;
+  };
+  const w = Math.max(1, cell(layout?.w, DEFAULT_PANE_CELLS));
+  const h = Math.min(slots, Math.max(1, cell(layout?.h, slots)));
   return {
-    column: Math.max(0, Math.round(Number(layout?.column)) || 0),
-    row: Math.max(0, Math.round(Number(layout?.row)) || 0)
+    x: Math.max(0, cell(layout?.x, 0)),
+    // Pushed back rather than clipped, so a pane always fits the board height.
+    y: Math.min(Math.max(0, cell(layout?.y, 0)), slots - h),
+    w,
+    h
   };
 }
 
-function sanitizeColumn(column) {
-  const width = snapColumnWidth(Math.round(Number(column?.width)) || DEFAULT_PANE_WIDTH);
-  const slots = Math.round(Number(column?.slots)) || 1;
-  return {
-    width: Math.max(MIN_COLUMN_WIDTH, width),
-    slots: Math.min(MAX_COLUMN_SLOTS, Math.max(1, slots))
-  };
+function clampGridSize(value) {
+  const size = Math.round(Number(value));
+  return Number.isFinite(size) ? Math.min(MAX_GRID_SIZE, Math.max(MIN_GRID_SIZE, size)) : DEFAULT_GRID_SIZE;
 }
 
-// A column must cover every row its panes claim, otherwise a pane would sit
-// outside the column that owns it.
-function sanitizeColumns(columns, layouts) {
-  const count = layouts.reduce((max, layout) => Math.max(max, layout.column + 1), 1);
-  const list = [];
-  for (let index = 0; index < count; index += 1) {
-    const claimed = layouts.reduce(
-      (max, layout) => (layout.column === index ? Math.max(max, layout.row + 1) : max),
-      0
-    );
-    const source = Array.isArray(columns) ? columns[index] : undefined;
-    list.push(sanitizeColumn({
-      width: source?.width,
-      slots: Math.max(Math.round(Number(source?.slots)) || 1, claimed)
-    }));
-  }
-  return list;
+function clampVerticalSlots(value) {
+  const slots = Math.round(Number(value));
+  return Number.isFinite(slots) ? Math.min(MAX_VERTICAL_SLOTS, Math.max(1, slots)) : DEFAULT_VERTICAL_SLOTS;
 }
 
-function isColumnarLayout(layout) {
-  return Boolean(layout) && Number.isFinite(Number(layout.column));
+// A layout is already in cells when it carries none of the older markers: the
+// column model's `column`, the first grid's `cols`, or the canvas's `z`.
+function isCellLayout(layout) {
+  return Boolean(layout)
+    && layout.column === undefined
+    && layout.cols === undefined
+    && layout.z === undefined
+    && Number.isFinite(Number(layout.w));
 }
 
-// Both older schemas reduce to world pixels first, so a single grouping pass
-// below covers the freeform canvas and the cell grid that preceded it.
-function worldLayout(layout) {
-  if (layout && (Number.isFinite(Number(layout.w)) || Number.isFinite(Number(layout.h)))) {
+// Each older schema reduces to world pixels, so one pass below converts them
+// all. Only x and width matter: vertical position becomes a sort key, because
+// none of the older models shared this one's bounded height.
+function worldLayout(layout, columns) {
+  if (Number.isFinite(Number(layout?.column))) {
+    const index = Math.max(0, Math.round(Number(layout.column)));
+    const list = Array.isArray(columns) ? columns : [];
+    let x = 0;
+    for (let position = 0; position < index; position += 1) {
+      x += Math.round(Number(list[position]?.width)) || LEGACY_CELL_WIDTH;
+    }
     return {
-      x: Math.round(Number(layout.x)) || 0,
-      y: Math.round(Number(layout.y)) || 0,
-      width: Math.max(MIN_COLUMN_WIDTH, Math.round(Number(layout.w)) || DEFAULT_PANE_WIDTH)
+      x,
+      y: Math.max(0, Math.round(Number(layout.row)) || 0),
+      width: Math.round(Number(list[index]?.width)) || LEGACY_CELL_WIDTH
     };
   }
-  const cols = Math.max(1, Math.round(Number(layout?.cols)) || 1);
+  if (layout && layout.cols !== undefined) {
+    const cols = Math.max(1, Math.round(Number(layout.cols)) || 1);
+    return {
+      x: (Math.round(Number(layout.x)) || 0) * LEGACY_CELL_WIDTH,
+      y: (Math.round(Number(layout.y)) || 0) * LEGACY_CELL_HEIGHT,
+      width: cols * LEGACY_CELL_WIDTH
+    };
+  }
   return {
-    x: (Math.round(Number(layout?.x)) || 0) * DEFAULT_PANE_WIDTH,
-    y: (Math.round(Number(layout?.y)) || 0) * DEFAULT_PANE_HEIGHT,
-    width: cols * DEFAULT_PANE_WIDTH
+    x: Math.round(Number(layout?.x)) || 0,
+    y: Math.round(Number(layout?.y)) || 0,
+    width: Math.max(1, Math.round(Number(layout?.w)) || LEGACY_CELL_WIDTH)
   };
 }
 
-// Panes from the old freeform canvas become columns: each distinct x starts a
-// new column, and ascending y becomes the row inside that column.
-function migrateTabLayout(panes, columns) {
+function migratePaneLayouts(panes, columns, gridSize, verticalSlots) {
   const layouts = panes.map((pane) => pane.layout);
-  if (layouts.every(isColumnarLayout)) {
-    const sanitized = layouts.map(sanitizeLayout);
-    return { layouts: sanitized, columns: sanitizeColumns(columns, sanitized) };
+  if (layouts.every(isCellLayout)) {
+    return layouts.map((layout) => sanitizeLayout(layout, verticalSlots));
   }
 
   const grouped = new Map();
   panes
-    .map((pane, index) => ({ ...worldLayout(pane.layout), index }))
+    .map((pane, index) => ({ ...worldLayout(pane.layout, columns), index }))
     .sort((a, b) => a.x - b.x || a.y - b.y)
     .forEach((item) => {
       if (!grouped.has(item.x)) {
@@ -1039,50 +982,34 @@ function migrateTabLayout(panes, columns) {
       grouped.get(item.x).push(item);
     });
 
-  const nextLayouts = new Array(panes.length);
-  const nextColumns = [];
+  const next = new Array(panes.length);
   for (const items of grouped.values()) {
-    const column = nextColumns.length;
-    items.forEach((item, row) => {
-      nextLayouts[item.index] = { column, row };
+    // Panes that shared an x stack up, splitting the slots between them; the
+    // last one absorbs whatever the division left over.
+    const height = Math.max(1, Math.floor(verticalSlots / items.length));
+    items.forEach((item, position) => {
+      const y = position * height;
+      next[item.index] = sanitizeLayout({
+        x: Math.round(item.x / gridSize),
+        y,
+        w: Math.max(1, Math.round(item.width / gridSize)),
+        h: position === items.length - 1 ? verticalSlots - y : height
+      }, verticalSlots);
     });
-    nextColumns.push(sanitizeColumn({
-      width: items.reduce((max, item) => Math.max(max, item.width), 0),
-      slots: items.length
-    }));
   }
-  return { layouts: nextLayouts, columns: sanitizeColumns(nextColumns, nextLayouts) };
+  return next;
 }
 
-// The board grows to the right, but a new pane first tries to fill a free slot
-// of the column it came from, so the configured slots-per-column shape is what
-// actually fills up. 'vertical' additionally grows a full column by one slot;
-// 'horizontal' always starts a new column.
-function appendLayout(tab, sourcePane, direction, defaultSlots = 1) {
-  if ((direction === 'vertical' || direction === 'auto') && sourcePane) {
-    const columnIndex = sanitizeLayout(sourcePane.layout).column;
-    const column = tab.columns[columnIndex];
-    if (column) {
-      const used = new Set(
-        tab.panes
-          .filter((pane) => sanitizeLayout(pane.layout).column === columnIndex)
-          .map((pane) => sanitizeLayout(pane.layout).row)
-      );
-      for (let row = 0; row < column.slots; row += 1) {
-        if (!used.has(row)) {
-          return { column: columnIndex, row };
-        }
-      }
-      // An explicit vertical split still grows a column that is already full;
-      // 'auto' leaves it alone and falls through to a new column.
-      if (direction === 'vertical' && column.slots < MAX_COLUMN_SLOTS) {
-        column.slots += 1;
-        return { column: columnIndex, row: column.slots - 1 };
-      }
-    }
-  }
-  tab.columns.push(sanitizeColumn({ width: DEFAULT_PANE_WIDTH, slots: defaultSlots }));
-  return { column: tab.columns.length - 1, row: 0 };
+// The board grows to the right, so a new pane opens past the rightmost edge at
+// full height. It is the one placement that never disturbs what is already
+// there, which matters more than packing the board tightly.
+function appendLayout(panes, verticalSlots) {
+  const slots = clampVerticalSlots(verticalSlots);
+  const right = panes.reduce((max, pane) => {
+    const layout = sanitizeLayout(pane.layout, slots);
+    return Math.max(max, layout.x + layout.w);
+  }, 0);
+  return { x: right, y: 0, w: DEFAULT_PANE_CELLS, h: slots };
 }
 
 // Excalidraw owns this payload's shape, so it is stored verbatim as a JSON

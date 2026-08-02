@@ -453,7 +453,7 @@
     const layout = normalizePaneLayout(pane.layout);
     const fontSize = Number(pane.fontSize);
     const fontStyle = Number.isInteger(fontSize) ? ` --pane-font-size: ${fontSize}px;` : '';
-    return `grid-row: ${layout.row + 1};${fontStyle}`;
+    return `grid-column: ${layout.x + 1} / span ${layout.w}; grid-row: ${layout.y + 1} / span ${layout.h};${fontStyle}`;
   }
 
   function paneFontSize(pane) {
@@ -678,6 +678,8 @@
         ${pane.type === 'usage' ? `<button class="pane-usage-refresh" type="button" data-usage-refresh aria-label="Refresh usage" title="Refresh usage">${fileActionIcon('refresh')}</button>` : ''}
         <button class="pane-close" data-close-pane="${pane.id}" title="Close pane">${fileActionIcon('close')}</button>
         ${body}
+        ${['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'].map((direction) => `
+        <div class="pane-resize pane-resize-${direction}" data-pane-resize="${pane.id}" data-pane-resize-direction="${direction}"></div>`).join('')}
       </section>
     `;
   }
@@ -1331,8 +1333,8 @@
             <button type="button" class="primary" data-switch-mobile>Switch to Mobile</button>
             <button type="button" class="desktop-mode-banner-dismiss" data-dismiss-banner aria-label="Keep desktop layout" title="Keep desktop layout">×</button>
           </div>
-          <div class="pane-grid" data-pane-grid>
-            ${renderPaneColumns(tab)}
+          <div class="pane-grid" data-pane-grid style="${boardStyle()}">
+            ${tab.panes.map((pane) => renderPane(pane)).join('')}
           </div>
         </section>
       </main>
@@ -4839,7 +4841,7 @@
         renamePane(label.dataset.renamePane, label.textContent);
       };
     });
-    findAll(root, '[data-column-resize]').forEach((handle) => {
+    findAll(root, '[data-pane-resize]').forEach((handle) => {
       handle.onpointerdown = startPaneResize;
     });
   }
@@ -5359,9 +5361,6 @@
             body: JSON.stringify({ layout: preferredLayout })
           });
           pane.layout = result.layout || preferredLayout;
-          if (Array.isArray(result.columns)) {
-            tab.columns = result.columns;
-          }
         } catch (error) {
           showToast(error.message);
         }
@@ -5372,80 +5371,72 @@
     }
   }
 
-  // Which slot the pointer is over. Past the last column means "open a new one".
-  function dropTargetAt(clientX, clientY) {
-    const columns = [...app.querySelectorAll('[data-column]')];
-    const tab = activeTab(activeSession());
-    for (const element of columns) {
-      const rect = element.getBoundingClientRect();
-      if (clientX >= rect.left && clientX < rect.right) {
-        const index = Number(element.dataset.column);
-        const slots = tabColumns(tab)[index]?.slots || 1;
-        const offset = rect.height ? (clientY - rect.top) / rect.height : 0;
-        return { column: index, row: Math.min(slots - 1, Math.max(0, Math.floor(offset * slots))) };
-      }
-    }
-    return { column: columns.length, row: 0 };
+
+  // Which cell the pointer is over, in board coordinates so a scrolled board
+  // still resolves to the cell drawn under the cursor.
+  function pointerCell(grid, clientX, clientY) {
+    const rect = grid.getBoundingClientRect();
+    const rowHeight = rect.height / verticalSlots();
+    return {
+      x: Math.floor((clientX - rect.left + grid.scrollLeft) / gridSize()),
+      y: Math.floor((clientY - rect.top) / rowHeight)
+    };
   }
 
-  function highlightDropTarget(target) {
-    app.querySelectorAll('.pane-column.drop-target').forEach((element) => {
-      element.classList.remove('drop-target');
-      element.style.removeProperty('--drop-row');
-    });
-    const column = target ? app.querySelector(`[data-column="${target.column}"]`) : null;
-    if (column) {
-      column.classList.add('drop-target');
-      column.style.setProperty('--drop-row', target.row + 1);
-    }
-  }
-
-  async function saveColumn(tabId, index, patch) {
-    try {
-      await api(`/api/tabs/${tabId}/columns/${index}`, {
-        method: 'PATCH',
-        body: JSON.stringify(patch)
-      });
-      return true;
-    } catch (error) {
-      showToast(error.message);
-      return false;
-    }
-  }
-
-  // Only a column's trailing edge is draggable now: pane height follows the
-  // column's slot count, so there is nothing vertical left to drag.
+  // Drag and resize both work in whole-cell deltas: the pointer's starting cell
+  // is subtracted from its current one, so the pane can only ever land on a
+  // cell boundary and never drifts by a stray pixel.
   function startPaneResize(event) {
     event.preventDefault();
     event.stopPropagation();
     const handle = event.currentTarget;
-    const columnElement = handle.closest('[data-column]');
-    const tab = activeTab(activeSession());
-    if (!columnElement || !tab) {
+    const paneId = handle.dataset.paneResize;
+    const paneElement = handle.closest('[data-pane]');
+    const grid = app.querySelector('.pane-grid');
+    const found = findPaneState(paneId);
+    if (!paneElement || !grid || !found) {
       return;
     }
 
-    const index = Number(columnElement.dataset.column);
-    const startWidth = tabColumns(tab)[index].width;
-    const startX = event.clientX;
-    let nextWidth = startWidth;
+    const direction = handle.dataset.paneResizeDirection || 'se';
+    const startCell = pointerCell(grid, event.clientX, event.clientY);
+    const startLayout = normalizePaneLayout(found.pane.layout);
+    let nextLayout = startLayout;
 
     handle.setPointerCapture(event.pointerId);
     const onMove = (moveEvent) => {
-      nextWidth = Math.max(MIN_COLUMN_WIDTH, startWidth + (moveEvent.clientX - startX));
-      columnElement.style.setProperty('--column-width', `${nextWidth}px`);
+      const cell = pointerCell(grid, moveEvent.clientX, moveEvent.clientY);
+      const dx = cell.x - startCell.x;
+      const dy = cell.y - startCell.y;
+      const candidate = { ...startLayout };
+      if (direction.includes('e')) candidate.w = startLayout.w + dx;
+      if (direction.includes('w')) {
+        candidate.x = startLayout.x + dx;
+        candidate.w = startLayout.w - dx;
+      }
+      if (direction.includes('s')) candidate.h = startLayout.h + dy;
+      if (direction.includes('n')) {
+        candidate.y = startLayout.y + dy;
+        candidate.h = startLayout.h - dy;
+      }
+      // Keep the anchored edge still once the pane is down to a single cell.
+      if (direction.includes('w') && candidate.w < 1) {
+        candidate.x = startLayout.x + startLayout.w - 1;
+      }
+      if (direction.includes('n') && candidate.h < 1) {
+        candidate.y = startLayout.y + startLayout.h - 1;
+      }
+      nextLayout = normalizePaneLayout(candidate);
+      applyPaneLayoutStyle(paneElement, nextLayout);
     };
     const onUp = async () => {
       handle.removeEventListener('pointermove', onMove);
       handle.removeEventListener('pointerup', onUp);
       handle.removeEventListener('pointercancel', onUp);
-      const width = normalizeColumn({ width: nextWidth }).width;
-      columnElement.style.setProperty('--column-width', `${width}px`);
-      tab.columns = tabColumns(tab).map((column, position) => (
-        position === index ? { ...column, width } : column
-      ));
-      await saveColumn(tab.id, index, { width });
-      panesInColumn(tab, index).forEach((pane) => paneTerminal(pane.id)?.sendResize());
+      if (!await savePaneLayoutLocal(paneId, nextLayout)) {
+        applyPaneLayoutStyle(paneElement, startLayout);
+      }
+      paneTerminal(paneId)?.sendResize();
     };
     handle.addEventListener('pointermove', onMove);
     handle.addEventListener('pointerup', onUp);
@@ -5461,15 +5452,17 @@
     const title = event.currentTarget;
     const paneId = title.dataset.paneTitle;
     const paneElement = title.closest('[data-pane]');
+    const grid = app.querySelector('.pane-grid');
     const found = findPaneState(paneId);
-    if (!paneElement || !found) {
+    if (!paneElement || !grid || !found) {
       return;
     }
 
     const startX = event.clientX;
     const startY = event.clientY;
+    const startCell = pointerCell(grid, startX, startY);
     const startLayout = normalizePaneLayout(found.pane.layout);
-    let target = startLayout;
+    let nextLayout = startLayout;
     let moved = false;
 
     title.setPointerCapture(event.pointerId);
@@ -5482,23 +5475,23 @@
         cancelClick();
         paneElement.classList.add('dragging');
       }
-      target = dropTargetAt(moveEvent.clientX, moveEvent.clientY);
-      highlightDropTarget(target);
+      const cell = pointerCell(grid, moveEvent.clientX, moveEvent.clientY);
+      nextLayout = normalizePaneLayout({
+        ...startLayout,
+        x: startLayout.x + (cell.x - startCell.x),
+        y: startLayout.y + (cell.y - startCell.y)
+      });
+      applyPaneLayoutStyle(paneElement, nextLayout);
     };
     const onUp = async () => {
       title.removeEventListener('pointermove', onMove);
       title.removeEventListener('pointerup', onUp);
       paneElement.classList.remove('dragging');
-      highlightDropTarget(null);
       if (!moved) {
         return;
       }
-      if (target.column !== startLayout.column || target.row !== startLayout.row) {
-        // Moving between columns can add or empty one, so the board is rebuilt
-        // rather than patched in place.
-        if (await savePaneLayoutLocal(paneId, target)) {
-          render();
-        }
+      if (!await savePaneLayoutLocal(paneId, nextLayout)) {
+        applyPaneLayoutStyle(paneElement, startLayout);
       }
       await setActivePane(paneId);
     };
@@ -5515,9 +5508,6 @@
       const found = findPaneState(paneId);
       if (found) {
         found.pane.layout = result.layout || layout;
-        if (Array.isArray(result.columns)) {
-          found.tab.columns = result.columns;
-        }
       }
       return true;
     } catch (error) {
@@ -5541,11 +5531,8 @@
     if (!paneElement) {
       return;
     }
-    const column = app.querySelector(`[data-column="${layout.column}"]`);
-    if (column && paneElement.parentElement !== column) {
-      column.insertBefore(paneElement, column.querySelector('.column-resize'));
-    }
-    paneElement.style.gridRow = layout.row + 1;
+    paneElement.style.gridColumn = `${layout.x + 1} / span ${layout.w}`;
+    paneElement.style.gridRow = `${layout.y + 1} / span ${layout.h}`;
     syncPaneTitleWidth(paneElement);
     paneElement.querySelectorAll('[data-paged-toolbar]').forEach(updatePagedToolbar);
   }
@@ -5561,7 +5548,7 @@
       const next = normalizePaneLayout(update.layout);
       pane.layout = next;
       applyPaneLayoutStyle(document.querySelector(`[data-pane="${pane.id}"]`), next);
-      if (previous.column !== next.column || previous.row !== next.row) {
+      if (previous.w !== next.w || previous.h !== next.h) {
         paneTerminal(pane.id)?.sendResize();
       }
     }
@@ -5575,18 +5562,10 @@
     session.activeTabId = tab.id;
     state.activeSessionId = session.id;
     state.activePaneId = pane.id;
-    if (Array.isArray(response.columns)) {
-      tab.columns = response.columns;
-    }
 
-    const column = ensurePaneColumn(tab, normalizePaneLayout(pane.layout).column);
-    // A column created just now is rendered from tab.panes, which already holds
-    // this pane; only a column that already existed still needs it inserted.
-    // The resize handle is always last, so the pane goes before it.
-    if (column && !column.querySelector(`[data-pane="${pane.id}"]`)) {
-      column.querySelector('.column-resize')?.insertAdjacentHTML('beforebegin', renderPane(pane));
-    }
-    const paneElement = column?.querySelector(`[data-pane="${pane.id}"]`);
+    const grid = app.querySelector('.pane-grid');
+    grid?.insertAdjacentHTML('beforeend', renderPane(pane));
+    const paneElement = grid?.querySelector(`[data-pane="${pane.id}"]`);
     if (paneElement) {
       wirePaneControls(paneElement);
       wireFilesPane(paneElement);
@@ -5600,94 +5579,63 @@
     mountPaneContent(pane);
   }
 
-  const GRID_UNIT = 120;
-  const MIN_COLUMN_WIDTH = GRID_UNIT;
-  const DEFAULT_COLUMN_WIDTH = 720;
-  const MAX_COLUMN_SLOTS = 6;
+  const DEFAULT_GRID_SIZE = 120;
+  const DEFAULT_VERTICAL_SLOTS = 12;
+  const MAX_VERTICAL_SLOTS = 24;
+  const DEFAULT_PANE_CELLS = 6;
 
-  function normalizePaneLayout(layout) {
-    return {
-      column: Math.max(0, Math.round(Number(layout?.column)) || 0),
-      row: Math.max(0, Math.round(Number(layout?.row)) || 0)
+  // Cell width is a fixed pixel size because the board scrolls sideways; cell
+  // height is the viewport divided by the configured slot count, so it is only
+  // ever resolved in CSS.
+  function gridSize() {
+    const size = Math.round(Number(state.config?.ui?.grid_size));
+    return Number.isFinite(size) ? Math.min(400, Math.max(20, size)) : DEFAULT_GRID_SIZE;
+  }
+
+  function verticalSlots() {
+    const slots = Math.round(Number(state.config?.ui?.vertical_slots));
+    return Number.isFinite(slots) ? Math.min(MAX_VERTICAL_SLOTS, Math.max(1, slots)) : DEFAULT_VERTICAL_SLOTS;
+  }
+
+  // Mirrors sanitizeLayout in src/state.js: whole cells, at least one of each,
+  // never taller than the board, and pushed back so it always fits.
+  function normalizePaneLayout(layout, slots = verticalSlots()) {
+    const cell = (value, fallback) => {
+      const rounded = Math.round(Number(value));
+      return Number.isFinite(rounded) ? rounded : fallback;
     };
-  }
-
-  // Mirrors sanitizeColumn in src/state.js so a column the client builds already
-  // matches what the server will store.
-  function normalizeColumn(column) {
-    const width = Math.round(Number(column?.width)) || DEFAULT_COLUMN_WIDTH;
-    const slots = Math.round(Number(column?.slots)) || 1;
+    const w = Math.max(1, cell(layout?.w, DEFAULT_PANE_CELLS));
+    const h = Math.min(slots, Math.max(1, cell(layout?.h, slots)));
     return {
-      width: Math.max(MIN_COLUMN_WIDTH, Math.round(width / GRID_UNIT) * GRID_UNIT),
-      slots: Math.min(MAX_COLUMN_SLOTS, Math.max(1, slots))
+      x: Math.max(0, cell(layout?.x, 0)),
+      y: Math.min(Math.max(0, cell(layout?.y, 0)), slots - h),
+      w,
+      h
     };
-  }
-
-  // The board always has at least one column, and never fewer than the panes
-  // themselves claim.
-  function tabColumns(tab) {
-    const layouts = (tab?.panes || []).map((pane) => normalizePaneLayout(pane.layout));
-    const count = layouts.reduce((max, layout) => Math.max(max, layout.column + 1), 1);
-    return Array.from({ length: count }, (_, index) => normalizeColumn(tab?.columns?.[index]));
-  }
-
-  function panesInColumn(tab, columnIndex) {
-    return (tab?.panes || [])
-      .filter((pane) => normalizePaneLayout(pane.layout).column === columnIndex)
-      .sort((a, b) => normalizePaneLayout(a.layout).row - normalizePaneLayout(b.layout).row);
   }
 
   // The board only scrolls horizontally, so bringing a pane into view is just
-  // scrolling to the column that holds it.
+  // scrolling to the pane itself.
   function ensureActivePaneVisible(behavior = 'smooth') {
     if (isMobileLayout()) {
       return; // the active pane already fills the grid
     }
-    const column = app.querySelector(`[data-pane="${state.activePaneId}"]`)?.closest('[data-column]');
-    if (!column) {
+    const pane = app.querySelector(`[data-pane="${state.activePaneId}"]`);
+    if (!pane) {
       return;
     }
     const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    column.scrollIntoView({
+    pane.scrollIntoView({
       behavior: reduceMotion ? 'auto' : behavior,
       inline: 'nearest',
       block: 'nearest'
     });
   }
 
-  // Each column is its own grid of `slots` equal rows, so a pane lands on the
-  // row its layout names and unused slots simply stay empty.
-  function renderPaneColumn(tab, index, column) {
-    return `
-      <div class="pane-column" data-column="${index}" style="--column-width: ${column.width}px; --column-slots: ${column.slots};">
-        ${panesInColumn(tab, index).map((pane) => renderPane(pane)).join('')}
-        <div class="column-resize" data-column-resize="${index}" role="separator" aria-orientation="vertical"
-          aria-label="Resize column ${index + 1}" tabindex="0"></div>
-      </div>
-    `;
-  }
-
-  function renderPaneColumns(tab) {
-    return tabColumns(tab).map((column, index) => renderPaneColumn(tab, index, column)).join('');
-  }
-
-  // A new pane usually lands in a column that is not on the board yet; columns
-  // only ever get appended, so the new one belongs at the end.
-  function ensurePaneColumn(tab, index) {
-    const grid = app.querySelector('.pane-grid');
-    if (!grid) {
-      return null;
-    }
-    let column = grid.querySelector(`[data-column="${index}"]`);
-    if (!column) {
-      grid.insertAdjacentHTML('beforeend', renderPaneColumn(tab, index, tabColumns(tab)[index]));
-      column = grid.querySelector(`[data-column="${index}"]`);
-      const handle = column?.querySelector('[data-column-resize]');
-      if (handle) {
-        handle.onpointerdown = startPaneResize;
-      }
-    }
-    return column;
+  // The dashed backdrop and the pane placement read the same two variables, so
+  // the cells a pane snaps to are exactly the cells drawn behind it.
+  function boardStyle() {
+    return `--grid-size: ${gridSize()}px; --vertical-slots: ${verticalSlots()};`;
   }
 
   function mountTerminal(paneId, terminalTabId) {
@@ -6819,7 +6767,8 @@
             <section class="settings-section" id="settings-workspace">
               <div class="section-heading"><div><h2>Workspace</h2><p>Sidebar size and how new columns are split.</p></div></div>
               <div class="settings-grid">
-                <label>Rows per new column<input name="ui.default_column_slots" type="number" min="1" max="6" value="${escapeAttr(settings.ui.default_column_slots)}"></label>
+                <label>Grid cell width (px)<input name="ui.grid_size" type="number" min="20" max="400" step="10" value="${escapeAttr(settings.ui.grid_size)}"></label>
+                <label>Rows per screen<input name="ui.vertical_slots" type="number" min="1" max="24" value="${escapeAttr(settings.ui.vertical_slots)}"></label>
               </div>
             </section>
             <section class="settings-section" id="settings-persistence">
@@ -7135,7 +7084,8 @@
       },
       ui: {
         sidebar_width: numberOrUndefined(form.get('ui.sidebar_width')),
-        default_column_slots: numberOrUndefined(form.get('ui.default_column_slots')),
+        grid_size: numberOrUndefined(form.get('ui.grid_size')),
+        vertical_slots: numberOrUndefined(form.get('ui.vertical_slots')),
         terminal_font_family: form.get('ui.terminal_font_family'),
         terminal_font_size: numberOrUndefined(form.get('ui.terminal_font_size')),
         mobile_terminal_font_size: numberOrUndefined(form.get('ui.mobile_terminal_font_size')),

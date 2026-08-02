@@ -191,7 +191,8 @@ function settingsConfig(config, runtimeConfig) {
     },
     ui: {
       sidebar_width: positiveInteger(config.ui.sidebar_width, runtimeConfig.ui.sidebar_width),
-      default_column_slots: positiveInteger(config.ui.default_column_slots, runtimeConfig.ui.default_column_slots),
+      grid_size: positiveInteger(config.ui.grid_size, runtimeConfig.ui.grid_size),
+      vertical_slots: positiveInteger(config.ui.vertical_slots, runtimeConfig.ui.vertical_slots),
       terminal_font_family: config.ui.terminal_font_family,
       terminal_font_size: positiveInteger(config.ui.terminal_font_size, runtimeConfig.ui.terminal_font_size),
       mobile_terminal_font_size: positiveInteger(config.ui.mobile_terminal_font_size, runtimeConfig.ui.mobile_terminal_font_size),
@@ -345,8 +346,11 @@ function sanitizeSettingsUpdates(updates) {
     if (positiveInteger(updates.ui.sidebar_width, 0)) {
       next.ui.sidebar_width = Number(updates.ui.sidebar_width);
     }
-    if (positiveInteger(updates.ui.default_column_slots, 0)) {
-      next.ui.default_column_slots = Number(updates.ui.default_column_slots);
+    if (positiveInteger(updates.ui.grid_size, 0)) {
+      next.ui.grid_size = Number(updates.ui.grid_size);
+    }
+    if (positiveInteger(updates.ui.vertical_slots, 0)) {
+      next.ui.vertical_slots = Number(updates.ui.vertical_slots);
     }
     if (typeof updates.ui.terminal_font_family === 'string' && updates.ui.terminal_font_family.trim()) {
       next.ui.terminal_font_family = updates.ui.terminal_font_family.trim();
@@ -567,7 +571,10 @@ function main() {
   let shell = resolveShell(config);
   let configReloadError = '';
   let restartRequired = false;
-  const store = new StateStore(root, config.persistence.scrollback_lines, config.ui.default_column_slots);
+  const store = new StateStore(root, config.persistence.scrollback_lines, {
+    gridSize: config.ui.grid_size,
+    verticalSlots: config.ui.vertical_slots
+  });
   store.load();
 
   const app = express();

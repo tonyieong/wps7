@@ -51,7 +51,8 @@ const defaultConfig = {
   },
   ui: {
     sidebar_width: 286,
-    default_column_slots: 1,
+    grid_size: 120,
+    vertical_slots: 12,
     terminal_font_family: 'Consolas, "Cascadia Mono", monospace',
     terminal_font_size: 13,
     mobile_terminal_font_size: 12,
@@ -154,8 +155,10 @@ mobile_keybar_buttons = ${formatTomlValue(defaultMobileKeybarButtons)}
 [ui]
 # Hot reload after saving settings in the web UI.
 sidebar_width = 286
-# How many rows a newly opened column is split into (1-6).
-default_column_slots = 1
+# Board grid. Cell width is fixed in pixels; cell height is the viewport height
+# divided by vertical_slots. Pane sizes are always whole cells.
+grid_size = 120
+vertical_slots = 12
 terminal_font_family = "Consolas, \\"Cascadia Mono\\", monospace"
 terminal_font_size = 13
 mobile_terminal_font_size = 12
@@ -282,7 +285,8 @@ function normalizeConfigText(configText) {
 
 [ui]
 sidebar_width = ${defaultConfig.ui.sidebar_width}
-default_column_slots = ${defaultConfig.ui.default_column_slots}
+grid_size = ${defaultConfig.ui.grid_size}
+vertical_slots = ${defaultConfig.ui.vertical_slots}
 terminal_font_family = "${defaultConfig.ui.terminal_font_family.replaceAll('"', '\\"')}"
 terminal_font_size = ${defaultConfig.ui.terminal_font_size}
 mobile_terminal_font_size = ${defaultConfig.ui.mobile_terminal_font_size}
@@ -424,7 +428,7 @@ function updateConfigFile(root, updates) {
     shell: ['preferred', 'fallback', 'args'],
     persistence: ['autosave_minutes', 'scrollback_lines'],
     terminal: ['backend', 'reconnect_scrollback_lines', 'resize_debounce_ms', 'auto_scroll_on_resize', 'cursor_blink', 'browser_notifications', 'mobile_keybar_buttons'],
-    ui: ['sidebar_width', 'default_column_slots', 'terminal_font_family', 'terminal_font_size', 'mobile_terminal_font_size', 'file_pane_font_size', 'system_font_size', 'notepad_word_wrap', 'notepad_indent_guides', 'notepad_autosave'],
+    ui: ['sidebar_width', 'grid_size', 'vertical_slots', 'terminal_font_family', 'terminal_font_size', 'mobile_terminal_font_size', 'file_pane_font_size', 'system_font_size', 'notepad_word_wrap', 'notepad_indent_guides', 'notepad_autosave'],
     file_manager: ['enabled', 'root_mode', 'max_upload_bytes', 'show_hidden', 'bookmarks'],
     browser: ['bookmarks', 'history'],
     usage: Object.keys(defaultConfig.usage),
