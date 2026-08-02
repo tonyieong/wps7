@@ -6842,6 +6842,8 @@
                 <label class="settings-wide">MiniMax Coding Plan API key<input name="usage.minimax_api_key" type="password" autocomplete="off" placeholder="${settings.usage?.minimax_configured ? 'Saved — leave blank to keep' : 'sk-cp-…'}"></label>
                 <label>MiniMax region<select name="usage.minimax_region"><option value="global" ${settings.usage?.minimax_region !== 'china' ? 'selected' : ''}>Global</option><option value="china" ${settings.usage?.minimax_region === 'china' ? 'selected' : ''}>China mainland</option></select></label>
                 <label class="settings-check"><input name="usage.clear_minimax_api_key" type="checkbox"> Clear saved MiniMax key</label>
+                <label class="settings-wide">Codex home folder<input name="usage.codex_home" type="text" autocomplete="off" placeholder="Blank = current user's home" value="${escapeAttr(settings.usage?.codex_home || '')}" title="Override where the signed-in Codex CLI credentials (auth.json) are read from. Needed when wps7.exe runs as a service account."></label>
+                <label class="settings-wide">Claude Code home folder<input name="usage.claude_home" type="text" autocomplete="off" placeholder="Blank = current user's home" value="${escapeAttr(settings.usage?.claude_home || '')}" title="Override where the signed-in Claude Code CLI credentials (.credentials.json) are read from. Needed when wps7.exe runs as a service account."></label>
               </div>
             </section>
             <section class="settings-section restart" id="settings-server">
@@ -7149,7 +7151,9 @@
         show_five_hour: form.get('usage.show_five_hour') === 'on',
         show_weekly: form.get('usage.show_weekly') === 'on',
         show_model_weekly: form.get('usage.show_model_weekly') === 'on',
-        show_credits: form.get('usage.show_credits') === 'on'
+        show_credits: form.get('usage.show_credits') === 'on',
+        codex_home: String(form.get('usage.codex_home') || '').trim(),
+        claude_home: String(form.get('usage.claude_home') || '').trim()
       },
       custom_theme: customThemeFromForm(form)
     };

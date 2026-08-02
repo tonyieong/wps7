@@ -83,7 +83,9 @@ const defaultConfig = {
     show_five_hour: true,
     show_weekly: true,
     show_model_weekly: true,
-    show_credits: true
+    show_credits: true,
+    codex_home: '',
+    claude_home: ''
   },
   custom_theme: {
     selected_light: 'wps-light',
@@ -197,6 +199,13 @@ show_five_hour = true
 show_weekly = true
 show_model_weekly = true
 show_credits = true
+# Override the Codex/Claude Code home folder used to find the signed-in CLI
+# credentials (auth.json / .credentials.json). Leave blank to use the current
+# user's home. Needed when wps7.exe runs as a Windows service account (e.g.
+# LocalSystem) whose home folder differs from the account that ran codex login
+# / claude interactively, e.g. "C:\\Users\\yourname\\.codex".
+codex_home = ""
+claude_home = ""
 
 [custom_theme]
 selected_light = "wps-light"
