@@ -70,7 +70,7 @@ test('the sidebar shortcuts feature has been removed', () => {
 });
 
 test('workspace tabs and terminal grid use the compact edge-to-edge layout', () => {
-  assert.match(styles, /\.workspace\s*\{\s*grid-template-rows:\s*auto minmax\(0, 1fr\) 44px/);
+  assert.match(styles, /\.workspace\s*\{\s*grid-template-rows:\s*auto minmax\(0, 1fr\) 36px/);
   assert.match(styles, /\.tabs\s*\{\s*padding:\s*0 8px 4px/);
   assert.match(styles, /\.tab\s*\{[^}]*width:\s*max-content[^}]*min-width:\s*0[^}]*flex:\s*0 1 auto/s);
   assert.match(styles, /\.pane-grid\s*\{[^}]*border:\s*0/s);

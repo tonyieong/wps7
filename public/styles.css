@@ -3093,7 +3093,7 @@ textarea:focus-visible {
 /* Tabs sit at the bottom, WPS-sheet style: the banner (when shown) tops the
    content area, the board fills what's left, and tabs anchor the bottom. */
 .workspace {
-  grid-template-rows: auto minmax(0, 1fr) 44px;
+  grid-template-rows: auto minmax(0, 1fr) 36px;
 }
 
 .desktop-mode-banner {
@@ -3164,7 +3164,7 @@ textarea:focus-visible {
 }
 
 .tab {
-  height: 34px;
+  height: var(--pane-toolbar-height);
   width: max-content;
   min-width: 0;
   max-width: 220px;
