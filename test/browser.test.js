@@ -11,6 +11,7 @@ const {
   RemoteBrowserPage,
   chromeArguments,
   chromiumProfileCleanupCommand,
+  desktopUserAgent,
   findChromiumExecutable,
   isOwnServerWebsite,
   mobileUserAgent,
@@ -70,6 +71,17 @@ test('mobile emulation uses an Android Chromium identity', () => {
   assert.match(mobileUserAgent('Mozilla/5.0 Chrome/150.0.7339.12 Safari/537.36'), /Chrome\/150\.0\.0\.0 Mobile/);
 });
 
+test('desktop identity masks the Headless marker instead of going blank', () => {
+  // A blank User-Agent header is a strong bot signal on its own and was tripping
+  // sites' (e.g. Google's) automated-traffic detection on every desktop-mode page load.
+  const headless = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/120.0.0.0 Safari/537.36';
+  assert.equal(
+    desktopUserAgent(headless),
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+  );
+  assert.equal(desktopUserAgent(''), '');
+});
+
 test('mobile viewport enables device metrics, touch and the mobile user agent', async () => {
   const page = Object.create(RemoteBrowserPage.prototype);
   page.viewport = normalizeViewport(390, 844, 2, 'mobile');
@@ -95,6 +107,87 @@ test('mobile viewport enables device metrics, touch and the mobile user agent', 
   assert.equal(touch.params.enabled, true);
   const userAgent = calls.find((call) => call.method === 'Emulation.setUserAgentOverride');
   assert.match(userAgent.params.userAgent, /Mobile/);
+});
+
+test('desktop viewport masks the headless Chromium user agent instead of sending a blank one', async () => {
+  const page = Object.create(RemoteBrowserPage.prototype);
+  page.viewport = normalizeViewport(1280, 720, 1);
+  page.emulationMode = 'desktop';
+  page.desktopUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/120.0.0.0 Safari/537.36';
+  const calls = [];
+  page.send = async (method, params) => { calls.push({ method, params }); return {}; };
+
+  await page.applyViewport();
+
+  const userAgent = calls.find((call) => call.method === 'Emulation.setUserAgentOverride');
+  assert.ok(userAgent.params.userAgent);
+  assert.doesNotMatch(userAgent.params.userAgent, /Headless/);
+  assert.match(userAgent.params.userAgent, /Chrome\/120\.0\.0\.0/);
+});
+
+test('a blank tab uses the app theme background instead of Chromium\'s stark white default', async () => {
+  const page = Object.create(RemoteBrowserPage.prototype);
+  const calls = [];
+  page.send = async (method, params) => { calls.push({ method, params }); return {}; };
+
+  await page.applyBackground('#06111b');
+
+  assert.deepEqual(calls, [
+    { method: 'Emulation.setEmulatedMedia', params: { features: [{ name: 'prefers-color-scheme', value: 'dark' }] } },
+    { method: 'Emulation.setDefaultBackgroundColorOverride', params: { color: { r: 6, g: 17, b: 27, a: 1 } } }
+  ]);
+});
+
+test('a light theme background is emulated as prefers-color-scheme: light', async () => {
+  // Headless Chromium's own chrome (about:blank, the raw JSON/text viewer) reads
+  // prefers-color-scheme rather than the background override to decide its color,
+  // so it renders dark regardless of the override unless this is also set.
+  const page = Object.create(RemoteBrowserPage.prototype);
+  const calls = [];
+  page.send = async (method, params) => { calls.push({ method, params }); return {}; };
+
+  await page.applyBackground('#ffffff');
+
+  const media = calls.find((call) => call.method === 'Emulation.setEmulatedMedia');
+  assert.deepEqual(media.params, { features: [{ name: 'prefers-color-scheme', value: 'light' }] });
+});
+
+test('an invalid background color is ignored rather than sent to Chromium', async () => {
+  const page = Object.create(RemoteBrowserPage.prototype);
+  const calls = [];
+  page.send = async (method, params) => { calls.push({ method, params }); return {}; };
+
+  await page.applyBackground('not-a-color');
+
+  assert.deepEqual(calls, []);
+});
+
+test('a client reporting its theme background updates the shared manager color and Chromium', async () => {
+  const page = Object.create(RemoteBrowserPage.prototype);
+  page.manager = { themeBackground: '#06111b' };
+  const calls = [];
+  page.send = async (method, params) => { calls.push({ method, params }); return {}; };
+  const client = { readyState: WebSocket.OPEN, send() {} };
+
+  await page.handle({ type: 'theme', backgroundColor: '#ffffff' }, client);
+
+  assert.equal(page.manager.themeBackground, '#ffffff');
+  const bg = calls.find((call) => call.method === 'Emulation.setDefaultBackgroundColorOverride');
+  assert.deepEqual(bg.params, { color: { r: 255, g: 255, b: 255, a: 1 } });
+});
+
+test('an unchanged or invalid client background does not re-issue the Chromium override', async () => {
+  const page = Object.create(RemoteBrowserPage.prototype);
+  page.manager = { themeBackground: '#06111b' };
+  const calls = [];
+  page.send = async (method, params) => { calls.push({ method, params }); return {}; };
+  const client = { readyState: WebSocket.OPEN, send() {} };
+
+  await page.handle({ type: 'theme', backgroundColor: '#06111b' }, client);
+  await page.handle({ type: 'theme', backgroundColor: 'nope' }, client);
+
+  assert.deepEqual(calls.filter((call) => call.method === 'Emulation.setDefaultBackgroundColorOverride'), []);
+  assert.equal(page.manager.themeBackground, '#06111b');
 });
 
 test('only the latest controlling browser client can resize a shared tab', async () => {
@@ -230,6 +323,22 @@ test('browser resize waits for the initial frame before handling client messages
   await new Promise((resolve) => setImmediate(resolve));
 
   assert.deepEqual(events, ['attach:start', 'attach:end', 'handle:resize']);
+  manager.shutdown();
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('a new browser manager defaults new tabs to the app\'s dark theme background', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-browser-test-'));
+  const manager = new BrowserManager({
+    root,
+    store: { findPane: () => null },
+    normalizeWebsite: (value) => value,
+    serverPort: 5000,
+    networkInterfaces: {}
+  });
+
+  assert.equal(manager.themeBackground, '#06111b');
+
   manager.shutdown();
   fs.rmSync(root, { recursive: true, force: true });
 });

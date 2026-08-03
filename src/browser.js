@@ -74,6 +74,22 @@ function mobileUserAgent(userAgent) {
   return `Mozilla/5.0 (Linux; Android 15; WPS7 Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion}.0.0.0 Mobile Safari/537.36`;
 }
 
+function desktopUserAgent(userAgent) {
+  // Chromium's own UA advertises "HeadlessChrome", a fingerprint sites use to flag
+  // automated traffic (e.g. Google's "unusual traffic" interstitial). Mask it like a
+  // normal desktop Chrome instead of sending a blank User-Agent header.
+  return String(userAgent || '').replace('HeadlessChrome', 'Chrome');
+}
+
+const DEFAULT_BACKGROUND_COLOR = '#06111b';
+
+function parseHexColor(value) {
+  const match = /^#([0-9a-f]{6})$/i.exec(String(value || '').trim());
+  if (!match) return null;
+  const number = parseInt(match[1], 16);
+  return { r: (number >> 16) & 255, g: (number >> 8) & 255, b: number & 255 };
+}
+
 function normalizedHostname(value) {
   const hostname = String(value || '').toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
   return hostname.startsWith('::ffff:') ? hostname.slice(7) : hostname;
@@ -156,6 +172,7 @@ class RemoteBrowserPage {
     this.socket.on('message', (data) => this.onMessage(data));
     this.socket.on('close', () => this.onClose());
     await this.send('Page.enable');
+    await this.applyBackground(this.manager.themeBackground);
     await this.send('Runtime.enable');
     await this.send('DOM.enable');
     await this.send('Runtime.addBinding', { name: this.rtcBinding });
@@ -398,8 +415,21 @@ class RemoteBrowserPage {
         platform: 'Android'
       });
     } else {
-      await this.send('Emulation.setUserAgentOverride', { userAgent: '' });
+      await this.send('Emulation.setUserAgentOverride', { userAgent: desktopUserAgent(this.desktopUserAgent) });
     }
+  }
+
+  async applyBackground(hex) {
+    const color = parseHexColor(hex);
+    if (!color) return;
+    // Chromium's own chrome (about:blank, the raw JSON/text viewer, error pages) picks its
+    // background from prefers-color-scheme, not from the page background override below --
+    // headless Chromium otherwise renders those as dark regardless of the requested color.
+    const scheme = (color.r + color.g + color.b) / 3 > 128 ? 'light' : 'dark';
+    await this.send('Emulation.setEmulatedMedia', {
+      features: [{ name: 'prefers-color-scheme', value: scheme }]
+    }).catch(() => {});
+    await this.send('Emulation.setDefaultBackgroundColorOverride', { color: { ...color, a: 1 } }).catch(() => {});
   }
 
   setClientStreamMode(client, mode, reason = '') {
@@ -803,6 +833,13 @@ class RemoteBrowserPage {
       if (metadata.webrtc) this.startRtcForClient(client);
       return;
     }
+    if (message.type === 'theme') {
+      if (parseHexColor(message.backgroundColor) && message.backgroundColor !== this.manager.themeBackground) {
+        this.manager.themeBackground = message.backgroundColor;
+        await this.applyBackground(message.backgroundColor);
+      }
+      return;
+    }
     if (message.type === 'navigate') {
       const url = this.manager.normalizeWebsite(message.url);
       if (!url) throw new Error('Enter a valid HTTP or HTTPS website.');
@@ -921,6 +958,7 @@ class BrowserManager {
     this.debuggingUrl = '';
     this.starting = null;
     this.captureQueue = Promise.resolve();
+    this.themeBackground = DEFAULT_BACKGROUND_COLOR;
   }
 
   queueCapture(callback) {
@@ -1206,6 +1244,7 @@ module.exports = {
   RemoteBrowserPage,
   chromeArguments,
   chromiumProfileCleanupCommand,
+  desktopUserAgent,
   findChromiumExecutable,
   isOwnServerWebsite,
   mobileUserAgent,
