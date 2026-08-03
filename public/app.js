@@ -5698,6 +5698,11 @@
     return Number.isFinite(slots) ? Math.min(MAX_VERTICAL_SLOTS, Math.max(1, slots)) : DEFAULT_VERTICAL_SLOTS;
   }
 
+  function defaultPaneWidth() {
+    const width = Math.round(Number(state.config?.ui?.default_pane_width));
+    return Number.isFinite(width) ? Math.max(1, width) : DEFAULT_PANE_CELLS;
+  }
+
   // Mirrors sanitizeLayout in src/state.js: whole cells, at least one of each,
   // never taller than the board, and pushed back so it always fits.
   function normalizePaneLayout(layout, slots = verticalSlots()) {
@@ -5705,7 +5710,7 @@
       const rounded = Math.round(Number(value));
       return Number.isFinite(rounded) ? rounded : fallback;
     };
-    const w = Math.max(1, cell(layout?.w, DEFAULT_PANE_CELLS));
+    const w = Math.max(1, cell(layout?.w, defaultPaneWidth()));
     const h = Math.min(slots, Math.max(1, cell(layout?.h, slots)));
     return {
       x: Math.max(0, cell(layout?.x, 0)),
@@ -6905,6 +6910,7 @@
               <div class="settings-grid">
                 <label>Grid cell width (px)<input name="ui.grid_size" type="number" min="20" max="400" step="10" value="${escapeAttr(settings.ui.grid_size)}"></label>
                 <label>Rows per screen<input name="ui.vertical_slots" type="number" min="1" max="24" value="${escapeAttr(settings.ui.vertical_slots)}"></label>
+                <label>New pane width (cells)<input name="ui.default_pane_width" type="number" min="1" max="48" value="${escapeAttr(settings.ui.default_pane_width ?? 6)}"></label>
               </div>
             </section>
             <section class="settings-section" id="settings-persistence">
@@ -7237,6 +7243,7 @@
         sidebar_width: numberOrUndefined(form.get('ui.sidebar_width')),
         grid_size: numberOrUndefined(form.get('ui.grid_size')),
         vertical_slots: numberOrUndefined(form.get('ui.vertical_slots')),
+        default_pane_width: numberOrUndefined(form.get('ui.default_pane_width')),
         terminal_font_family: form.get('ui.terminal_font_family'),
         terminal_font_size: numberOrUndefined(form.get('ui.terminal_font_size')),
         mobile_terminal_font_size: numberOrUndefined(form.get('ui.mobile_terminal_font_size')),

@@ -183,6 +183,44 @@ test('changing vertical slots rescales every pane and keeps them apart', () => {
   assert.equal(store.gridSize, 60);
 });
 
+test('a configured default pane width sizes the first pane and every new pane', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100, { defaultPaneWidth: 4 });
+  store.load();
+  const firstPane = store.state.sessions[0].tabs[0].panes[0];
+  assert.deepEqual(firstPane.layout, { x: 0, y: 0, w: 4, h: 12 });
+
+  const secondPane = store.splitPane(firstPane.id, 'horizontal');
+  assert.deepEqual(secondPane.layout, { x: 4, y: 0, w: 4, h: 12 });
+
+  const thirdPane = store.createFilesPane(secondPane.id, 'C:\\');
+  assert.deepEqual(thirdPane.layout, { x: 8, y: 0, w: 4, h: 12 });
+
+  const session = store.createSession();
+  assert.deepEqual(session.tabs[0].panes[0].layout, { x: 0, y: 0, w: 4, h: 12 });
+});
+
+test('out-of-range default pane widths clamp instead of breaking the board', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100, { defaultPaneWidth: 0 });
+  store.load();
+  assert.deepEqual(store.state.sessions[0].tabs[0].panes[0].layout, { x: 0, y: 0, w: 1, h: 12 });
+});
+
+test('applyGrid updates the default pane width without resizing existing panes', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100, { defaultPaneWidth: 6 });
+  store.load();
+  const firstPane = store.state.sessions[0].tabs[0].panes[0];
+
+  store.applyGrid(store.gridSize, store.verticalSlots, 3);
+  assert.equal(store.defaultPaneWidth, 3);
+  assert.deepEqual(firstPane.layout, { x: 0, y: 0, w: 6, h: 12 });
+
+  const nextPane = store.splitPane(firstPane.id, 'horizontal');
+  assert.deepEqual(nextPane.layout, { x: 6, y: 0, w: 3, h: 12 });
+});
+
 test('new panes open past the rightmost edge at full height', () => {
   for (const type of ['terminal', 'files']) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
