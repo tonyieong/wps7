@@ -32,6 +32,9 @@ function chromeArguments(profilePath) {
     '--disable-component-update',
     '--disable-features=Translate',
     '--auto-accept-this-tab-capture',
+    // Required: without it tab capture falls back to JPEG streaming. The capture
+    // script no longer renames the page to match, which would have let a site
+    // observe the title change; the flag alone still auto-selects the own tab.
     '--auto-select-tab-capture-source-by-title=WPS7 Capture Target',
     '--autoplay-policy=no-user-gesture-required',
     '--window-size=1280,720'
@@ -523,8 +526,6 @@ class RemoteBrowserPage {
         if (!state.stream || state.stream.getTracks().some((track) => track.readyState === 'ended')) {
           if (!state.streamPromise) state.streamPromise = (async () => {
             let expired = false;
-            const originalTitle = document.title;
-            document.title = 'WPS7 Capture Target';
             const request = navigator.mediaDevices.getDisplayMedia({
               video: { frameRate: { ideal: 30, max: 30 } },
               audio: true,
@@ -542,7 +543,6 @@ class RemoteBrowserPage {
                 }, 2500))
               ]);
             } finally {
-              document.title = originalTitle;
               state.streamPromise = null;
             }
           })();

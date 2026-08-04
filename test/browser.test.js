@@ -395,6 +395,23 @@ test('tab capture ending signals every WebRTC peer sharing the stream', () => {
   assert.match(expression, /peerId: activePeerId, type: 'captureEnded'/);
 });
 
+test('tab capture leaves the page title alone', () => {
+  // The capture used to rename the page to "WPS7 Capture Target" so
+  // --auto-select-tab-capture-source-by-title would match it, which made the
+  // rename observable to the site and briefly replaced the real title. The flag
+  // still auto-selects the pane's own tab without it; dropping the flag as well
+  // was tried and sends every pane back to JPEG streaming.
+  const page = Object.create(RemoteBrowserPage.prototype);
+  page.rtcStateKey = '__state';
+  page.rtcBinding = '__signal';
+  const expression = page.rtcCaptureExpression('peer-1');
+
+  assert.doesNotMatch(expression, /document\.title/);
+  assert.match(expression, /preferCurrentTab: true/);
+  assert.ok(chromeArguments('C:\\wps7\\data\\browser-profile')
+    .includes('--auto-select-tab-capture-source-by-title=WPS7 Capture Target'));
+});
+
 test('tab capture crops WebRTC video to the emulated page viewport when Chromium supports it', () => {
   const page = Object.create(RemoteBrowserPage.prototype);
   page.rtcStateKey = '__state';
