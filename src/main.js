@@ -1452,6 +1452,14 @@ function main() {
     }
   });
 
+  app.post('/api/files/copy', requireFileAuth(config), (req, res) => {
+    try {
+      res.status(201).json(files.copyItem(req.body.path, req.body.destination));
+    } catch (error) {
+      handleRouteError(res, error);
+    }
+  });
+
   app.delete('/api/files', requireFileAuth(config), (req, res) => {
     try {
       res.json(files.deleteItem(req.body.path));
