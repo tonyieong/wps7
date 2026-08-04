@@ -11,6 +11,7 @@ test('creates default config with localhost port 5000', () => {
   assert.equal(config.server.host, '127.0.0.1');
   assert.equal(config.server.port, 5000);
   assert.equal(config.ui.terminal_font_family, 'Consolas, "Cascadia Mono", monospace');
+  assert.equal(config.ui.default_pane_width, 6);
   assert.equal(config.ui.terminal_font_size, 13);
   assert.equal(config.ui.mobile_terminal_font_size, 12);
   assert.equal(config.ui.file_pane_font_size, 13);
@@ -129,6 +130,7 @@ test('updates known config values while preserving loadability', () => {
       system_font_size: 15,
       grid_size: 60,
       vertical_slots: 8,
+      default_pane_width: 4,
       notepad_word_wrap: true,
       notepad_indent_guides: true,
       notepad_autosave: true
@@ -206,6 +208,7 @@ test('updates known config values while preserving loadability', () => {
   assert.equal(config.ui.system_font_size, 15);
   assert.equal(config.ui.grid_size, 60);
   assert.equal(config.ui.vertical_slots, 8);
+  assert.equal(config.ui.default_pane_width, 4);
   assert.equal(config.ui.notepad_word_wrap, true);
   assert.equal(config.ui.notepad_indent_guides, true);
   assert.equal(config.ui.notepad_autosave, true);

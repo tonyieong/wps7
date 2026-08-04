@@ -53,6 +53,7 @@ const defaultConfig = {
     sidebar_width: 286,
     grid_size: 120,
     vertical_slots: 12,
+    default_pane_width: 6,
     terminal_font_family: 'Consolas, "Cascadia Mono", monospace',
     terminal_font_size: 13,
     mobile_terminal_font_size: 12,
@@ -161,6 +162,8 @@ sidebar_width = 286
 # divided by vertical_slots. Pane sizes are always whole cells.
 grid_size = 120
 vertical_slots = 12
+# Width, in cells, given to a newly created pane.
+default_pane_width = 6
 terminal_font_family = "Consolas, \\"Cascadia Mono\\", monospace"
 terminal_font_size = 13
 mobile_terminal_font_size = 12
@@ -296,6 +299,7 @@ function normalizeConfigText(configText) {
 sidebar_width = ${defaultConfig.ui.sidebar_width}
 grid_size = ${defaultConfig.ui.grid_size}
 vertical_slots = ${defaultConfig.ui.vertical_slots}
+default_pane_width = ${defaultConfig.ui.default_pane_width}
 terminal_font_family = "${defaultConfig.ui.terminal_font_family.replaceAll('"', '\\"')}"
 terminal_font_size = ${defaultConfig.ui.terminal_font_size}
 mobile_terminal_font_size = ${defaultConfig.ui.mobile_terminal_font_size}
@@ -308,6 +312,7 @@ notepad_autosave = ${defaultConfig.ui.notepad_autosave}
   }
 
   if (/^\[ui\]\s*$/m.test(nextText)) {
+    nextText = ensureTomlKey(nextText, 'ui', 'default_pane_width', defaultConfig.ui.default_pane_width);
     nextText = ensureTomlKey(nextText, 'ui', 'terminal_font_family', defaultConfig.ui.terminal_font_family);
     nextText = ensureTomlKey(nextText, 'ui', 'terminal_font_size', defaultConfig.ui.terminal_font_size);
     nextText = ensureTomlKey(nextText, 'ui', 'mobile_terminal_font_size', defaultConfig.ui.mobile_terminal_font_size);
@@ -437,7 +442,7 @@ function updateConfigFile(root, updates) {
     shell: ['preferred', 'fallback', 'args'],
     persistence: ['autosave_minutes', 'scrollback_lines'],
     terminal: ['backend', 'reconnect_scrollback_lines', 'resize_debounce_ms', 'auto_scroll_on_resize', 'cursor_blink', 'browser_notifications', 'mobile_keybar_buttons'],
-    ui: ['sidebar_width', 'grid_size', 'vertical_slots', 'terminal_font_family', 'terminal_font_size', 'mobile_terminal_font_size', 'file_pane_font_size', 'system_font_size', 'notepad_word_wrap', 'notepad_indent_guides', 'notepad_autosave'],
+    ui: ['sidebar_width', 'grid_size', 'vertical_slots', 'default_pane_width', 'terminal_font_family', 'terminal_font_size', 'mobile_terminal_font_size', 'file_pane_font_size', 'system_font_size', 'notepad_word_wrap', 'notepad_indent_guides', 'notepad_autosave'],
     file_manager: ['enabled', 'root_mode', 'max_upload_bytes', 'show_hidden', 'bookmarks'],
     browser: ['bookmarks', 'history'],
     usage: Object.keys(defaultConfig.usage),

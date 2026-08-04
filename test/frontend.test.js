@@ -790,7 +790,7 @@ test('saving the grid settings reshapes the board without a reload', () => {
   // repositioned in place: a full render would drop every terminal connection
   assert.match(appSource, /if \(state\.config\.layoutChanged\) \{\s*const loaded = await api\('\/api\/state'\)/);
   assert.match(appSource, /applyPaneLayoutStyle\(document\.querySelector\(`\[data-pane="\$\{pane\.id\}"\]`\), pane\.layout\);\s*paneTerminal\(pane\.id\)\?\.sendResize\(\)/);
-  assert.match(mainSource, /const layoutChanged = store\.applyGrid\(config\.ui\.grid_size, config\.ui\.vertical_slots\)/);
+  assert.match(mainSource, /const layoutChanged = store\.applyGrid\(config\.ui\.grid_size, config\.ui\.vertical_slots, config\.ui\.default_pane_width\)/);
   assert.match(mainSource, /publicConfig\(config, shell, restartRequired, configReloadError\), layoutChanged \}/);
 });
 

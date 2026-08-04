@@ -40,6 +40,8 @@ sidebar_width = 286
 # divided by vertical_slots. Pane sizes are always whole cells.
 grid_size = 120
 vertical_slots = 12
+# Width, in cells, given to a newly created pane.
+default_pane_width = 6
 terminal_font_family = "Consolas, \"Cascadia Mono\", monospace"
 terminal_font_size = 13
 mobile_terminal_font_size = 12

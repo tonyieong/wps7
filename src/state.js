@@ -9,6 +9,8 @@ const MAX_GRID_SIZE = 400;
 const DEFAULT_VERTICAL_SLOTS = 12;
 const MAX_VERTICAL_SLOTS = 24;
 const DEFAULT_PANE_CELLS = 6;
+const MIN_PANE_CELLS = 1;
+const MAX_PANE_CELLS = 48;
 // The original grid laid panes out in 720x480 cells; only migration needs this.
 const LEGACY_CELL_WIDTH = 720;
 const LEGACY_CELL_HEIGHT = 480;
@@ -123,7 +125,7 @@ function notepadTabsForPane(pane) {
   return { tabs, activeNotepadTabId };
 }
 
-function defaultSession(name = 'Workspace 1', paneTitle = 'PowerShell 1', verticalSlots = DEFAULT_VERTICAL_SLOTS) {
+function defaultSession(name = 'Workspace 1', paneTitle = 'PowerShell 1', verticalSlots = DEFAULT_VERTICAL_SLOTS, paneWidth = DEFAULT_PANE_CELLS) {
   const paneId = crypto.randomUUID();
   const firstTerminalTab = terminalTab({ title: paneTitle, cwd: process.cwd() });
   return {
@@ -142,7 +144,7 @@ function defaultSession(name = 'Workspace 1', paneTitle = 'PowerShell 1', vertic
             title: paneTitle,
             cwd: process.cwd(),
             split: null,
-            layout: { x: 0, y: 0, w: DEFAULT_PANE_CELLS, h: clampVerticalSlots(verticalSlots) },
+            layout: { x: 0, y: 0, w: clampPaneWidth(paneWidth), h: clampVerticalSlots(verticalSlots) },
             scrollback: [],
             terminalTabs: [{ ...firstTerminalTab, scrollback: [] }],
             activeTerminalTabId: firstTerminalTab.id
@@ -161,7 +163,8 @@ class StateStore {
     this.scrollbackLimit = scrollbackLimit;
     this.gridSize = clampGridSize(options.gridSize);
     this.verticalSlots = clampVerticalSlots(options.verticalSlots);
-    const session = defaultSession('Workspace 1', 'PowerShell 1', this.verticalSlots);
+    this.defaultPaneWidth = clampPaneWidth(options.defaultPaneWidth);
+    const session = defaultSession('Workspace 1', 'PowerShell 1', this.verticalSlots, this.defaultPaneWidth);
     this.state = {
       activeSessionId: session.id,
       sessions: [session],
@@ -282,7 +285,7 @@ class StateStore {
             activeNotepadTabId: pane.type === 'notepad' ? pane.activeNotepadTabId : undefined,
             fontSize: validPaneFontSize(pane.fontSize) ? pane.fontSize : undefined,
             split: pane.split,
-            layout: sanitizeLayout(pane.layout, this.verticalSlots)
+            layout: sanitizeLayout(pane.layout, this.verticalSlots, this.defaultPaneWidth)
           }))
         }))
       }))
@@ -314,7 +317,7 @@ class StateStore {
             activeNotepadTabId: pane.type === 'notepad' ? pane.activeNotepadTabId : undefined,
             fontSize: validPaneFontSize(pane.fontSize) ? pane.fontSize : undefined,
             split: pane.split,
-            layout: sanitizeLayout(pane.layout, this.verticalSlots)
+            layout: sanitizeLayout(pane.layout, this.verticalSlots, this.defaultPaneWidth)
           }))
         }))
       }))
@@ -370,7 +373,7 @@ class StateStore {
     const sessionName = String(name || '').trim() ||
       nextNumberedName('Workspace', this.state.sessions.map((session) => session.name));
     const paneTitle = nextNumberedName('PowerShell', []);
-    const session = defaultSession(sessionName, paneTitle, this.verticalSlots);
+    const session = defaultSession(sessionName, paneTitle, this.verticalSlots, this.defaultPaneWidth);
     this.state.sessions.push(session);
     this.state.activeSessionId = session.id;
     this.save();
@@ -423,7 +426,7 @@ class StateStore {
       return null;
     }
 
-    const layout = appendLayout(found.tab.panes, this.verticalSlots);
+    const layout = appendLayout(found.tab.panes, this.verticalSlots, this.defaultPaneWidth);
     const title = nextNumberedName('PowerShell', found.tab.panes.map((candidate) => candidate.title));
     const firstTab = { ...terminalTab({ title, cwd: found.pane.cwd }), scrollback: [] };
     const pane = {
@@ -452,7 +455,7 @@ class StateStore {
     if (!found) {
       return null;
     }
-    const layout = appendLayout(found.tab.panes, this.verticalSlots);
+    const layout = appendLayout(found.tab.panes, this.verticalSlots, this.defaultPaneWidth);
     const firstTab = filesTab({ path: pathValue || '' });
     const pane = {
       id: crypto.randomUUID(),
@@ -770,7 +773,7 @@ class StateStore {
     if (!found) {
       return null;
     }
-    const layout = appendLayout(found.tab.panes, this.verticalSlots);
+    const layout = appendLayout(found.tab.panes, this.verticalSlots, this.defaultPaneWidth);
     if (!layout) {
       return null;
     }
@@ -851,7 +854,7 @@ class StateStore {
       return false;
     }
 
-    const next = sanitizeLayout(layout, this.verticalSlots);
+    const next = sanitizeLayout(layout, this.verticalSlots, this.defaultPaneWidth);
     // Refusing the move leaves the pane where it was, which the client reads as
     // "put it back" rather than silently nudging it somewhere unasked for.
     const collides = found.tab.panes.some((pane) => pane.id !== paneId
@@ -866,11 +869,12 @@ class StateStore {
 
   // Returns true when pane geometry actually changed, so the caller knows the
   // clients need a fresh layout rather than just a repaint.
-  applyGrid(gridSize, verticalSlots) {
+  applyGrid(gridSize, verticalSlots, defaultPaneWidth) {
     const previous = this.verticalSlots;
     const next = clampVerticalSlots(verticalSlots);
     this.gridSize = clampGridSize(gridSize);
     this.verticalSlots = next;
+    this.defaultPaneWidth = clampPaneWidth(defaultPaneWidth);
     if (previous === next) {
       return false; // only the cell width moved; cell counts are unaffected
     }
@@ -935,13 +939,13 @@ module.exports = {
 // Every pane measurement is in whole grid cells. Cell width is the configured
 // pixel size (the board scrolls sideways, so it stays fixed); cell height is
 // the viewport divided by verticalSlots, which the client resolves at render.
-function sanitizeLayout(layout, verticalSlots) {
+function sanitizeLayout(layout, verticalSlots, paneWidth = DEFAULT_PANE_CELLS) {
   const slots = clampVerticalSlots(verticalSlots);
   const cell = (value, fallback) => {
     const rounded = Math.round(Number(value));
     return Number.isFinite(rounded) ? rounded : fallback;
   };
-  const w = Math.max(1, cell(layout?.w, DEFAULT_PANE_CELLS));
+  const w = Math.max(1, cell(layout?.w, paneWidth));
   const h = Math.min(slots, Math.max(1, cell(layout?.h, slots)));
   return {
     x: Math.max(0, cell(layout?.x, 0)),
@@ -960,6 +964,11 @@ function clampGridSize(value) {
 function clampVerticalSlots(value) {
   const slots = Math.round(Number(value));
   return Number.isFinite(slots) ? Math.min(MAX_VERTICAL_SLOTS, Math.max(1, slots)) : DEFAULT_VERTICAL_SLOTS;
+}
+
+function clampPaneWidth(value) {
+  const width = Math.round(Number(value));
+  return Number.isFinite(width) ? Math.min(MAX_PANE_CELLS, Math.max(MIN_PANE_CELLS, width)) : DEFAULT_PANE_CELLS;
 }
 
 // A layout is already in cells when it carries none of the older markers: the
@@ -1079,13 +1088,14 @@ function rescaleLayout(layout, fromSlots, toSlots) {
 // The board grows to the right, so a new pane opens past the rightmost edge at
 // full height. It is the one placement that never disturbs what is already
 // there, which matters more than packing the board tightly.
-function appendLayout(panes, verticalSlots) {
+function appendLayout(panes, verticalSlots, paneWidth = DEFAULT_PANE_CELLS) {
   const slots = clampVerticalSlots(verticalSlots);
+  const width = clampPaneWidth(paneWidth);
   const right = panes.reduce((max, pane) => {
-    const layout = sanitizeLayout(pane.layout, slots);
+    const layout = sanitizeLayout(pane.layout, slots, width);
     return Math.max(max, layout.x + layout.w);
   }, 0);
-  return { x: right, y: 0, w: DEFAULT_PANE_CELLS, h: slots };
+  return { x: right, y: 0, w: width, h: slots };
 }
 
 // Excalidraw owns this payload's shape, so it is stored verbatim as a JSON
