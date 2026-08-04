@@ -731,6 +731,7 @@
     'upload-folder': '<path d="M3 7h7l2 2h9v10H3z"/><path d="M12 17v-6M9.5 13.5 12 11l2.5 2.5"/>',
     download: '<path d="M12 4v12M7.5 11.5 12 16l4.5-4.5"/><path d="M5 20h14"/>',
     copy: '<rect x="8" y="8" width="11" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h2"/>',
+    'copy-path': '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
     rename: '<path d="m4 20 4.2-1 10.9-10.9-3.2-3.2L5 15.8z"/><path d="m14.5 6.5 3 3"/>',
     delete: '<path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/>',
     'select-all': '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 12 2.5 2.5L16 9"/>',
@@ -869,7 +870,8 @@
             <label class="file-command-button file-upload" data-toolbar-item data-file-upload-trigger role="button" tabindex="${pane.path ? '0' : '-1'}" aria-disabled="${pane.path ? 'false' : 'true'}" title="Upload files" aria-label="Upload files">${fileActionIcon('upload-file')}<input type="file" multiple tabindex="-1" data-file-upload ${pane.path ? '' : 'disabled'}></label>
             <label class="file-command-button file-upload" data-toolbar-item data-file-upload-trigger role="button" tabindex="${pane.path ? '0' : '-1'}" aria-disabled="${pane.path ? 'false' : 'true'}" title="Upload folder" aria-label="Upload folder">${fileActionIcon('upload-folder')}<input type="file" multiple webkitdirectory directory tabindex="-1" data-folder-upload ${pane.path ? '' : 'disabled'}></label>
             <button class="file-command-button" type="button" data-toolbar-item data-file-download-selected aria-label="Download selected" title="Download selected" ${selectedPaths.length ? '' : 'disabled'}>${fileActionIcon('download')}</button>
-            <button class="file-command-button" type="button" data-toolbar-item data-file-copy-selected aria-label="Copy selected paths" title="Copy selected paths" ${selectedPaths.length ? '' : 'disabled'}>${fileActionIcon('copy')}</button>
+            <button class="file-command-button" type="button" data-toolbar-item data-file-duplicate-selected aria-label="Copy selected" title="Copy selected" ${selectedPaths.length ? '' : 'disabled'}>${fileActionIcon('copy')}</button>
+            <button class="file-command-button" type="button" data-toolbar-item data-file-copy-selected aria-label="Copy selected paths" title="Copy selected paths" ${selectedPaths.length ? '' : 'disabled'}>${fileActionIcon('copy-path')}</button>
             <button class="file-command-button" type="button" data-toolbar-item data-file-rename-selected aria-label="Rename selected" title="Rename selected" ${selectedPaths.length === 1 ? '' : 'disabled'}>${fileActionIcon('rename')}</button>
             <button class="file-command-button" type="button" data-toolbar-item data-file-delete-selected aria-label="Delete selected" title="Delete selected" ${selectedPaths.length ? '' : 'disabled'}>${fileActionIcon('delete')}</button>
             <button class="file-command-button ${allSelected ? 'active' : ''}" type="button" data-toolbar-item data-file-select-all aria-label="${allSelected ? 'Deselect all' : 'Select all'}" aria-pressed="${allSelected}" title="${allSelected ? 'Deselect all' : 'Select all'}">${fileActionIcon(allSelected ? 'deselect-all' : 'select-all')}</button>
@@ -901,7 +903,7 @@
               <small class="file-item-count">${selectedPaths.length ? `${selectedPaths.length}/${entries.length} items` : `${entries.length} items`}</small>
             </button>
           ${entries.map((entry, index) => `
-            <div class="file-row compact-file-row ${selectedPaths.includes(entry.path) ? 'selected' : ''} ${entry.hidden ? 'hidden-entry' : ''} ${state.fileClipboard?.paths?.includes(entry.path) ? 'cut-pending' : ''}" role="option" aria-selected="${selectedPaths.includes(entry.path)}" data-file-row="${escapeAttr(entry.path)}" data-file-index="${index}" tabindex="0">
+            <div class="file-row compact-file-row ${selectedPaths.includes(entry.path) ? 'selected' : ''} ${entry.hidden ? 'hidden-entry' : ''} ${state.fileClipboard?.mode === 'cut' && state.fileClipboard?.paths?.includes(entry.path) ? 'cut-pending' : ''}" role="option" aria-selected="${selectedPaths.includes(entry.path)}" data-file-row="${escapeAttr(entry.path)}" data-file-index="${index}" tabindex="0">
               <div class="file-name" data-file-open="${escapeAttr(entry.path)}" data-file-type="${entry.type}">
                 ${entry.type === 'directory' ? fileActionIcon('folder') : fileActionIcon('file')}<span>${escapeHtml(entry.name)}</span>
               </div>
@@ -3841,6 +3843,7 @@
       await uploadDroppedFiles(event.dataTransfer, paneId);
     });
     paneElement.querySelector('[data-file-download-selected]')?.addEventListener('click', () => downloadFiles(selectedFileList(paneId), paneId));
+    paneElement.querySelector('[data-file-duplicate-selected]')?.addEventListener('click', () => copyFiles(selectedFileList(paneId), paneId));
     paneElement.querySelector('[data-file-copy-selected]')?.addEventListener('click', () => copyFilePaths(selectedFileList(paneId)));
     paneElement.querySelector('[data-file-select-all]')?.addEventListener('click', () => {
       state.selectedFiles[paneId] = allVisibleFilesSelected(paneId) ? [] : visibleFilePaths(paneId);
@@ -3988,6 +3991,11 @@
           event.preventDefault();
           cutFiles(selected, paneId);
         }
+      } else if ((event.ctrlKey || event.metaKey) && key === 'c') {
+        if (selected.length) {
+          event.preventDefault();
+          copyFiles(selected, paneId);
+        }
       } else if ((event.ctrlKey || event.metaKey) && key === 'v') {
         if (state.fileClipboard?.paths?.length) {
           event.preventDefault();
@@ -4131,6 +4139,7 @@
     });
     const renameButton = container.querySelector('[data-file-rename-selected]');
     const downloadButton = container.querySelector('[data-file-download-selected]');
+    const duplicateButton = container.querySelector('[data-file-duplicate-selected]');
     const copyButton = container.querySelector('[data-file-copy-selected]');
     const deleteButton = container.querySelector('[data-file-delete-selected]');
     if (renameButton) {
@@ -4141,6 +4150,9 @@
     }
     if (downloadButton) {
       downloadButton.disabled = selected.length === 0;
+    }
+    if (duplicateButton) {
+      duplicateButton.disabled = selected.length === 0;
     }
     if (copyButton) {
       copyButton.disabled = selected.length === 0;
@@ -4507,6 +4519,15 @@
     updateFilesPane(paneId);
   }
 
+  function copyFiles(paths, paneId) {
+    if (!paths.length) {
+      return;
+    }
+    state.fileClipboard = { paths: [...paths], mode: 'copy' };
+    showToast(paths.length === 1 ? 'Item ready to copy.' : `${paths.length} items ready to copy.`, 'success');
+    updateFilesPane(paneId);
+  }
+
   async function pasteFiles(paneId) {
     const found = findPaneState(paneId);
     const clipboard = state.fileClipboard;
@@ -4514,26 +4535,36 @@
       return;
     }
     const destination = found.pane.path;
+    const copying = clipboard.mode === 'copy';
     let failures = 0;
     for (const path of clipboard.paths) {
       try {
-        await api('/api/files/move', {
-          method: 'PATCH',
-          body: JSON.stringify({ path, destination })
-        });
+        if (copying) {
+          await api('/api/files/copy', {
+            method: 'POST',
+            body: JSON.stringify({ path, destination })
+          });
+        } else {
+          await api('/api/files/move', {
+            method: 'PATCH',
+            body: JSON.stringify({ path, destination })
+          });
+        }
       } catch (error) {
         failures += 1;
       }
     }
-    state.fileClipboard = null;
+    if (!copying) {
+      state.fileClipboard = null;
+    }
     state.selectedFiles[paneId] = [];
     await loadFilesPane(found.pane);
     if (failures) {
-      filesPaneData(paneId).error = `${failures} item(s) could not be moved.`;
+      filesPaneData(paneId).error = `${failures} item(s) could not be ${copying ? 'copied' : 'moved'}.`;
       updateFilesPane(paneId);
-      showToast(`${failures} item(s) could not be moved.`);
+      showToast(`${failures} item(s) could not be ${copying ? 'copied' : 'moved'}.`);
     } else {
-      showToast('Moved.', 'success');
+      showToast(copying ? 'Copied.' : 'Moved.', 'success');
     }
   }
 
@@ -4579,6 +4610,7 @@
     if (selected.length) {
       items.push({ label: selected.length > 1 ? `Download (${selected.length})` : 'Download', action: () => downloadFiles(selected, paneId) });
       items.push({ label: 'Cut', action: () => cutFiles(selected, paneId) });
+      items.push({ label: selected.length > 1 ? `Copy (${selected.length})` : 'Copy', action: () => copyFiles(selected, paneId) });
       items.push({ label: selected.length > 1 ? 'Copy paths' : 'Copy path', action: () => copyFilePaths(selected) });
     }
     items.push({ label: 'Paste', disabled: !clipboardReady, action: () => pasteFiles(paneId) });

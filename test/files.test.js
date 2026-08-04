@@ -31,6 +31,28 @@ test('manages folders and files inside a local path', async () => {
   assert.equal(files.deleteItem(created.path).ok, true);
 });
 
+test('copies files and folders without disturbing the source, deduping name clashes', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-files-'));
+  const source = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-files-src-'));
+  const sourceFile = path.join(source, 'note.txt');
+  fs.writeFileSync(sourceFile, 'hello');
+  fs.mkdirSync(path.join(source, 'nested'));
+  fs.writeFileSync(path.join(source, 'nested', 'inner.txt'), 'inner');
+
+  const copiedFile = files.copyItem(sourceFile, root);
+  assert.equal(fs.readFileSync(copiedFile.path, 'utf8'), 'hello');
+  assert.equal(fs.existsSync(sourceFile), true);
+
+  const copiedFolder = files.copyItem(source, root);
+  assert.equal(copiedFolder.type, 'directory');
+  assert.equal(fs.readFileSync(path.join(copiedFolder.path, 'nested', 'inner.txt'), 'utf8'), 'inner');
+  assert.equal(fs.existsSync(source), true);
+
+  const duplicate = files.copyItem(sourceFile, root);
+  assert.notEqual(duplicate.path, copiedFile.path);
+  assert.equal(fs.readFileSync(duplicate.path, 'utf8'), 'hello');
+});
+
 test('repairs utf8 filenames decoded as latin1 mojibake', async () => {
   const mojibake = 'ãæå¡è§èæ¡ä¾éãç¬¬ä¸å­£-éç¨.pdf';
   assert.equal(files.repairMojibakeFilename(mojibake), '【服务规范案例集】第三季-通用.pdf');

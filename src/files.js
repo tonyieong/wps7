@@ -231,6 +231,16 @@ function moveItem(targetPath, destinationPath) {
   return fileInfo(to);
 }
 
+function copyItem(targetPath, destinationPath) {
+  const from = assertLocalPath(targetPath);
+  const destination = assertLocalPath(destinationPath);
+  const stat = fs.statSync(destination);
+  const targetDir = stat.isDirectory() ? destination : path.win32.dirname(destination);
+  const to = uniqueChildPath(targetDir, path.win32.basename(from));
+  fs.cpSync(from, to, { recursive: true });
+  return fileInfo(to);
+}
+
 function deleteItem(targetPath) {
   const target = assertLocalPath(targetPath);
   const stat = fs.statSync(target);
@@ -404,6 +414,7 @@ function prepareBulkDownload(paths) {
 module.exports = {
   createFolder,
   createFile,
+  copyItem,
   deleteItem,
   deleteItems,
   downloadInfo,
