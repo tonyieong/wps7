@@ -290,6 +290,47 @@ test('an unchanged or invalid client background does not re-issue the Chromium o
   assert.equal(page.manager.themeBackground, '#06111b');
 });
 
+test('input events are dispatched without waiting on the renderer', async () => {
+  // Awaiting each dispatch costs a renderer round trip -- ~18ms even on an idle
+  // page -- so a moving pointer queues events faster than they drain. The backlog
+  // grew until every command tripped send()'s 10 second deadline and the pane
+  // stopped responding ("Chromium command timed out: Input.dispatchMouseEvent")
+  // until it emptied again.
+  const page = Object.create(RemoteBrowserPage.prototype);
+  const sent = [];
+  page.socket = { readyState: WebSocket.OPEN, send: (payload) => sent.push(JSON.parse(payload)) };
+  page.nextRequestId = 1;
+  page.send = async () => { throw new Error('input must not wait for a reply'); };
+  page.claimViewport = async () => {};
+  const client = { readyState: WebSocket.OPEN, send() {} };
+
+  await page.handle({ type: 'mouse', event: 'mouseMoved', x: 5, y: 6, buttons: 0 }, client);
+  await page.handle({ type: 'key', event: 'keyDown', key: 'a', text: 'a' }, client);
+  await page.handle({ type: 'text', text: 'hi' }, client);
+  await page.handle({ type: 'touch', event: 'touchStart', touchPoints: [{ x: 1, y: 2 }] }, client);
+
+  assert.deepEqual(sent.map((message) => message.method), [
+    'Input.dispatchMouseEvent',
+    'Input.dispatchKeyEvent',
+    'Input.insertText',
+    'Input.dispatchTouchEvent'
+  ]);
+  // Each command still gets its own id and rides the ordered CDP socket, so
+  // Chromium sees them in the order the user made them.
+  assert.deepEqual(sent.map((message) => message.id), [1, 2, 3, 4]);
+  assert.equal(sent[0].params.x, 5);
+});
+
+test('input aimed at a closed socket is dropped rather than thrown', async () => {
+  const page = Object.create(RemoteBrowserPage.prototype);
+  page.socket = { readyState: WebSocket.CLOSED, send: () => { throw new Error('socket is closed'); } };
+  page.nextRequestId = 1;
+  page.claimViewport = async () => {};
+  const client = { readyState: WebSocket.OPEN, send() {} };
+
+  await assert.doesNotReject(page.handle({ type: 'mouse', event: 'mouseMoved', x: 1, y: 1, buttons: 0 }, client));
+});
+
 test('only the latest controlling browser client can resize a shared tab', async () => {
   const first = { readyState: WebSocket.OPEN, send() {} };
   const second = { readyState: WebSocket.OPEN, send() {} };

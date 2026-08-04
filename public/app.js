@@ -2029,6 +2029,8 @@
     let selectedText = '';
     let hasFrame = false;
     let resizeFrame = 0;
+    let pointerMoveFrame = 0;
+    let pendingPointerMove = null;
     let paneZoomKeydown = null;
     let rtcPeer = null;
     let rtcPeerId = '';
@@ -2079,6 +2081,7 @@
         window.clearTimeout(state.browserZoomTimers.get(paneId));
         state.browserZoomTimers.delete(paneId);
         cancelAnimationFrame(resizeFrame);
+        cancelAnimationFrame(pointerMoveFrame);
         document.removeEventListener('pointerdown', closeContextMenu);
         paneElement.removeEventListener('keydown', paneZoomKeydown, true);
         resizeObserver.disconnect();
@@ -2290,6 +2293,15 @@
       const point = pointerPosition(event);
       connection.send({ type: 'mouse', event: eventName, ...point, modifiers: browserModifiers(event), ...extra });
     };
+    // Also called directly before a press, release or wheel, so a queued move can
+    // never arrive after the event that followed it.
+    const flushPointerMove = () => {
+      cancelAnimationFrame(pointerMoveFrame);
+      pointerMoveFrame = 0;
+      const event = pendingPointerMove;
+      pendingPointerMove = null;
+      if (event) sendMouse('mouseMoved', event, { button: event.buttons & 1 ? 'left' : 'none', buttons: event.buttons });
+    };
     const touchPoints = () => [...activeTouches.values()];
     const updateTouch = (event) => {
       const point = pointerPosition(event);
@@ -2312,6 +2324,7 @@
         connection.send({ type: 'touch', event: 'touchStart', touchPoints: touchPoints(), modifiers: browserModifiers(event) });
         return;
       }
+      flushPointerMove();
       sendMouse('mousePressed', event, { button: event.button === 2 ? 'right' : event.button === 1 ? 'middle' : 'left', buttons: event.buttons, clickCount: event.detail || 1 });
     };
     inputSurface.onpointermove = (event) => {
@@ -2321,7 +2334,10 @@
         connection.send({ type: 'touch', event: 'touchMove', touchPoints: touchPoints(), modifiers: browserModifiers(event) });
         return;
       }
-      sendMouse('mouseMoved', event, { button: event.buttons & 1 ? 'left' : 'none', buttons: event.buttons });
+      // One move per frame: a 125Hz pointer otherwise sends moves faster than the
+      // remote page consumes them, and the user ends up waiting on the backlog.
+      pendingPointerMove = event;
+      if (!pointerMoveFrame) pointerMoveFrame = requestAnimationFrame(flushPointerMove);
     };
     inputSurface.onpointerup = (event) => {
       if (event.pointerType === 'touch') {
@@ -2331,6 +2347,7 @@
         return;
       }
       if (event.button !== 2) {
+        flushPointerMove();
         sendMouse('mouseReleased', event, { button: event.button === 1 ? 'middle' : 'left', buttons: 0, clickCount: event.detail || 1 });
         connection.send({ type: 'selection' });
       }
@@ -2356,6 +2373,7 @@
         showBrowserZoomPopover(paneId);
         return;
       }
+      flushPointerMove();
       sendMouse('mouseWheel', event, { button: 'none', deltaX: event.deltaX, deltaY: event.deltaY });
     };
     const sendKey = (type, event, text = '') => connection.send({

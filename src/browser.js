@@ -236,6 +236,16 @@ class RemoteBrowserPage {
     });
   }
 
+  dispatch(method, params = {}) {
+    // Input carries no useful reply, and awaiting one costs a renderer round trip
+    // (~18ms even on an idle page). A pointer moving at 125Hz then queues events
+    // faster than they drain, so the backlog grew until every command hit send()'s
+    // 10 second deadline and the pane froze until it emptied. The CDP socket keeps
+    // order, so Chromium still receives these in the order the user made them.
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+    this.socket.send(JSON.stringify({ id: this.nextRequestId++, method, params }));
+  }
+
   onMessage(data) {
     let message;
     try {
@@ -900,7 +910,7 @@ class RemoteBrowserPage {
       if (message.event === 'mousePressed' || message.event === 'mouseWheel' || Number(message.buttons)) {
         await this.claimViewport(client);
       }
-      return this.send('Input.dispatchMouseEvent', {
+      return this.dispatch('Input.dispatchMouseEvent', {
         type: message.event,
         x: Number(message.x) || 0,
         y: Number(message.y) || 0,
@@ -914,7 +924,7 @@ class RemoteBrowserPage {
     }
     if (message.type === 'touch') {
       if (message.event === 'touchStart') await this.claimViewport(client);
-      return this.send('Input.dispatchTouchEvent', {
+      return this.dispatch('Input.dispatchTouchEvent', {
         type: String(message.event || ''),
         touchPoints: Array.isArray(message.touchPoints) ? message.touchPoints.slice(0, 5).map((point) => ({
           x: Number(point.x) || 0,
@@ -929,7 +939,7 @@ class RemoteBrowserPage {
     }
     if (message.type === 'key') {
       await this.claimViewport(client);
-      return this.send('Input.dispatchKeyEvent', {
+      return this.dispatch('Input.dispatchKeyEvent', {
         type: message.event,
         key: String(message.key || ''),
         code: String(message.code || ''),
@@ -942,7 +952,7 @@ class RemoteBrowserPage {
     }
     if (message.type === 'text') {
       await this.claimViewport(client);
-      return this.send('Input.insertText', { text: String(message.text || '') });
+      return this.dispatch('Input.insertText', { text: String(message.text || '') });
     }
     if (message.type === 'selection' || message.type === 'copy') {
       const text = await this.selectedText();
