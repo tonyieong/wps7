@@ -154,6 +154,11 @@ test('settings separate PowerShell, file pane, and system font sizes', () => {
   assert.match(styles, /\.session-item[\s\S]*?font-size:\s*var\(--system-font-size/s);
 });
 
+test('a new pane\'s default height is configurable and capped at rows per screen', () => {
+  assert.match(appSource, /New pane height \(cells\)<input name="ui\.default_pane_height" type="number" min="1" max="\$\{escapeAttr\(settings\.ui\.vertical_slots\)\}"/);
+  assert.match(appSource, /default_pane_height:\s*numberOrUndefined\(form\.get\('ui\.default_pane_height'\)\)/);
+});
+
 test('settings hide internal sidebar and file-manager switches and use clear shared icons', () => {
   assert.doesNotMatch(appSource, /Sidebar width<input/);
   assert.doesNotMatch(appSource, /File manager enabled<\/label>/);
@@ -790,7 +795,7 @@ test('saving the grid settings reshapes the board without a reload', () => {
   // repositioned in place: a full render would drop every terminal connection
   assert.match(appSource, /if \(state\.config\.layoutChanged\) \{\s*const loaded = await api\('\/api\/state'\)/);
   assert.match(appSource, /applyPaneLayoutStyle\(document\.querySelector\(`\[data-pane="\$\{pane\.id\}"\]`\), pane\.layout\);\s*paneTerminal\(pane\.id\)\?\.sendResize\(\)/);
-  assert.match(mainSource, /const layoutChanged = store\.applyGrid\(config\.ui\.grid_size, config\.ui\.vertical_slots, config\.ui\.default_pane_width\)/);
+  assert.match(mainSource, /const layoutChanged = store\.applyGrid\(config\.ui\.grid_size, config\.ui\.vertical_slots, config\.ui\.default_pane_width, config\.ui\.default_pane_height\)/);
   assert.match(mainSource, /publicConfig\(config, shell, restartRequired, configReloadError\), layoutChanged \}/);
 });
 

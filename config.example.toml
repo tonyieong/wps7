@@ -42,6 +42,8 @@ grid_size = 120
 vertical_slots = 12
 # Width, in cells, given to a newly created pane.
 default_pane_width = 6
+# Height, in cells, given to a newly created pane. Capped at vertical_slots.
+default_pane_height = 12
 terminal_font_family = "Consolas, \"Cascadia Mono\", monospace"
 terminal_font_size = 13
 mobile_terminal_font_size = 12
