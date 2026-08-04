@@ -207,6 +207,40 @@ test('out-of-range default pane widths clamp instead of breaking the board', () 
   assert.deepEqual(store.state.sessions[0].tabs[0].panes[0].layout, { x: 0, y: 0, w: 1, h: 12 });
 });
 
+test('a configured default pane height sizes the first pane and every new pane', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100, { verticalSlots: 12, defaultPaneHeight: 4 });
+  store.load();
+  const firstPane = store.state.sessions[0].tabs[0].panes[0];
+  assert.deepEqual(firstPane.layout, { x: 0, y: 0, w: 6, h: 4 });
+
+  const secondPane = store.splitPane(firstPane.id, 'horizontal');
+  assert.deepEqual(secondPane.layout, { x: 6, y: 0, w: 6, h: 4 });
+
+  const thirdPane = store.createFilesPane(secondPane.id, 'C:\\');
+  assert.deepEqual(thirdPane.layout, { x: 12, y: 0, w: 6, h: 4 });
+
+  const session = store.createSession();
+  assert.deepEqual(session.tabs[0].panes[0].layout, { x: 0, y: 0, w: 6, h: 4 });
+});
+
+test('a default pane height above rows per screen clamps to the row count', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100, { verticalSlots: 8, defaultPaneHeight: 99 });
+  store.load();
+  assert.equal(store.defaultPaneHeight, 8);
+  assert.deepEqual(store.state.sessions[0].tabs[0].panes[0].layout, { x: 0, y: 0, w: 6, h: 8 });
+});
+
+test('applyGrid re-clamps the default pane height when rows per screen shrinks', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100, { verticalSlots: 12, defaultPaneHeight: 10 });
+  store.load();
+
+  store.applyGrid(store.gridSize, 6, store.defaultPaneWidth, 10);
+  assert.equal(store.defaultPaneHeight, 6);
+});
+
 test('applyGrid updates the default pane width without resizing existing panes', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
   const store = new StateStore(root, 100, { defaultPaneWidth: 6 });

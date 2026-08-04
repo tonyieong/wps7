@@ -194,6 +194,7 @@ function settingsConfig(config, runtimeConfig) {
       grid_size: positiveInteger(config.ui.grid_size, runtimeConfig.ui.grid_size),
       vertical_slots: positiveInteger(config.ui.vertical_slots, runtimeConfig.ui.vertical_slots),
       default_pane_width: positiveInteger(config.ui.default_pane_width, runtimeConfig.ui.default_pane_width),
+      default_pane_height: positiveInteger(config.ui.default_pane_height, runtimeConfig.ui.default_pane_height),
       terminal_font_family: config.ui.terminal_font_family,
       terminal_font_size: positiveInteger(config.ui.terminal_font_size, runtimeConfig.ui.terminal_font_size),
       mobile_terminal_font_size: positiveInteger(config.ui.mobile_terminal_font_size, runtimeConfig.ui.mobile_terminal_font_size),
@@ -357,6 +358,9 @@ function sanitizeSettingsUpdates(updates) {
     }
     if (positiveInteger(updates.ui.default_pane_width, 0)) {
       next.ui.default_pane_width = Number(updates.ui.default_pane_width);
+    }
+    if (positiveInteger(updates.ui.default_pane_height, 0)) {
+      next.ui.default_pane_height = Number(updates.ui.default_pane_height);
     }
     if (typeof updates.ui.terminal_font_family === 'string' && updates.ui.terminal_font_family.trim()) {
       next.ui.terminal_font_family = updates.ui.terminal_font_family.trim();
@@ -580,7 +584,8 @@ function main() {
   const store = new StateStore(root, config.persistence.scrollback_lines, {
     gridSize: config.ui.grid_size,
     verticalSlots: config.ui.vertical_slots,
-    defaultPaneWidth: config.ui.default_pane_width
+    defaultPaneWidth: config.ui.default_pane_width,
+    defaultPaneHeight: config.ui.default_pane_height
   });
   store.load();
 
@@ -620,7 +625,7 @@ function main() {
     store.scrollbackLimit = config.persistence.scrollback_lines;
     // A new slot count rescales every pane, so the client is told to take the
     // fresh layout rather than repaint the one it already has.
-    const layoutChanged = store.applyGrid(config.ui.grid_size, config.ui.vertical_slots, config.ui.default_pane_width);
+    const layoutChanged = store.applyGrid(config.ui.grid_size, config.ui.vertical_slots, config.ui.default_pane_width, config.ui.default_pane_height);
     terminalManager.updateConfig(config, shell);
     clearInterval(autosaveTimer);
     autosaveTimer = startAutosave(store, config);

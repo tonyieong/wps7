@@ -6918,6 +6918,7 @@
                 <label>Grid cell width (px)<input name="ui.grid_size" type="number" min="20" max="400" step="10" value="${escapeAttr(settings.ui.grid_size)}"></label>
                 <label>Rows per screen<input name="ui.vertical_slots" type="number" min="1" max="24" value="${escapeAttr(settings.ui.vertical_slots)}"></label>
                 <label>New pane width (cells)<input name="ui.default_pane_width" type="number" min="1" max="48" value="${escapeAttr(settings.ui.default_pane_width ?? 6)}"></label>
+                <label>New pane height (cells)<input name="ui.default_pane_height" type="number" min="1" max="${escapeAttr(settings.ui.vertical_slots)}" value="${escapeAttr(settings.ui.default_pane_height ?? 12)}"></label>
               </div>
             </section>
             <section class="settings-section" id="settings-persistence">
@@ -7251,6 +7252,7 @@
         grid_size: numberOrUndefined(form.get('ui.grid_size')),
         vertical_slots: numberOrUndefined(form.get('ui.vertical_slots')),
         default_pane_width: numberOrUndefined(form.get('ui.default_pane_width')),
+        default_pane_height: numberOrUndefined(form.get('ui.default_pane_height')),
         terminal_font_family: form.get('ui.terminal_font_family'),
         terminal_font_size: numberOrUndefined(form.get('ui.terminal_font_size')),
         mobile_terminal_font_size: numberOrUndefined(form.get('ui.mobile_terminal_font_size')),

@@ -125,7 +125,7 @@ function notepadTabsForPane(pane) {
   return { tabs, activeNotepadTabId };
 }
 
-function defaultSession(name = 'Workspace 1', paneTitle = 'PowerShell 1', verticalSlots = DEFAULT_VERTICAL_SLOTS, paneWidth = DEFAULT_PANE_CELLS) {
+function defaultSession(name = 'Workspace 1', paneTitle = 'PowerShell 1', verticalSlots = DEFAULT_VERTICAL_SLOTS, paneWidth = DEFAULT_PANE_CELLS, paneHeight = verticalSlots) {
   const paneId = crypto.randomUUID();
   const firstTerminalTab = terminalTab({ title: paneTitle, cwd: process.cwd() });
   return {
@@ -144,7 +144,7 @@ function defaultSession(name = 'Workspace 1', paneTitle = 'PowerShell 1', vertic
             title: paneTitle,
             cwd: process.cwd(),
             split: null,
-            layout: { x: 0, y: 0, w: clampPaneWidth(paneWidth), h: clampVerticalSlots(verticalSlots) },
+            layout: { x: 0, y: 0, w: clampPaneWidth(paneWidth), h: clampPaneHeight(paneHeight, verticalSlots) },
             scrollback: [],
             terminalTabs: [{ ...firstTerminalTab, scrollback: [] }],
             activeTerminalTabId: firstTerminalTab.id
@@ -164,7 +164,8 @@ class StateStore {
     this.gridSize = clampGridSize(options.gridSize);
     this.verticalSlots = clampVerticalSlots(options.verticalSlots);
     this.defaultPaneWidth = clampPaneWidth(options.defaultPaneWidth);
-    const session = defaultSession('Workspace 1', 'PowerShell 1', this.verticalSlots, this.defaultPaneWidth);
+    this.defaultPaneHeight = clampPaneHeight(options.defaultPaneHeight, this.verticalSlots);
+    const session = defaultSession('Workspace 1', 'PowerShell 1', this.verticalSlots, this.defaultPaneWidth, this.defaultPaneHeight);
     this.state = {
       activeSessionId: session.id,
       sessions: [session],
@@ -373,7 +374,7 @@ class StateStore {
     const sessionName = String(name || '').trim() ||
       nextNumberedName('Workspace', this.state.sessions.map((session) => session.name));
     const paneTitle = nextNumberedName('PowerShell', []);
-    const session = defaultSession(sessionName, paneTitle, this.verticalSlots, this.defaultPaneWidth);
+    const session = defaultSession(sessionName, paneTitle, this.verticalSlots, this.defaultPaneWidth, this.defaultPaneHeight);
     this.state.sessions.push(session);
     this.state.activeSessionId = session.id;
     this.save();
@@ -426,7 +427,7 @@ class StateStore {
       return null;
     }
 
-    const layout = appendLayout(found.tab.panes, this.verticalSlots, this.defaultPaneWidth);
+    const layout = appendLayout(found.tab.panes, this.verticalSlots, this.defaultPaneWidth, this.defaultPaneHeight);
     const title = nextNumberedName('PowerShell', found.tab.panes.map((candidate) => candidate.title));
     const firstTab = { ...terminalTab({ title, cwd: found.pane.cwd }), scrollback: [] };
     const pane = {
@@ -455,7 +456,7 @@ class StateStore {
     if (!found) {
       return null;
     }
-    const layout = appendLayout(found.tab.panes, this.verticalSlots, this.defaultPaneWidth);
+    const layout = appendLayout(found.tab.panes, this.verticalSlots, this.defaultPaneWidth, this.defaultPaneHeight);
     const firstTab = filesTab({ path: pathValue || '' });
     const pane = {
       id: crypto.randomUUID(),
@@ -773,7 +774,7 @@ class StateStore {
     if (!found) {
       return null;
     }
-    const layout = appendLayout(found.tab.panes, this.verticalSlots, this.defaultPaneWidth);
+    const layout = appendLayout(found.tab.panes, this.verticalSlots, this.defaultPaneWidth, this.defaultPaneHeight);
     if (!layout) {
       return null;
     }
@@ -869,12 +870,13 @@ class StateStore {
 
   // Returns true when pane geometry actually changed, so the caller knows the
   // clients need a fresh layout rather than just a repaint.
-  applyGrid(gridSize, verticalSlots, defaultPaneWidth) {
+  applyGrid(gridSize, verticalSlots, defaultPaneWidth, defaultPaneHeight) {
     const previous = this.verticalSlots;
     const next = clampVerticalSlots(verticalSlots);
     this.gridSize = clampGridSize(gridSize);
     this.verticalSlots = next;
     this.defaultPaneWidth = clampPaneWidth(defaultPaneWidth);
+    this.defaultPaneHeight = clampPaneHeight(defaultPaneHeight, next);
     if (previous === next) {
       return false; // only the cell width moved; cell counts are unaffected
     }
@@ -969,6 +971,14 @@ function clampVerticalSlots(value) {
 function clampPaneWidth(value) {
   const width = Math.round(Number(value));
   return Number.isFinite(width) ? Math.min(MAX_PANE_CELLS, Math.max(MIN_PANE_CELLS, width)) : DEFAULT_PANE_CELLS;
+}
+
+// Unlike pane width, the cap is not a fixed constant: a pane can never be
+// taller than the current row count, so the ceiling moves with verticalSlots.
+function clampPaneHeight(value, verticalSlots) {
+  const slots = clampVerticalSlots(verticalSlots);
+  const height = Math.round(Number(value));
+  return Number.isFinite(height) ? Math.min(slots, Math.max(MIN_PANE_CELLS, height)) : slots;
 }
 
 // A layout is already in cells when it carries none of the older markers: the
@@ -1086,16 +1096,17 @@ function rescaleLayout(layout, fromSlots, toSlots) {
 }
 
 // The board grows to the right, so a new pane opens past the rightmost edge at
-// full height. It is the one placement that never disturbs what is already
-// there, which matters more than packing the board tightly.
-function appendLayout(panes, verticalSlots, paneWidth = DEFAULT_PANE_CELLS) {
+// the configured default height. It is the one placement that never disturbs
+// what is already there, which matters more than packing the board tightly.
+function appendLayout(panes, verticalSlots, paneWidth = DEFAULT_PANE_CELLS, paneHeight = verticalSlots) {
   const slots = clampVerticalSlots(verticalSlots);
   const width = clampPaneWidth(paneWidth);
+  const height = clampPaneHeight(paneHeight, slots);
   const right = panes.reduce((max, pane) => {
     const layout = sanitizeLayout(pane.layout, slots, width);
     return Math.max(max, layout.x + layout.w);
   }, 0);
-  return { x: right, y: 0, w: width, h: slots };
+  return { x: right, y: 0, w: width, h: height };
 }
 
 // Excalidraw owns this payload's shape, so it is stored verbatim as a JSON
