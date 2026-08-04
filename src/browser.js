@@ -24,6 +24,10 @@ function chromeArguments(profilePath) {
     `--user-data-dir=${profilePath}`,
     '--no-first-run',
     '--no-default-browser-check',
+    // Headless Chromium reports navigator.webdriver === true, the first thing
+    // every bot check reads. Left on, ordinary browsing in a Browser pane keeps
+    // landing on "verify you are human" interstitials.
+    '--disable-blink-features=AutomationControlled',
     '--disable-background-networking',
     '--disable-component-update',
     '--disable-features=Translate',
@@ -69,9 +73,13 @@ function normalizeViewport(width, height, deviceScaleFactor, emulationMode = 'de
   };
 }
 
+// A device model sites actually see in the wild; an invented one ("WPS7 Mobile")
+// reads as a forged identity to the same checks the masked UA is there to satisfy.
+const MOBILE_DEVICE_MODEL = 'Pixel 7';
+
 function mobileUserAgent(userAgent) {
   const chromeVersion = String(userAgent || '').match(/(?:Chrome|HeadlessChrome)\/(\d+)/)?.[1] || '120';
-  return `Mozilla/5.0 (Linux; Android 15; WPS7 Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion}.0.0.0 Mobile Safari/537.36`;
+  return `Mozilla/5.0 (Linux; Android 15; ${MOBILE_DEVICE_MODEL}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeVersion}.0.0.0 Mobile Safari/537.36`;
 }
 
 function desktopUserAgent(userAgent) {
@@ -79,6 +87,20 @@ function desktopUserAgent(userAgent) {
   // automated traffic (e.g. Google's "unusual traffic" interstitial). Mask it like a
   // normal desktop Chrome instead of sending a blank User-Agent header.
   return String(userAgent || '').replace('HeadlessChrome', 'Chrome');
+}
+
+function userAgentMetadata(emulationMode) {
+  // Overriding only the User-Agent string makes Chromium drop its Client Hints:
+  // Sec-CH-UA, -Mobile and -Platform stop being sent entirely and
+  // navigator.userAgentData goes blank. A Chrome user agent that sends no Client
+  // Hints at all is a louder automation signal than the Headless marker it masks,
+  // so the metadata has to travel with the string. brands and fullVersionList are
+  // left out on purpose: Chromium then fills in its own real values, including the
+  // GREASE brand, which no hand-written list can match version for version.
+  if (normalizeEmulationMode(emulationMode) === 'mobile') {
+    return { platform: 'Android', platformVersion: '15.0.0', architecture: '', model: MOBILE_DEVICE_MODEL, mobile: true };
+  }
+  return { platform: 'Windows', platformVersion: '19.0.0', architecture: 'x86', model: '', mobile: false };
 }
 
 const DEFAULT_BACKGROUND_COLOR = '#06111b';
@@ -397,25 +419,40 @@ class RemoteBrowserPage {
 
   async applyViewport() {
     const mobile = this.emulationMode === 'mobile';
+    const landscape = this.viewport.width > this.viewport.height;
+    // A phone's screen is its viewport, but a desktop display is always larger
+    // than the window drawn on it. Reporting screen.width === innerWidth is a
+    // reading no real desktop produces, and bot checks treat it as one.
+    const screen = mobile ? this.viewport : {
+      width: Math.max(1920, this.viewport.width),
+      height: Math.max(1080, this.viewport.height)
+    };
     await this.ensureWindowFits();
     await this.send('Emulation.setDeviceMetricsOverride', {
       ...this.viewport,
       mobile,
-      screenWidth: this.viewport.width,
-      screenHeight: this.viewport.height,
+      screenWidth: screen.width,
+      screenHeight: screen.height,
       screenOrientation: {
-        type: this.viewport.width > this.viewport.height ? 'landscapePrimary' : 'portraitPrimary',
-        angle: this.viewport.width > this.viewport.height ? 90 : 0
+        type: landscape ? 'landscapePrimary' : 'portraitPrimary',
+        // Only a handheld reports a rotated display; a desktop stays at 0.
+        angle: mobile && landscape ? 90 : 0
       }
     });
     await this.send('Emulation.setTouchEmulationEnabled', { enabled: mobile, maxTouchPoints: mobile ? 5 : 1 });
     if (mobile) {
       await this.send('Emulation.setUserAgentOverride', {
         userAgent: mobileUserAgent(this.desktopUserAgent),
-        platform: 'Android'
+        platform: 'Linux armv8l',
+        userAgentMetadata: userAgentMetadata('mobile')
       });
     } else {
-      await this.send('Emulation.setUserAgentOverride', { userAgent: desktopUserAgent(this.desktopUserAgent) });
+      // No platform here: Chromium keeps its genuine navigator.platform ("Win32"),
+      // which naming the platform explicitly would replace with a value no Chrome sends.
+      await this.send('Emulation.setUserAgentOverride', {
+        userAgent: desktopUserAgent(this.desktopUserAgent),
+        userAgentMetadata: userAgentMetadata('desktop')
+      });
     }
   }
 
@@ -1250,5 +1287,6 @@ module.exports = {
   mobileUserAgent,
   normalizeEmulationMode,
   normalizeViewport,
-  terminateStaleChromium
+  terminateStaleChromium,
+  userAgentMetadata
 };

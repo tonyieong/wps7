@@ -17,7 +17,8 @@ const {
   mobileUserAgent,
   normalizeEmulationMode,
   normalizeViewport,
-  terminateStaleChromium
+  terminateStaleChromium,
+  userAgentMetadata
 } = require('../src/browser');
 
 test('remote browser launches an isolated headless Chromium profile', () => {
@@ -33,6 +34,45 @@ test('remote browser launches an isolated headless Chromium profile', () => {
   assert.ok(args.includes('--auto-accept-this-tab-capture'));
   assert.ok(args.includes('--auto-select-tab-capture-source-by-title=WPS7 Capture Target'));
   assert.ok(args.includes('--autoplay-policy=no-user-gesture-required'));
+});
+
+test('headless Chromium does not announce itself as automation controlled', () => {
+  // Headless Chromium sets navigator.webdriver to true, which every major bot
+  // check (reCAPTCHA, Cloudflare, Akamai) reads first. It made Browser panes
+  // hit "verify you are human" interstitials on ordinary browsing.
+  assert.ok(chromeArguments('C:\\wps7\\data\\browser-profile').includes('--disable-blink-features=AutomationControlled'));
+});
+
+test('a masked user agent ships the matching Client Hints metadata', () => {
+  // Emulation.setUserAgentOverride wipes Chromium's Client Hints unless the
+  // metadata is supplied too: Sec-CH-UA/-Mobile/-Platform stop being sent and
+  // navigator.userAgentData goes blank. A Chrome user agent with no Client
+  // Hints at all is a louder automation signal than the Headless marker was.
+  const desktop = userAgentMetadata('desktop');
+  assert.equal(desktop.mobile, false);
+  assert.equal(desktop.platform, 'Windows');
+  assert.ok(desktop.platformVersion);
+  assert.equal(desktop.model, '');
+
+  const mobile = userAgentMetadata('mobile');
+  assert.equal(mobile.mobile, true);
+  assert.equal(mobile.platform, 'Android');
+  assert.match(mobileUserAgent('Mozilla/5.0 Chrome/150.0.7339.12 Safari/537.36'), new RegExp(mobile.model));
+
+  // brands and fullVersionList are deliberately left out so Chromium keeps its
+  // own real values (including the GREASE brand) instead of an invented list.
+  for (const metadata of [desktop, mobile]) {
+    assert.equal(metadata.brands, undefined);
+    assert.equal(metadata.fullVersionList, undefined);
+  }
+});
+
+test('mobile emulation borrows a real device model rather than an invented one', () => {
+  // "WPS7 Mobile" is a device model no bot check has ever seen, so it read as
+  // a forged identity on every mobile-mode page load.
+  const agent = mobileUserAgent('Mozilla/5.0 Chrome/150.0.7339.12 Safari/537.36');
+  assert.doesNotMatch(agent, /WPS7/);
+  assert.equal(userAgentMetadata('mobile').model, 'Pixel 7');
 });
 
 test('starting Chromium first clears out any stale process still holding the profile lock', async () => {
@@ -123,6 +163,66 @@ test('desktop viewport masks the headless Chromium user agent instead of sending
   assert.ok(userAgent.params.userAgent);
   assert.doesNotMatch(userAgent.params.userAgent, /Headless/);
   assert.match(userAgent.params.userAgent, /Chrome\/120\.0\.0\.0/);
+  assert.deepEqual(userAgent.params.userAgentMetadata, userAgentMetadata('desktop'));
+  // navigator.platform stays whatever the host Chromium really reports; naming
+  // it here would replace the genuine "Win32" with a value no Chrome sends.
+  assert.equal(userAgent.params.platform, undefined);
+});
+
+test('a desktop pane reports a screen larger than its viewport', async () => {
+  // Sizing the emulated screen to the viewport makes screen.width === innerWidth,
+  // an impossible reading on a real desktop and a well known headless tell.
+  const page = Object.create(RemoteBrowserPage.prototype);
+  page.viewport = normalizeViewport(1100, 640, 1);
+  page.emulationMode = 'desktop';
+  page.desktopUserAgent = 'Mozilla/5.0 Chrome/120.0.0.0 Safari/537.36';
+  const calls = [];
+  page.send = async (method, params) => { calls.push({ method, params }); return {}; };
+
+  await page.applyViewport();
+
+  const metrics = calls.find((call) => call.method === 'Emulation.setDeviceMetricsOverride').params;
+  assert.equal(metrics.width, 1100);
+  assert.equal(metrics.height, 640);
+  assert.ok(metrics.screenWidth > metrics.width);
+  assert.ok(metrics.screenHeight > metrics.height);
+  // A desktop display is never reported as a rotated device.
+  assert.equal(metrics.screenOrientation.angle, 0);
+});
+
+test('a viewport wider than the default desktop screen still fits inside it', async () => {
+  const page = Object.create(RemoteBrowserPage.prototype);
+  page.viewport = normalizeViewport(2560, 1440, 1);
+  page.emulationMode = 'desktop';
+  page.desktopUserAgent = '';
+  const calls = [];
+  page.send = async (method, params) => { calls.push({ method, params }); return {}; };
+
+  await page.applyViewport();
+
+  const metrics = calls.find((call) => call.method === 'Emulation.setDeviceMetricsOverride').params;
+  assert.ok(metrics.screenWidth >= metrics.width);
+  assert.ok(metrics.screenHeight >= metrics.height);
+});
+
+test('a mobile pane keeps the screen equal to the viewport, as a phone reports it', async () => {
+  const page = Object.create(RemoteBrowserPage.prototype);
+  page.viewport = normalizeViewport(390, 844, 2, 'mobile');
+  page.emulationMode = 'mobile';
+  page.desktopUserAgent = 'Mozilla/5.0 Chrome/120.0.0.0 Safari/537.36';
+  const calls = [];
+  page.send = async (method, params) => { calls.push({ method, params }); return {}; };
+
+  await page.applyViewport();
+
+  const metrics = calls.find((call) => call.method === 'Emulation.setDeviceMetricsOverride').params;
+  assert.equal(metrics.screenWidth, metrics.width);
+  assert.equal(metrics.screenHeight, metrics.height);
+  assert.equal(metrics.screenOrientation.type, 'portraitPrimary');
+
+  const userAgent = calls.find((call) => call.method === 'Emulation.setUserAgentOverride').params;
+  assert.deepEqual(userAgent.userAgentMetadata, userAgentMetadata('mobile'));
+  assert.equal(userAgent.platform, 'Linux armv8l');
 });
 
 test('a blank tab uses the app theme background instead of Chromium\'s stark white default', async () => {
