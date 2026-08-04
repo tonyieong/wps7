@@ -1499,6 +1499,16 @@
     if (!items.length || !previous || !next || !toolbar.clientWidth) {
       return;
     }
+    // Below the file pane's narrow-column breakpoint the toolbar wraps onto a
+    // second row (styles.css) instead of paging, so every action stays reachable.
+    const filesPane = toolbar.closest('.files-pane');
+    if (filesPane && filesPane.clientWidth <= 360) {
+      items.forEach((item) => item.hidden = false);
+      previous.hidden = true;
+      next.hidden = true;
+      delete toolbar.dataset.toolbarPageIndex;
+      return;
+    }
     const fixed = Array.from(toolbar.children).filter((child) => !child.hasAttribute('data-toolbar-item') && !child.hasAttribute('data-toolbar-page'));
     const gap = Number.parseFloat(getComputedStyle(toolbar).gap) || 0;
     items.forEach((item) => item.hidden = false);

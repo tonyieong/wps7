@@ -3294,6 +3294,18 @@ textarea:focus-visible {
   height: 40px;
 }
 
+/* Below 360px the toolbar wraps instead of paging (app.js skips pagination
+   at this width), so every action stays visible without clicking through pages. */
+@container (max-width: 360px) {
+  .app.mode-mobile .files-pane .file-command-bar,
+  .app.mobile-device .files-pane .file-command-bar,
+  .files-pane .file-command-bar {
+    height: auto;
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+}
+
 .files-pane .file-toolbar {
   grid-row: 1;
   gap: 0;
