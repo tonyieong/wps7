@@ -872,6 +872,7 @@
             <button class="file-command-button" type="button" data-toolbar-item data-file-download-selected aria-label="Download selected" title="Download selected" ${selectedPaths.length ? '' : 'disabled'}>${fileActionIcon('download')}</button>
             <button class="file-command-button" type="button" data-toolbar-item data-file-duplicate-selected aria-label="Copy selected" title="Copy selected" ${selectedPaths.length ? '' : 'disabled'}>${fileActionIcon('copy')}</button>
             <button class="file-command-button" type="button" data-toolbar-item data-file-copy-selected aria-label="Copy selected paths" title="Copy selected paths" ${selectedPaths.length ? '' : 'disabled'}>${fileActionIcon('copy-path')}</button>
+            <button class="file-command-button" type="button" data-toolbar-item data-file-paste aria-label="Paste" title="Paste" ${state.fileClipboard?.paths?.length && pane.path ? '' : 'disabled'}>${fileActionIcon('paste')}</button>
             <button class="file-command-button" type="button" data-toolbar-item data-file-rename-selected aria-label="Rename selected" title="Rename selected" ${selectedPaths.length === 1 ? '' : 'disabled'}>${fileActionIcon('rename')}</button>
             <button class="file-command-button" type="button" data-toolbar-item data-file-delete-selected aria-label="Delete selected" title="Delete selected" ${selectedPaths.length ? '' : 'disabled'}>${fileActionIcon('delete')}</button>
             <button class="file-command-button ${allSelected ? 'active' : ''}" type="button" data-toolbar-item data-file-select-all aria-label="${allSelected ? 'Deselect all' : 'Select all'}" aria-pressed="${allSelected}" title="${allSelected ? 'Deselect all' : 'Select all'}">${fileActionIcon(allSelected ? 'deselect-all' : 'select-all')}</button>
@@ -3725,6 +3726,12 @@
       if (!pathMenu || !pathToggle || !pathInput) {
         return;
       }
+      if (open) {
+        const paneHeight = paneElement.getBoundingClientRect().height;
+        if (paneHeight > 0) {
+          pathMenu.style.maxHeight = `${Math.round(paneHeight * 0.6)}px`;
+        }
+      }
       pathMenu.hidden = !open;
       pathToggle.setAttribute('aria-expanded', String(open));
       pathInput.setAttribute('aria-expanded', String(open));
@@ -3845,6 +3852,7 @@
     paneElement.querySelector('[data-file-download-selected]')?.addEventListener('click', () => downloadFiles(selectedFileList(paneId), paneId));
     paneElement.querySelector('[data-file-duplicate-selected]')?.addEventListener('click', () => copyFiles(selectedFileList(paneId), paneId));
     paneElement.querySelector('[data-file-copy-selected]')?.addEventListener('click', () => copyFilePaths(selectedFileList(paneId)));
+    paneElement.querySelector('[data-file-paste]')?.addEventListener('click', () => pasteFiles(paneId));
     paneElement.querySelector('[data-file-select-all]')?.addEventListener('click', () => {
       state.selectedFiles[paneId] = allVisibleFilesSelected(paneId) ? [] : visibleFilePaths(paneId);
       syncFileSelectionUi(paneElement, paneId);
@@ -4510,6 +4518,16 @@
     }
   }
 
+  function syncFilePasteButtons() {
+    const clipboardReady = Boolean(state.fileClipboard?.paths?.length);
+    document.querySelectorAll('[data-files-pane]').forEach((paneElement) => {
+      const pasteButton = paneElement.querySelector('[data-file-paste]');
+      if (pasteButton) {
+        pasteButton.disabled = !clipboardReady || !findPaneState(paneElement.dataset.filesPane)?.pane.path;
+      }
+    });
+  }
+
   function cutFiles(paths, paneId) {
     if (!paths.length) {
       return;
@@ -4517,6 +4535,7 @@
     state.fileClipboard = { paths: [...paths], mode: 'cut' };
     showToast(paths.length === 1 ? 'Item ready to move.' : `${paths.length} items ready to move.`, 'success');
     updateFilesPane(paneId);
+    syncFilePasteButtons();
   }
 
   function copyFiles(paths, paneId) {
@@ -4526,6 +4545,7 @@
     state.fileClipboard = { paths: [...paths], mode: 'copy' };
     showToast(paths.length === 1 ? 'Item ready to copy.' : `${paths.length} items ready to copy.`, 'success');
     updateFilesPane(paneId);
+    syncFilePasteButtons();
   }
 
   async function pasteFiles(paneId) {
@@ -4556,6 +4576,7 @@
     }
     if (!copying) {
       state.fileClipboard = null;
+      syncFilePasteButtons();
     }
     state.selectedFiles[paneId] = [];
     await loadFilesPane(found.pane);
