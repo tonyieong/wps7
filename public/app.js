@@ -192,6 +192,12 @@
       root.style.setProperty(`--${name}`, value);
     }
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', palette.ink);
+    if (state.lastBrowserThemeBackground !== palette.terminalBg) {
+      state.lastBrowserThemeBackground = palette.terminalBg;
+      for (const connection of state.browserConnections.values()) {
+        connection.send({ type: 'theme', backgroundColor: palette.terminalBg });
+      }
+    }
     state.themeTransitionFrame = window.requestAnimationFrame(() => {
       state.themeTransitionFrame = window.requestAnimationFrame(() => {
         root.classList.remove('theme-changing');
@@ -2112,6 +2118,7 @@
         reconnectDelay = 500;
         status.textContent = 'Loading…';
         const size = browserViewportSize(viewport);
+        connection.send({ type: 'theme', backgroundColor: activeTheme().terminalBg });
         connection.send({
           type: 'clientCapabilities',
           webrtc: typeof RTCPeerConnection === 'function',
