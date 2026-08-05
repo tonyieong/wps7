@@ -3166,12 +3166,13 @@ textarea:focus-visible {
     width: 100%;
     min-width: 0;
     grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: auto auto;
-    row-gap: 1px;
     padding: 3px 0;
   }
-  .files-pane .compact-file-row .file-name,
-  .files-pane .file-parent-row .file-name {
+  .files-pane .compact-file-row {
+    grid-template-rows: auto auto;
+    row-gap: 1px;
+  }
+  .files-pane .compact-file-row .file-name {
     grid-column: 1 / -1;
     grid-row: 1;
   }
@@ -3188,32 +3189,15 @@ textarea:focus-visible {
     font-size: 10px;
     opacity: .75;
   }
-}
-
-.app.mode-mobile .files-pane .file-location-row,
-.app.mobile-device .files-pane .file-location-row,
-.app.mode-mobile .files-pane .file-command-bar,
-.app.mobile-device .files-pane .file-command-bar,
-.app.mode-mobile .files-pane .file-filter-row,
-.app.mobile-device .files-pane .file-filter-row {
-  height: 44px;
-}
-
-.app.mode-mobile .files-pane .file-command-button,
-.app.mobile-device .files-pane .file-command-button {
-  min-width: 40px;
-  height: 40px;
-}
-
-.app.mode-mobile .files-pane .paged-toolbar-button,
-.app.mobile-device .files-pane .paged-toolbar-button {
-  min-width: 34px;
-  height: 40px;
-}
-
-.app.mode-mobile .files-pane .file-path-input,
-.app.mobile-device .files-pane .file-path-input {
-  height: 40px;
+  .files-pane .file-parent-row .file-name {
+    grid-column: 1;
+  }
+  .files-pane .file-parent-row .file-item-count {
+    grid-column: 2;
+  }
+  .files-pane .file-parent-row small:empty {
+    display: none;
+  }
 }
 
 .app.mode-mobile .files-pane .compact-file-row,
@@ -3231,8 +3215,6 @@ textarea:focus-visible {
 /* Below 360px the toolbar wraps instead of paging (app.js skips pagination
    at this width), so every action stays visible without clicking through pages. */
 @container (max-width: 360px) {
-  .app.mode-mobile .files-pane .file-command-bar,
-  .app.mobile-device .files-pane .file-command-bar,
   .files-pane .file-command-bar {
     height: auto;
     flex-wrap: wrap;
