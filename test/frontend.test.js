@@ -304,6 +304,18 @@ test('browser tab strip keeps its icon after tab updates and the surface fills t
   assert.match(appSource, /const pointerPosition = \(event\) => \{\s*const rect = inputSurface\.getBoundingClientRect\(\);[\s\S]*?event\.clientX - rect\.left\) \/ Math\.max\(1, rect\.width\) \* contentWidth/);
 });
 
+test('browser panes coalesce pointer moves to one per frame', () => {
+  // A 125Hz pointer produces moves faster than the remote page consumes them, so
+  // sending every one only grows a queue the user then waits on.
+  assert.match(appSource, /pointerMoveFrame = requestAnimationFrame\(flushPointerMove\)/);
+  assert.match(appSource, /const flushPointerMove = \(\) => \{[\s\S]*?sendMouse\('mouseMoved'/);
+  assert.match(appSource, /dispose\(\) \{[\s\S]*?cancelAnimationFrame\(pointerMoveFrame\)/);
+  // A queued move must never land after the press, release or wheel that followed it.
+  assert.match(appSource, /flushPointerMove\(\);\s*sendMouse\('mousePressed'/);
+  assert.match(appSource, /flushPointerMove\(\);\s*sendMouse\('mouseReleased'/);
+  assert.match(appSource, /flushPointerMove\(\);\s*sendMouse\('mouseWheel'/);
+});
+
 test('workspace exposes multi-tab notepad panes with line numbers and text-file save support', () => {
   assert.match(appSource, /data-action="notepad"[^>]+aria-label="New notepad"/);
   assert.match(appSource, /function renderNotepadPane\(pane\)/);

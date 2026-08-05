@@ -66,12 +66,14 @@
     suppressSessionClickUntil: 0,
     theme: ({ dark: 'wps-dark', light: 'wps-light', custom: 'custom-dark' })[localStorage.getItem('wps7.theme')] || localStorage.getItem('wps7.theme') || 'wps-dark',
     customThemeDraft: null,
-    whiteboards: new Map()
+    whiteboards: new Map(),
+    focusedPaneId: ''
   };
 
   const app = document.getElementById('app');
   document.addEventListener('pointerdown', closeFloatingSidebarFromOutside);
   document.addEventListener('pointerdown', closeNotepadPopoversFromOutside);
+  document.addEventListener('pointerdown', closePaneFocusFromOutside);
   window.visualViewport?.addEventListener('resize', updateVisualViewport);
   window.visualViewport?.addEventListener('scroll', updateVisualViewport);
   window.addEventListener('resize', updateVisualViewport);
@@ -1275,6 +1277,7 @@
     }
     state.activeSessionId = session.id;
     state.activePaneId = state.activePaneId || tab.activePaneId || tab.panes[0].id;
+    state.focusedPaneId = '';
     const sidebarWidth = state.sidebarWidth || Number(state.config.ui?.sidebar_width) || 286;
 
     applyTheme();
@@ -2025,6 +2028,8 @@
     let selectedText = '';
     let hasFrame = false;
     let resizeFrame = 0;
+    let pointerMoveFrame = 0;
+    let pendingPointerMove = null;
     let paneZoomKeydown = null;
     let rtcPeer = null;
     let rtcPeerId = '';
@@ -2075,6 +2080,7 @@
         window.clearTimeout(state.browserZoomTimers.get(paneId));
         state.browserZoomTimers.delete(paneId);
         cancelAnimationFrame(resizeFrame);
+        cancelAnimationFrame(pointerMoveFrame);
         document.removeEventListener('pointerdown', closeContextMenu);
         paneElement.removeEventListener('keydown', paneZoomKeydown, true);
         resizeObserver.disconnect();
@@ -2286,6 +2292,15 @@
       const point = pointerPosition(event);
       connection.send({ type: 'mouse', event: eventName, ...point, modifiers: browserModifiers(event), ...extra });
     };
+    // Also called directly before a press, release or wheel, so a queued move can
+    // never arrive after the event that followed it.
+    const flushPointerMove = () => {
+      cancelAnimationFrame(pointerMoveFrame);
+      pointerMoveFrame = 0;
+      const event = pendingPointerMove;
+      pendingPointerMove = null;
+      if (event) sendMouse('mouseMoved', event, { button: event.buttons & 1 ? 'left' : 'none', buttons: event.buttons });
+    };
     const touchPoints = () => [...activeTouches.values()];
     const updateTouch = (event) => {
       const point = pointerPosition(event);
@@ -2308,6 +2323,7 @@
         connection.send({ type: 'touch', event: 'touchStart', touchPoints: touchPoints(), modifiers: browserModifiers(event) });
         return;
       }
+      flushPointerMove();
       sendMouse('mousePressed', event, { button: event.button === 2 ? 'right' : event.button === 1 ? 'middle' : 'left', buttons: event.buttons, clickCount: event.detail || 1 });
     };
     inputSurface.onpointermove = (event) => {
@@ -2317,7 +2333,10 @@
         connection.send({ type: 'touch', event: 'touchMove', touchPoints: touchPoints(), modifiers: browserModifiers(event) });
         return;
       }
-      sendMouse('mouseMoved', event, { button: event.buttons & 1 ? 'left' : 'none', buttons: event.buttons });
+      // One move per frame: a 125Hz pointer otherwise sends moves faster than the
+      // remote page consumes them, and the user ends up waiting on the backlog.
+      pendingPointerMove = event;
+      if (!pointerMoveFrame) pointerMoveFrame = requestAnimationFrame(flushPointerMove);
     };
     inputSurface.onpointerup = (event) => {
       if (event.pointerType === 'touch') {
@@ -2327,6 +2346,7 @@
         return;
       }
       if (event.button !== 2) {
+        flushPointerMove();
         sendMouse('mouseReleased', event, { button: event.button === 1 ? 'middle' : 'left', buttons: 0, clickCount: event.detail || 1 });
         connection.send({ type: 'selection' });
       }
@@ -2352,6 +2372,7 @@
         showBrowserZoomPopover(paneId);
         return;
       }
+      flushPointerMove();
       sendMouse('mouseWheel', event, { button: 'none', deltaX: event.deltaX, deltaY: event.deltaY });
     };
     const sendKey = (type, event, text = '') => connection.send({
@@ -4744,6 +4765,79 @@
     findAll(root, '[data-pane-resize]').forEach((handle) => {
       handle.onpointerdown = startPaneResize;
     });
+    findAll(root, '.pane-kind-icon').forEach((icon) => {
+      icon.ondblclick = (event) => {
+        event.stopPropagation();
+        event.preventDefault();
+        togglePaneFocus(icon.closest('[data-pane]')?.dataset.pane);
+      };
+    });
+  }
+
+  function togglePaneFocus(paneId) {
+    if (!paneId) {
+      return;
+    }
+    if (state.focusedPaneId === paneId) {
+      exitPaneFocus();
+    } else {
+      enterPaneFocus(paneId);
+    }
+  }
+
+  function enterPaneFocus(paneId) {
+    const paneElement = document.querySelector(`[data-pane="${paneId}"]`);
+    if (!paneElement) {
+      return;
+    }
+    if (state.focusedPaneId) {
+      exitPaneFocus();
+    }
+    const rect = paneElement.getBoundingClientRect();
+    const ratio = rect.width / rect.height || 1;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const targetArea = viewportWidth * viewportHeight * 0.85;
+    let focusHeight = Math.sqrt(targetArea / ratio);
+    let focusWidth = focusHeight * ratio;
+    const maxWidth = viewportWidth * 0.96;
+    const maxHeight = viewportHeight * 0.96;
+    if (focusWidth > maxWidth) {
+      focusWidth = maxWidth;
+      focusHeight = focusWidth / ratio;
+    }
+    if (focusHeight > maxHeight) {
+      focusHeight = maxHeight;
+      focusWidth = focusHeight * ratio;
+    }
+    state.focusedPaneId = paneId;
+    paneElement.style.setProperty('--pane-focus-width', `${Math.round(focusWidth)}px`);
+    paneElement.style.setProperty('--pane-focus-height', `${Math.round(focusHeight)}px`);
+    paneElement.classList.add('pane-focused');
+    const backdrop = document.createElement('div');
+    backdrop.className = 'pane-focus-backdrop';
+    backdrop.setAttribute('data-pane-focus-backdrop', '');
+    app.querySelector('.app')?.appendChild(backdrop);
+    setActivePane(paneId, paneElement.dataset.paneType !== 'files');
+  }
+
+  function exitPaneFocus() {
+    if (!state.focusedPaneId) {
+      return;
+    }
+    const paneElement = document.querySelector(`[data-pane="${state.focusedPaneId}"]`);
+    paneElement?.classList.remove('pane-focused');
+    paneElement?.style.removeProperty('--pane-focus-width');
+    paneElement?.style.removeProperty('--pane-focus-height');
+    state.focusedPaneId = '';
+    app.querySelector('[data-pane-focus-backdrop]')?.remove();
+  }
+
+  function closePaneFocusFromOutside(event) {
+    if (!state.focusedPaneId || event.target.closest?.(`[data-pane="${state.focusedPaneId}"]`)) {
+      return;
+    }
+    exitPaneFocus();
   }
 
   function startPaneSwipe(event) {
@@ -4880,6 +4974,9 @@
       return;
     }
 
+    if (state.focusedPaneId === paneId) {
+      exitPaneFocus();
+    }
     clearUsageRefresh(paneId);
     const index = found.tab.panes.findIndex((pane) => pane.id === paneId);
     found.tab.panes.splice(index, 1);

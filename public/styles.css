@@ -5137,3 +5137,25 @@ a:focus-visible {
   outline: none;
 }
 
+.pane-kind-icon {
+  cursor: pointer;
+}
+
+.pane-focus-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  background: rgba(5, 7, 10, .55);
+}
+
+.pane-grid .pane.pane-focused {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: var(--pane-focus-width, 85vw);
+  height: var(--pane-focus-height, 85vh);
+  z-index: 96;
+  box-shadow: 0 24px 64px var(--shadow);
+}
+
