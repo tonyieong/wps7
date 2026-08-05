@@ -910,44 +910,6 @@ textarea {
   font-size: 12px;
 }
 
-.file-panel {
-  position: fixed;
-  top: 0;
-  bottom: 0;
-  z-index: 60;
-  display: grid;
-  grid-template-rows: auto auto auto auto minmax(0, 1fr);
-  border-right: 1px solid var(--line);
-  background: var(--panel);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.42);
-}
-
-.file-panel {
-  left: 48px;
-  width: min(420px, calc(100vw - 48px));
-}
-
-.file-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--line);
-}
-
-.file-header .icon-button {
-  margin-left: auto;
-}
-
-.file-path {
-  padding: 10px 12px;
-  color: var(--muted);
-  font: 12px Consolas, "Cascadia Mono", monospace;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .file-toolbar {
   display: grid;
   grid-template-rows: auto auto;
@@ -982,13 +944,6 @@ textarea {
 .file-path-input:focus {
   border-color: var(--accent);
   outline: none;
-}
-
-.file-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 0 12px 10px;
 }
 
 .file-upload {
@@ -1043,7 +998,6 @@ textarea {
   background: #142926;
 }
 
-.file-row > button:first-child,
 .file-list > .file-row[data-file-open],
 .file-name {
   min-width: 0;
@@ -1055,11 +1009,6 @@ textarea {
   align-items: center;
   gap: 8px;
   text-align: left;
-}
-
-.file-row > button[data-file-open],
-.file-name {
-  min-width: 0;
 }
 
 .file-name span {
@@ -1079,12 +1028,6 @@ textarea {
 .file-row small {
   color: var(--muted);
   font-size: 11px;
-}
-
-.file-icon {
-  width: 18px;
-  flex: 0 0 auto;
-  color: var(--accent);
 }
 
 .files-pane {
@@ -1220,13 +1163,6 @@ textarea {
 
   .pane-resize {
     display: none;
-  }
-
-  .file-panel {
-    left: 0;
-    right: 0;
-    width: auto;
-    border-left: 1px solid var(--line);
   }
 
   .settings-grid {
@@ -1970,7 +1906,6 @@ textarea:focus-visible {
 }
 
 .file-toolbar,
-.file-header,
 .settings-header,
 .settings-footer {
   border-color: var(--line);
@@ -1993,7 +1928,6 @@ textarea:focus-visible {
   background: var(--accent-soft);
 }
 
-.file-panel,
 .settings-panel {
   background: var(--panel);
   border-color: var(--line);

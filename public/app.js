@@ -51,12 +51,6 @@
     notepadAutosaveTimers: new Map(),
     themeTransitionFrame: 0,
     clickTimer: null,
-    filePanelOpen: false,
-    filePath: '',
-    fileDrives: [],
-    fileEntries: [],
-    fileParent: '',
-    fileError: '',
     selectedFiles: {},
     filePaneData: {},
     filePathHistory: loadFilePathHistory(),
@@ -355,7 +349,7 @@
 
   function renderLogin() {
     disposeTerminals();
-    document.querySelectorAll('.settings-overlay, .file-panel').forEach((element) => {
+    document.querySelectorAll('.settings-overlay').forEach((element) => {
       element._disposeModal?.();
       element.remove();
     });
@@ -1678,14 +1672,6 @@
     }
     existing._disposeModal?.();
     existing.remove();
-  }
-
-  async function toggleFilePanel() {
-    state.filePanelOpen = !state.filePanelOpen;
-    if (state.filePanelOpen && !state.filePath) {
-      await loadDrives();
-    }
-    renderFilePanel();
   }
 
   async function openFilesPane() {
@@ -3605,31 +3591,6 @@
     await openNotepadPane(path);
   }
 
-  async function loadDrives() {
-    try {
-      state.fileError = '';
-      const result = await api('/api/files/drives');
-      state.fileDrives = result.drives || [];
-      state.fileEntries = [];
-      state.fileParent = '';
-    } catch (error) {
-      state.fileError = error.message;
-    }
-  }
-
-  async function loadFiles(path) {
-    try {
-      state.fileError = '';
-      const result = await api(`/api/files?path=${encodeURIComponent(path)}`);
-      state.filePath = result.path;
-      state.fileEntries = result.entries || [];
-      state.fileParent = result.parent || '';
-    } catch (error) {
-      state.fileError = error.message;
-    }
-    renderFilePanel();
-  }
-
   async function loadFilesPane(pane) {
     if (!pane) {
       return;
@@ -3988,12 +3949,6 @@
         }
       };
     });
-    paneElement.querySelectorAll('[data-file-rename]').forEach((button) => {
-      button.onclick = () => renameFile(button.dataset.fileRename, paneId);
-    });
-    paneElement.querySelectorAll('[data-file-delete]').forEach((button) => {
-      button.onclick = () => deleteFile(button.dataset.fileDelete, paneId);
-    });
     paneElement.onkeydown = (event) => {
       if (event.target.closest('input')) {
         return;
@@ -4199,75 +4154,6 @@
     document.querySelectorAll('[data-files-pane]').forEach((paneElement) => syncFileSelectionUi(paneElement, paneElement.dataset.filesPane));
   }
 
-  function renderFilePanel() {
-    document.querySelector('.file-panel')?.remove();
-    if (!state.filePanelOpen) {
-      return;
-    }
-    const panel = document.createElement('aside');
-    panel.className = 'file-panel';
-    const showingDrives = !state.filePath;
-    panel.innerHTML = `
-      <header class="file-header">
-        <div class="brand">Files</div>
-        <button class="icon-button" data-file-close title="Close">×</button>
-      </header>
-      <div class="file-path">${escapeHtml(state.filePath || 'This PC')}</div>
-      <div class="file-actions">
-        ${state.filePath ? '<button class="secondary" data-file-up>Up</button><button class="secondary" data-file-new-folder>New folder</button><label class="secondary file-upload">Upload<input type="file" multiple data-file-upload></label>' : '<button class="secondary" data-file-refresh>Refresh</button>'}
-      </div>
-      <div class="file-error">${escapeHtml(state.fileError)}</div>
-      <div class="file-list">
-        ${showingDrives ? state.fileDrives.map((drive) => `
-          <button class="file-row" data-file-open="${escapeAttr(drive.path)}">
-            <span class="file-icon">▣</span><span>${escapeHtml(drive.name)}</span>
-          </button>
-        `).join('') : state.fileEntries.map((entry) => `
-          <div class="file-row" data-file-row="${escapeAttr(entry.path)}">
-            <button data-file-open="${escapeAttr(entry.path)}" ${entry.type === 'file' ? 'data-file-download' : ''}>
-              <span class="file-icon">${entry.type === 'directory' ? '▣' : '□'}</span>
-              <span>${escapeHtml(entry.name)}</span>
-            </button>
-            <small>${entry.type === 'file' ? formatBytes(entry.size) : 'Folder'}</small>
-            <button class="icon-button" data-file-rename="${escapeAttr(entry.path)}" title="Rename">✎</button>
-            <button class="icon-button" data-file-delete="${escapeAttr(entry.path)}" title="Delete">×</button>
-          </div>
-        `).join('')}
-      </div>
-    `;
-    document.body.appendChild(panel);
-    panel.querySelector('[data-file-close]').onclick = () => {
-      state.filePanelOpen = false;
-      renderFilePanel();
-    };
-    panel.querySelector('[data-file-refresh]')?.addEventListener('click', loadDrives);
-    panel.querySelector('[data-file-up]')?.addEventListener('click', () => {
-      if (state.fileParent) {
-        loadFiles(state.fileParent);
-      } else {
-        state.filePath = '';
-        loadDrives().then(renderFilePanel);
-      }
-    });
-    panel.querySelector('[data-file-new-folder]')?.addEventListener('click', createFolder);
-    panel.querySelector('[data-file-upload]')?.addEventListener('change', uploadFiles);
-    panel.querySelectorAll('[data-file-open]').forEach((button) => {
-      button.onclick = () => {
-        if (button.hasAttribute('data-file-download')) {
-          downloadFile(button.dataset.fileOpen);
-        } else {
-          loadFiles(button.dataset.fileOpen);
-        }
-      };
-    });
-    panel.querySelectorAll('[data-file-rename]').forEach((button) => {
-      button.onclick = () => renameFile(button.dataset.fileRename);
-    });
-    panel.querySelectorAll('[data-file-delete]').forEach((button) => {
-      button.onclick = () => deleteFile(button.dataset.fileDelete);
-    });
-  }
-
   const INVALID_FILENAME_CHARS = /[<>:"/|?*]/;
 
   function validateFileName(name) {
@@ -4379,8 +4265,8 @@
     URL.revokeObjectURL(url);
   }
 
-  async function createFolder(paneId = '') {
-    const found = paneId ? findPaneState(paneId) : null;
+  async function createFolder(paneId) {
+    const found = findPaneState(paneId);
     const result = await openAppModal({
       title: 'New folder',
       fields: [{ name: 'name', label: 'Folder name', value: '' }],
@@ -4393,21 +4279,13 @@
     try {
       await api('/api/files/folder', {
         method: 'POST',
-        body: JSON.stringify({ path: found?.pane.path || state.filePath, name: result.name })
+        body: JSON.stringify({ path: found.pane.path, name: result.name })
       });
-      if (found) {
-        await loadFilesPane(found.pane);
-      } else {
-        await loadFiles(state.filePath);
-      }
+      await loadFilesPane(found.pane);
     } catch (error) {
-      if (found) {
-        filesPaneData(paneId).error = friendlyFileError(error.message);
-      } else {
-        state.fileError = error.message;
-      }
+      filesPaneData(paneId).error = friendlyFileError(error.message);
       showToast(error.message);
-      found ? updateFilesPane(paneId) : renderFilePanel();
+      updateFilesPane(paneId);
     }
   }
 
@@ -4438,8 +4316,8 @@
     }
   }
 
-  async function renameFile(path, paneId = '') {
-    const found = paneId ? findPaneState(paneId) : null;
+  async function renameFile(path, paneId) {
+    const found = findPaneState(paneId);
     const currentName = path.split(/[\\/]/).pop() || '';
     const result = await openAppModal({
       title: 'Rename',
@@ -4455,47 +4333,11 @@
         method: 'PATCH',
         body: JSON.stringify({ path, name: result.name })
       });
-      if (found) {
-        await loadFilesPane(found.pane);
-      } else {
-        await loadFiles(state.filePath);
-      }
+      await loadFilesPane(found.pane);
     } catch (error) {
-      if (found) {
-        filesPaneData(paneId).error = friendlyFileError(error.message);
-      } else {
-        state.fileError = error.message;
-      }
+      filesPaneData(paneId).error = friendlyFileError(error.message);
       showToast(error.message);
-      found ? updateFilesPane(paneId) : renderFilePanel();
-    }
-  }
-
-  async function deleteFile(path, paneId = '') {
-    const found = paneId ? findPaneState(paneId) : null;
-    const name = path.split(/[\\/]/).pop() || 'this item';
-    const confirmed = await confirmDialog('Delete item', `Delete "${name}" permanently? This cannot be undone.`, { danger: true });
-    if (!confirmed) {
-      return;
-    }
-    try {
-      await api('/api/files', {
-        method: 'DELETE',
-        body: JSON.stringify({ path })
-      });
-      if (found) {
-        await loadFilesPane(found.pane);
-      } else {
-        await loadFiles(state.filePath);
-      }
-    } catch (error) {
-      if (found) {
-        filesPaneData(paneId).error = friendlyFileError(error.message);
-      } else {
-        state.fileError = error.message;
-      }
-      showToast(error.message);
-      found ? updateFilesPane(paneId) : renderFilePanel();
+      updateFilesPane(paneId);
     }
   }
 
@@ -4681,7 +4523,7 @@
     return String(value).replace(/["\\]/g, '\\$&');
   }
 
-  async function downloadFile(path, paneId = '') {
+  async function downloadFile(path, paneId) {
     try {
       const headers = {};
       if (state.token) {
@@ -4694,15 +4536,9 @@
       }
       await saveResponseAsFile(response, path.split(/[\\/]/).pop() || 'download');
     } catch (error) {
-      if (paneId) {
-        filesPaneData(paneId).error = friendlyFileError(error.message);
-      } else {
-        state.fileError = error.message;
-      }
+      filesPaneData(paneId).error = friendlyFileError(error.message);
       showToast(error.message);
-      if (paneId) {
-        updateFilesPane(paneId);
-      }
+      updateFilesPane(paneId);
     }
   }
 
@@ -4740,7 +4576,7 @@
     }
   }
 
-  async function uploadFiles(event, paneId = '') {
+  async function uploadFiles(event, paneId) {
     const files = Array.from(event.target.files || []).map((file) => ({ file, name: file.webkitRelativePath || file.name }));
     await uploadFileItems(files, paneId);
     event.target.value = '';
@@ -4773,52 +4609,37 @@
     return (await Promise.all(children.map((child) => droppedEntryFiles(child, `${prefix}${entry.name}/`)))).flat();
   }
 
-  async function uploadFileItems(files, paneId = '') {
-    const found = paneId ? findPaneState(paneId) : null;
+  async function uploadFileItems(files, paneId) {
+    const found = findPaneState(paneId);
     if (!files.length) {
       return;
     }
     const form = new FormData();
     files.forEach((item) => form.append('files', item.file, item.name));
     try {
-      await uploadWithProgress(`/api/files/upload?path=${encodeURIComponent(found?.pane.path || state.filePath)}`, form, paneId);
-      if (found) {
-        await loadFilesPane(found.pane);
-      } else {
-        await loadFiles(state.filePath);
-      }
+      await uploadWithProgress(`/api/files/upload?path=${encodeURIComponent(found.pane.path)}`, form, paneId);
+      await loadFilesPane(found.pane);
       showToast('Upload complete.', 'success');
     } catch (error) {
-      if (found) {
-        filesPaneData(paneId).error = error.message;
-      } else {
-        state.fileError = error.message;
-      }
+      filesPaneData(paneId).error = error.message;
       showToast(error.message);
-      found ? updateFilesPane(paneId) : renderFilePanel();
+      updateFilesPane(paneId);
     } finally {
       setFileStatus('', paneId);
     }
   }
 
-  function setFileStatus(message, paneId = '') {
-    if (paneId) {
-      const pane = document.querySelector(`[data-pane="${paneId}"]`);
-      const target = pane?.querySelector(`[data-pane-upload-status="${paneId}"]`);
-      if (target) {
-        target.textContent = message;
-        target.closest('.pane-title')?.classList.toggle('uploading', Boolean(message));
-        syncPaneTitleWidth(pane);
-      }
-      return;
-    }
-    const target = document.querySelector('.file-panel .file-error');
+  function setFileStatus(message, paneId) {
+    const pane = document.querySelector(`[data-pane="${paneId}"]`);
+    const target = pane?.querySelector(`[data-pane-upload-status="${paneId}"]`);
     if (target) {
       target.textContent = message;
+      target.closest('.pane-title')?.classList.toggle('uploading', Boolean(message));
+      syncPaneTitleWidth(pane);
     }
   }
 
-  function uploadWithProgress(url, form, paneId = '') {
+  function uploadWithProgress(url, form, paneId) {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('POST', url);
@@ -4869,7 +4690,7 @@
       paneData.bookmarks = result.bookmarks || [];
       updateFilesPane(paneId);
     } catch (error) {
-      state.fileError = error.message;
+      paneData.error = friendlyFileError(error.message);
       showToast(error.message);
       updateFilesPane(paneId);
     }

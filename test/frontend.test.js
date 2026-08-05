@@ -348,7 +348,7 @@ test('files and PowerShell panes share a multi-tab strip like the browser pane',
 });
 
 test('adding panes updates the workspace incrementally without rebuilding existing terminals', () => {
-  const openFilesSource = appSource.slice(appSource.indexOf('async function openFilesPane'), appSource.indexOf('async function loadDrives'));
+  const openFilesSource = appSource.slice(appSource.indexOf('async function openFilesPane'), appSource.indexOf('async function openUsagePane'));
   const createPaneSource = appSource.slice(appSource.indexOf('async function createPane'), appSource.indexOf('function startPaneResize'));
   assert.match(openFilesSource, /appendPaneToWorkspace/);
   assert.match(createPaneSource, /appendPaneToWorkspace/);
