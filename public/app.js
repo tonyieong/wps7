@@ -1784,6 +1784,7 @@
     if (!found || !strip) return;
     strip.innerHTML = renderBrowserTabs(found.pane);
     wireBrowserTabs(paneElement, paneId);
+    wirePaneKindIcon(strip);
     const active = activeBrowserTab(found.pane);
     const input = paneElement.querySelector('[name="url"]');
     const zoom = paneElement.querySelector('[data-browser-zoom-value]');
@@ -2614,6 +2615,7 @@
     if (!found || !strip) return;
     strip.innerHTML = `<span class="pane-kind-icon" aria-hidden="true">${fileActionIcon('notepad')}</span>${renderNotepadTabs(found.pane)}`;
     wireNotepadTabs(container, paneId);
+    wirePaneKindIcon(strip);
   }
 
   async function activateNotepadTabClient(paneId, tabId) {
@@ -2770,6 +2772,7 @@
     if (!found || !strip) return;
     strip.innerHTML = renderPaneTabs(found.pane);
     wirePaneTabs(strip, paneId);
+    wirePaneKindIcon(strip);
   }
 
   function showActiveTerminalTab(paneId) {
@@ -4765,6 +4768,10 @@
     findAll(root, '[data-pane-resize]').forEach((handle) => {
       handle.onpointerdown = startPaneResize;
     });
+    wirePaneKindIcon(root);
+  }
+
+  function wirePaneKindIcon(root) {
     findAll(root, '.pane-kind-icon').forEach((icon) => {
       icon.ondblclick = (event) => {
         event.stopPropagation();
