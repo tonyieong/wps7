@@ -5522,7 +5522,7 @@
   }
 
   function startPaneMove(event) {
-    if (event.button !== 0 || event.target.closest('.pane-close, button, input, [data-browser-tab], [data-notepad-tab], [data-pane-tab]')) {
+    if (event.button !== 0 || event.target.closest('.pane-close, button, input, [data-browser-tab], [data-notepad-tab], [data-pane-tab], .pane-kind-icon')) {
       return;
     }
     event.preventDefault();

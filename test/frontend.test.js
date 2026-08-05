@@ -323,7 +323,7 @@ test('workspace exposes multi-tab notepad panes with line numbers and text-file 
   assert.match(appSource, /class="notepad-tab-strip" data-notepad-tab-strip/);
   assert.match(appSource, /function editNotepadTabPath\(paneId, tabId\)/);
   assert.match(appSource, /editNotepadTabPath\(paneId, tabElement\.dataset\.notepadTab\)/);
-  assert.match(appSource, /event\.target\.closest\('\.pane-close, button, input, \[data-browser-tab\], \[data-notepad-tab\], \[data-pane-tab\]'\)/);
+  assert.match(appSource, /event\.target\.closest\('\.pane-close, button, input, \[data-browser-tab\], \[data-notepad-tab\], \[data-pane-tab\], \.pane-kind-icon'\)/);
   assert.match(appSource, /class="notepad-gutter"/);
   assert.match(appSource, /class="notepad-editor"/);
   assert.match(appSource, /event\.ctrlKey && key === 's'/);
