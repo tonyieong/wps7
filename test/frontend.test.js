@@ -348,7 +348,7 @@ test('files and PowerShell panes share a multi-tab strip like the browser pane',
 });
 
 test('adding panes updates the workspace incrementally without rebuilding existing terminals', () => {
-  const openFilesSource = appSource.slice(appSource.indexOf('async function openFilesPane'), appSource.indexOf('async function loadDrives'));
+  const openFilesSource = appSource.slice(appSource.indexOf('async function openFilesPane'), appSource.indexOf('async function openUsagePane'));
   const createPaneSource = appSource.slice(appSource.indexOf('async function createPane'), appSource.indexOf('function startPaneResize'));
   assert.match(openFilesSource, /appendPaneToWorkspace/);
   assert.match(createPaneSource, /appendPaneToWorkspace/);
@@ -1302,8 +1302,9 @@ test('files pane can filter entries by name', () => {
   assert.match(styles, /\.file-filter-input\s*\{/);
 });
 
-test('mobile file controls grow to touch size and narrow panes collapse to one column', () => {
-  assert.match(styles, /\.app\.mode-mobile \.files-pane \.file-command-button,[\s\S]*?height:\s*40px/s);
+test('mobile file rows grow to touch size while the toolbar matches desktop height, and narrow panes collapse to one column', () => {
+  assert.match(styles, /\.app\.mode-mobile \.files-pane \.compact-file-row,[\s\S]*?min-height:\s*40px/s);
+  assert.doesNotMatch(styles, /\.app\.mode-mobile \.files-pane \.file-command-button/);
   assert.match(styles, /@container \(max-width: 360px\)[\s\S]*?\.compact-file-row \.file-modified\s*\{[^}]*grid-row:\s*2/s);
 });
 
