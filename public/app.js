@@ -72,12 +72,14 @@
     suppressSessionClickUntil: 0,
     theme: ({ dark: 'wps-dark', light: 'wps-light', custom: 'custom-dark' })[localStorage.getItem('wps7.theme')] || localStorage.getItem('wps7.theme') || 'wps-dark',
     customThemeDraft: null,
-    whiteboards: new Map()
+    whiteboards: new Map(),
+    focusedPaneId: ''
   };
 
   const app = document.getElementById('app');
   document.addEventListener('pointerdown', closeFloatingSidebarFromOutside);
   document.addEventListener('pointerdown', closeNotepadPopoversFromOutside);
+  document.addEventListener('pointerdown', closePaneFocusFromOutside);
   window.visualViewport?.addEventListener('resize', updateVisualViewport);
   window.visualViewport?.addEventListener('scroll', updateVisualViewport);
   window.addEventListener('resize', updateVisualViewport);
@@ -1281,6 +1283,7 @@
     }
     state.activeSessionId = session.id;
     state.activePaneId = state.activePaneId || tab.activePaneId || tab.panes[0].id;
+    state.focusedPaneId = '';
     const sidebarWidth = state.sidebarWidth || Number(state.config.ui?.sidebar_width) || 286;
 
     applyTheme();
@@ -4931,6 +4934,79 @@
     findAll(root, '[data-pane-resize]').forEach((handle) => {
       handle.onpointerdown = startPaneResize;
     });
+    findAll(root, '.pane-kind-icon').forEach((icon) => {
+      icon.ondblclick = (event) => {
+        event.stopPropagation();
+        event.preventDefault();
+        togglePaneFocus(icon.closest('[data-pane]')?.dataset.pane);
+      };
+    });
+  }
+
+  function togglePaneFocus(paneId) {
+    if (!paneId) {
+      return;
+    }
+    if (state.focusedPaneId === paneId) {
+      exitPaneFocus();
+    } else {
+      enterPaneFocus(paneId);
+    }
+  }
+
+  function enterPaneFocus(paneId) {
+    const paneElement = document.querySelector(`[data-pane="${paneId}"]`);
+    if (!paneElement) {
+      return;
+    }
+    if (state.focusedPaneId) {
+      exitPaneFocus();
+    }
+    const rect = paneElement.getBoundingClientRect();
+    const ratio = rect.width / rect.height || 1;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const targetArea = viewportWidth * viewportHeight * 0.85;
+    let focusHeight = Math.sqrt(targetArea / ratio);
+    let focusWidth = focusHeight * ratio;
+    const maxWidth = viewportWidth * 0.96;
+    const maxHeight = viewportHeight * 0.96;
+    if (focusWidth > maxWidth) {
+      focusWidth = maxWidth;
+      focusHeight = focusWidth / ratio;
+    }
+    if (focusHeight > maxHeight) {
+      focusHeight = maxHeight;
+      focusWidth = focusHeight * ratio;
+    }
+    state.focusedPaneId = paneId;
+    paneElement.style.setProperty('--pane-focus-width', `${Math.round(focusWidth)}px`);
+    paneElement.style.setProperty('--pane-focus-height', `${Math.round(focusHeight)}px`);
+    paneElement.classList.add('pane-focused');
+    const backdrop = document.createElement('div');
+    backdrop.className = 'pane-focus-backdrop';
+    backdrop.setAttribute('data-pane-focus-backdrop', '');
+    app.querySelector('.app')?.appendChild(backdrop);
+    setActivePane(paneId, paneElement.dataset.paneType !== 'files');
+  }
+
+  function exitPaneFocus() {
+    if (!state.focusedPaneId) {
+      return;
+    }
+    const paneElement = document.querySelector(`[data-pane="${state.focusedPaneId}"]`);
+    paneElement?.classList.remove('pane-focused');
+    paneElement?.style.removeProperty('--pane-focus-width');
+    paneElement?.style.removeProperty('--pane-focus-height');
+    state.focusedPaneId = '';
+    app.querySelector('[data-pane-focus-backdrop]')?.remove();
+  }
+
+  function closePaneFocusFromOutside(event) {
+    if (!state.focusedPaneId || event.target.closest?.(`[data-pane="${state.focusedPaneId}"]`)) {
+      return;
+    }
+    exitPaneFocus();
   }
 
   function startPaneSwipe(event) {
@@ -5067,6 +5143,9 @@
       return;
     }
 
+    if (state.focusedPaneId === paneId) {
+      exitPaneFocus();
+    }
     clearUsageRefresh(paneId);
     const index = found.tab.panes.findIndex((pane) => pane.id === paneId);
     found.tab.panes.splice(index, 1);
