@@ -747,3 +747,52 @@ test('whiteboard panes store their Excalidraw scene as bounded JSON', () => {
   // and only whiteboard panes accept one at all
   assert.equal(store.setWhiteboard(terminalPaneId, scene), false);
 });
+
+test('saving keeps the previous file as a backup and leaves no temp file behind', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100);
+  store.load();
+  // renameSession persists on its own, so these are two consecutive writes.
+  store.renameSession(store.state.activeSessionId, 'First');
+  store.renameSession(store.state.activeSessionId, 'Second');
+
+  const dataDir = path.join(root, 'data');
+  const current = JSON.parse(fs.readFileSync(path.join(dataDir, 'state.json'), 'utf8'));
+  const backup = JSON.parse(fs.readFileSync(path.join(dataDir, 'state.json.bak'), 'utf8'));
+  assert.equal(current.sessions[0].name, 'Second');
+  assert.equal(backup.sessions[0].name, 'First');
+  assert.equal(fs.readdirSync(dataDir).some((name) => name.endsWith('.tmp')), false);
+});
+
+test('loading recovers from the backup when state.json is truncated', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100);
+  store.load();
+  store.renameSession(store.state.activeSessionId, 'Survivor');
+  store.renameSession(store.state.activeSessionId, 'Doomed');
+
+  // Simulates losing power midway through a write.
+  const statePath = path.join(root, 'data', 'state.json');
+  fs.writeFileSync(statePath, '{"sessions":[{"na');
+
+  const reloaded = new StateStore(root, 100);
+  reloaded.load();
+  assert.equal(reloaded.state.sessions[0].name, 'Survivor');
+});
+
+test('loading falls back to a fresh workspace when both copies are unreadable', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100);
+  store.load();
+  store.save();
+  store.save();
+
+  const dataDir = path.join(root, 'data');
+  fs.writeFileSync(path.join(dataDir, 'state.json'), 'not json');
+  fs.writeFileSync(path.join(dataDir, 'state.json.bak'), 'also not json');
+
+  const reloaded = new StateStore(root, 100);
+  reloaded.load();
+  assert.equal(reloaded.state.sessions.length, 1);
+  assert.equal(reloaded.state.sessions[0].tabs[0].panes.length, 1);
+});

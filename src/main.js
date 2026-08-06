@@ -17,9 +17,16 @@ const { loadOrCreateControlToken, requireRuntimeControl } = require('./runtime-c
 const { createUploadParser } = require('./upload');
 const usage = require('./usage');
 const { BrowserManager, isOwnServerWebsite } = require('./browser');
+const { createRateLimiter, isSameOrigin, isTrustedHost } = require('./request-guard');
 
 const TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const REMEMBER_TOKEN_TTL_MS = 30 * TOKEN_TTL_MS;
+const LOGIN_ATTEMPT_LIMIT = 10;
+const LOGIN_ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
+
+function clientKey(req) {
+  return req.socket.remoteAddress || 'unknown';
+}
 
 function openBrowser(url) {
   spawn('cmd', ['/c', 'start', '', url], {
@@ -589,6 +596,24 @@ function main() {
   });
   store.load();
 
+  // Without these, one unhandled error drops every pane's WebSocket and leaves
+  // nothing in the log explaining why. Persist what we have, record the stack,
+  // then exit so the service manager can restart a clean process.
+  function handleFatalError(kind) {
+    return (error) => {
+      appendRuntimeLog(root, `${kind} pid=${process.pid} ${error instanceof Error ? error.stack : String(error)}`);
+      try {
+        store.save();
+      } catch (saveError) {
+        appendRuntimeLog(root, `${kind} could not save state: ${saveError.message}`);
+      }
+      process.exit(1);
+    };
+  }
+
+  process.on('uncaughtException', handleFatalError('uncaughtException'));
+  process.on('unhandledRejection', handleFatalError('unhandledRejection'));
+
   const app = express();
   const server = http.createServer(app);
   const terminalManager = new TerminalManager({ config, root, store, shell });
@@ -672,8 +697,20 @@ function main() {
     }, 1500).unref();
   }
 
-  app.use(express.json({ limit: '12mb' }));
+  const loginLimiter = createRateLimiter({ limit: LOGIN_ATTEMPT_LIMIT, windowMs: LOGIN_ATTEMPT_WINDOW_MS });
+
   app.disable('x-powered-by');
+  // A DNS rebinding page resolves its own name to this address, so its requests
+  // carry that name in Host. Rejecting unknown names keeps such a page from
+  // reaching any route, including the ones that spawn a shell.
+  app.use((req, res, next) => {
+    if (!isTrustedHost(req.headers.host, config.server.allowed_hosts)) {
+      res.status(403).type('text/plain').send('Untrusted Host header.');
+      return;
+    }
+    next();
+  });
+  app.use(express.json({ limit: '12mb' }));
   app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
@@ -761,7 +798,30 @@ function main() {
     }
   });
 
-  app.post('/api/auth/hash', (req, res) => {
+  function rejectWhenRateLimited(req, res) {
+    const limit = loginLimiter.check(clientKey(req));
+    if (limit.allowed) {
+      return false;
+    }
+    res.set('Retry-After', String(Math.ceil(limit.retryAfterMs / 1000)));
+    res.status(429).json({ error: 'Too many attempts. Try again later.' });
+    return true;
+  }
+
+  // Hashing is deliberately expensive, so an anonymous caller may only reach it
+  // while no password exists yet, which is the first-run setup case. Otherwise
+  // it is an unauthenticated way to burn 120k PBKDF2 rounds per request.
+  app.post('/api/auth/hash', (req, res, next) => {
+    if (config.auth.password_hash) {
+      requireAuth(config)(req, res, next);
+      return;
+    }
+    next();
+  }, (req, res) => {
+    if (rejectWhenRateLimited(req, res)) {
+      return;
+    }
+    loginLimiter.record(clientKey(req));
     const passwordError = validatePassword(req.body.password || '');
     if (passwordError) {
       res.status(400).json({ error: passwordError });
@@ -771,10 +831,15 @@ function main() {
   });
 
   app.post('/api/login', (req, res) => {
+    if (rejectWhenRateLimited(req, res)) {
+      return;
+    }
     if (!verifyPassword(req.body.password || '', config.auth.password_hash)) {
+      loginLimiter.record(clientKey(req));
       res.status(401).json({ error: 'Invalid password.' });
       return;
     }
+    loginLimiter.reset(clientKey(req));
     const ttlMs = req.body.remember ? REMEMBER_TOKEN_TTL_MS : TOKEN_TTL_MS;
     const token = createSessionToken(config.auth.password_hash, Date.now(), ttlMs);
     res.json({ token, expires_in: Math.floor(ttlMs / 1000) });
@@ -1530,6 +1595,16 @@ function main() {
 
   const wss = new WebSocketServer({ server, path: '/ws' });
   wss.on('connection', (ws, req) => {
+    // Upgrades bypass the Express middleware stack, and WebSocket is exempt from
+    // the same-origin policy, so both checks have to be repeated here.
+    if (!isTrustedHost(req.headers.host, config.server.allowed_hosts)) {
+      ws.close(1008, 'Untrusted host');
+      return;
+    }
+    if (!isSameOrigin(req.headers.origin, req.headers.host)) {
+      ws.close(1008, 'Cross-origin upgrade rejected');
+      return;
+    }
     const url = new URL(req.url, `http://${req.headers.host}`);
     const paneId = url.searchParams.get('paneId');
     const token = url.searchParams.get('token');

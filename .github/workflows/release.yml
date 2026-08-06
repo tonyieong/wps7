@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm test
+
+      - run: npm run package:win
+
+      - name: Assemble the release archive
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}"
+          $stage = "staging/wps7-$version-windows-x64"
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          Copy-Item dist/wps7.exe, dist/start-wps7.vbs $stage
+          Copy-Item dist/scripts, dist/assets -Destination $stage -Recurse
+          # These travel with the binary because the packaged exe embeds every
+          # production dependency and their licenses require the notices.
+          Copy-Item LICENSE, THIRD-PARTY-LICENSES.md, README.md, SECURITY.md, config.example.toml $stage
+          Compress-Archive -Path $stage -DestinationPath "wps7-$version-windows-x64.zip"
+
+      - name: Publish checksums
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Filter 'wps7-*-windows-x64.zip'
+          $files | ForEach-Object {
+            $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($_.Name)"
+          } | Set-Content -Path SHA256SUMS.txt -Encoding ascii
+          Get-Content SHA256SUMS.txt
+
+      - name: Create the GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # wps7 ships unsigned, so SmartScreen will warn. The checksum file is
+          # the only way a downloader can verify what they got.
+          $notes = @"
+          Verify your download before running it:
+
+          ``````powershell
+          Get-FileHash .\wps7-${{ github.ref_name }}-windows-x64.zip -Algorithm SHA256
+          ``````
+
+          Compare the result against ``SHA256SUMS.txt``. This build is not code
+          signed, so Windows SmartScreen will show an unknown publisher warning.
+          "@
+          gh release create "${{ github.ref_name }}" `
+            "wps7-${{ github.ref_name }}-windows-x64.zip" SHA256SUMS.txt `
+            --title "wps7 ${{ github.ref_name }}" `
+            --notes $notes `
+            --verify-tag

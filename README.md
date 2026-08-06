@@ -1,6 +1,22 @@
 # wps7
 
-Portable Windows web terminal workspace inspired by `tmux-continuum`.
+Portable Windows web terminal workspace inspired by `tmux-continuum`. It serves
+PowerShell sessions, a file manager, a notepad, a browser pane, and a whiteboard
+to any browser on your machine, and rebuilds the layout after a reboot.
+
+> [!WARNING]
+> **wps7 gives a web browser access to PowerShell and to your file system.**
+> Anyone who can reach the listening port and pass authentication can run
+> arbitrary commands as the account running the server.
+>
+> The default configuration binds to `127.0.0.1` with no password, which is
+> intended for single-user desktop use. **Before changing `server.host` to
+> `0.0.0.0`, set a strong password** — the installer refuses to expose wps7 on a
+> LAN without `auth.password_hash` for this reason.
+>
+> There is no TLS. On a LAN, the password, the session token, and all terminal
+> output travel unencrypted. For anything beyond a trusted network, put wps7
+> behind a reverse proxy that terminates TLS. See [SECURITY.md](SECURITY.md).
 
 ## Run
 
@@ -55,3 +71,26 @@ Windows cannot resume arbitrary process memory after reboot. wps7 saves sessions
 ## PowerShell
 
 wps7 prefers `pwsh.exe` and falls back to `powershell.exe`. If fallback is used, the web UI shows a PowerShell 7 install warning.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup and
+[AGENTS.md](AGENTS.md) for the repository conventions. Report security issues
+privately through the process in [SECURITY.md](SECURITY.md).
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
+wps7 redistributes third-party code: the packaged executable embeds every
+production dependency, and `public/vendor/` ships pre-built Excalidraw, React,
+and xterm.js along with their fonts. Their notices are collected in
+[THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md), regenerated with
+`npm run licenses:generate`.
+
+## Acknowledgements
+
+- [Excalidraw](https://github.com/excalidraw/excalidraw) powers the whiteboard pane.
+- [xterm.js](https://github.com/xtermjs/xterm.js) powers the terminal panes.
+- [CodexBar](https://github.com/steipete/CodexBar) inspired the usage pane.
+- [NSSM](https://nssm.cc/) runs wps7 as a Windows service.

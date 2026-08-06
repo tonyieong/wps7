@@ -775,7 +775,7 @@ test('the board paints dashed cell rules that scroll with it', () => {
 test('panes resize from every edge and snap to whole cells', () => {
   const source = appSource.slice(appSource.indexOf('function startPaneResize'), appSource.indexOf('function startPaneMove'));
   for (const direction of ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw']) {
-    assert.match(appSource, new RegExp(`data-pane-resize-direction="\\\$\\{direction\\}"|'${direction}'`));
+    assert.match(appSource, new RegExp(`data-pane-resize-direction="\\$\\{direction\\}"|'${direction}'`));
   }
   // Whole-cell deltas, so a pane can never land between cells
   assert.match(source, /const cell = pointerCell\(grid, moveEvent\.clientX, moveEvent\.clientY\)/);

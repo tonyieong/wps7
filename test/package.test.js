@@ -63,3 +63,25 @@ test('Windows packaging clears stale nested resource folders', () => {
   const command = packageJson.scripts['package:win'];
   assert.match(command, /Remove-Item 'dist\\scripts\\scripts','dist\\assets\\assets','dist\\tools\\tools' -Recurse -Force -ErrorAction SilentlyContinue/);
 });
+
+test('a fatal error saves state and logs before the process exits', () => {
+  assert.match(mainSource, /process\.on\('uncaughtException'/);
+  assert.match(mainSource, /process\.on\('unhandledRejection'/);
+  const handlerIndex = mainSource.indexOf('function handleFatalError');
+  const saveIndex = mainSource.indexOf('store.save()', handlerIndex);
+  const exitIndex = mainSource.indexOf('process.exit(1)', handlerIndex);
+  assert.ok(handlerIndex >= 0, 'main must install a fatal error handler');
+  assert.ok(saveIndex > handlerIndex && exitIndex > saveIndex, 'state must be saved before exiting');
+});
+
+test('the redistributable ships its license notices', () => {
+  const root = path.join(__dirname, '..');
+  for (const file of ['LICENSE', 'THIRD-PARTY-LICENSES.md']) {
+    assert.ok(fs.existsSync(path.join(root, file)), `${file} must exist`);
+  }
+  assert.equal(packageJson.license, 'MIT');
+  const notices = fs.readFileSync(path.join(root, 'THIRD-PARTY-LICENSES.md'), 'utf8');
+  for (const dependency of Object.keys(packageJson.dependencies)) {
+    assert.ok(notices.includes(`### ${dependency}@`), `${dependency} must appear in THIRD-PARTY-LICENSES.md`);
+  }
+});
