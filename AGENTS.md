@@ -20,7 +20,7 @@ When packaging or deploying, never stop the WPS7 instance listening on port `500
 After every code modification, rebuild a new `dist/wps7.exe` via `npm run package:win`, then run the new exe.
 
 For the port `5000` service-managed instance (NSSM `AppExit Default: Restart`), avoid Administrator `Stop-Service`/`Start-Service` by using the no-admin swap-in-place flow instead:
-1. `npx pkg . --targets node18-win-x64 --output dist\wps7-new.exe` — builds to a new filename, so the slow build step never touches the locked, currently-running `dist\wps7.exe`.
+1. `npx pkg . --targets node22-win-x64 --output dist\wps7-new.exe` — builds to a new filename, so the slow build step never touches the locked, currently-running `dist\wps7.exe`.
 2. Read the loopback control token from `dist\data\control-token` and `POST http://127.0.0.1:5000/api/runtime/restart` with header `X-WPS7-Control-Token: <token>` to make the running process save state and exit gracefully.
 3. Immediately swap the file in (e.g. .NET `[System.IO.File]::Replace('dist\wps7-new.exe', 'dist\wps7.exe', 'dist\wps7-backup.exe')`) — this fast rename fits inside NSSM's ~2s auto-restart window, so NSSM picks up the new exe on its own.
 This only needs write access to `dist/`, no elevation required. Never restart the exe on port `5001` this way.

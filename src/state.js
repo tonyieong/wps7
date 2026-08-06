@@ -160,6 +160,7 @@ class StateStore {
     this.root = root;
     this.dataDir = path.join(root, 'data');
     this.statePath = path.join(this.dataDir, 'state.json');
+    this.backupPath = `${this.statePath}.bak`;
     this.scrollbackLimit = scrollbackLimit;
     this.gridSize = clampGridSize(options.gridSize);
     this.verticalSlots = clampVerticalSlots(options.verticalSlots);
@@ -175,8 +176,9 @@ class StateStore {
 
   load() {
     fs.mkdirSync(this.dataDir, { recursive: true });
-    if (fs.existsSync(this.statePath)) {
-      this.state = this.hydrateState(JSON.parse(fs.readFileSync(this.statePath, 'utf8')));
+    const restored = this.readState(this.statePath) || this.readState(this.backupPath);
+    if (restored) {
+      this.state = restored;
       this.state.activeSessionId = this.state.activeSessionId || this.state.sessions[0]?.id || '';
     } else {
       this.save();
@@ -184,10 +186,43 @@ class StateStore {
     return this.state;
   }
 
+  readState(filePath) {
+    if (!fs.existsSync(filePath)) {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      if (!parsed || !Array.isArray(parsed.sessions) || !parsed.sessions.length) {
+        return null;
+      }
+      return this.hydrateState(parsed);
+    } catch (error) {
+      // A half-written or hand-edited file must not stop the server from
+      // starting; the caller falls back to the backup and then to a new
+      // workspace.
+      return null;
+    }
+  }
+
   save() {
     fs.mkdirSync(this.dataDir, { recursive: true });
     this.state.updatedAt = new Date().toISOString();
-    fs.writeFileSync(this.statePath, JSON.stringify(this.getPersistedState(), null, 2));
+    const payload = JSON.stringify(this.getPersistedState(), null, 2);
+    const tempPath = `${this.statePath}.tmp`;
+    // Scrollback makes this file large enough that losing power mid-write is a
+    // real risk, so the replacement is complete and flushed to disk before it
+    // takes the place of the previous copy.
+    const handle = fs.openSync(tempPath, 'w');
+    try {
+      fs.writeFileSync(handle, payload);
+      fs.fsyncSync(handle);
+    } finally {
+      fs.closeSync(handle);
+    }
+    if (fs.existsSync(this.statePath)) {
+      fs.copyFileSync(this.statePath, this.backupPath);
+    }
+    fs.renameSync(tempPath, this.statePath);
   }
 
   hydrateState(state) {

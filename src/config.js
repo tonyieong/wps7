@@ -21,7 +21,8 @@ const defaultConfig = {
   server: {
     host: '127.0.0.1',
     port: 5000,
-    open_browser: true
+    open_browser: true,
+    allowed_hosts: []
   },
   auth: {
     password_hash: ''
@@ -130,6 +131,10 @@ const defaultConfigText = `# Settings saved in the web UI update this file.
 host = "127.0.0.1"
 port = 5000
 open_browser = true
+# Extra Host header values to accept, for a reverse proxy that forwards its own
+# hostname. Addresses and "localhost" are always accepted; any other name is
+# rejected so a DNS rebinding page cannot reach this server. Edit here only.
+allowed_hosts = []
 
 [auth]
 # Hot reload.

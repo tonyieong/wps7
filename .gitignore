@@ -5,4 +5,13 @@ tmp-file-pane-test/
 qa-backup-*/
 config.toml
 *.log
+tools/nssm/nssm.exe
+
+# Development scratch: screenshots and generated mockups kept out of the repo.
+Test_image/
+output/
+2.1.4/
+example-test.png
+wps7-signedin.png
+wps7-test.png
 
