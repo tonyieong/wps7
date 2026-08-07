@@ -49,6 +49,14 @@ Use short imperative commit subjects, for example `Fix mobile terminal
 long-press selection`. In the description, explain the behavior change, how you
 verified it, and whether it needs a config change or a restart.
 
+Upgrading a native dependency such as node-pty requires building
+`dist/wps7.exe` and running it, not just a green test suite.
+
+When you do, give the executable time before judging the result. A packaged
+build unpacks its native modules on first use, so a terminal pane can still be
+empty for several seconds after the HTTP server starts answering. Probing the
+moment the port opens reports a broken ConPTY that is merely slow to warm up.
+
 If you add or upgrade a dependency, run `npm run licenses:generate` and commit the
 regenerated `THIRD-PARTY-LICENSES.md` alongside it. The packaged executable
 embeds every production dependency, so that file is how their license notices

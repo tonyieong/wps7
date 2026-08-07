@@ -38,7 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   express upgrade was verified against the live server, covering `:param`
   routes, JSON body parsing, static files, status codes and the WebSocket
   upgrade path, because its rewritten path-to-regexp is the usual breaking
-  change and the unit suite does not exercise routing.
+  change and the unit suite does not exercise routing. node-pty was verified by
+  driving a real ConPTY session in the packaged executable.
 
 ### Security
 
