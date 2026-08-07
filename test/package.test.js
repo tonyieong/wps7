@@ -74,6 +74,23 @@ test('a fatal error saves state and logs before the process exits', () => {
   assert.ok(saveIndex > handlerIndex && exitIndex > saveIndex, 'state must be saved before exiting');
 });
 
+test('request errors never send a stack trace to the client', () => {
+  const handlerIndex = mainSource.indexOf('app.use((error, req, res, next)');
+  assert.ok(handlerIndex >= 0, 'main must install an Express error handler');
+
+  const lastRouteIndex = mainSource.lastIndexOf("app.post('/api/files/upload'");
+  const websocketIndex = mainSource.indexOf('new WebSocketServer');
+  assert.ok(handlerIndex > lastRouteIndex, 'the handler must come after the routes it protects');
+  assert.ok(handlerIndex < websocketIndex, 'the handler must be installed before the server starts');
+
+  // Express's built-in handler puts error.stack in the response body, which
+  // exposes absolute paths from the host. A malformed JSON body reaches it.
+  const handler = mainSource.slice(handlerIndex, websocketIndex);
+  assert.doesNotMatch(handler, /error\.stack/);
+  assert.doesNotMatch(handler, /error:\s*error\.message/);
+  assert.match(handler, /res\.status\(status\)\.json/);
+});
+
 test('the redistributable ships its license notices', () => {
   const root = path.join(__dirname, '..');
   for (const file of ['LICENSE', 'THIRD-PARTY-LICENSES.md']) {
