@@ -1760,15 +1760,6 @@
     connection.send({ type: 'navigate', url: String(value || '').trim() });
   }
 
-  function updateBrowserPane(paneId) {
-    const found = findPaneState(paneId);
-    const container = document.querySelector(`[data-pane="${paneId}"]`);
-    const existing = container?.querySelector('.browser-pane');
-    if (!found || !existing) return;
-    existing.outerHTML = renderBrowserPane(found.pane);
-    wireBrowserPane(container);
-  }
-
   function updateBrowserMenu(paneId) {
     const found = findPaneState(paneId);
     const paneElement = document.querySelector(`[data-browser-pane="${paneId}"]`);

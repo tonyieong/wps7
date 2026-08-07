@@ -8,6 +8,7 @@ config.toml
 tools/nssm/nssm.exe
 
 # Development scratch: screenshots and generated mockups kept out of the repo.
+.playwright-mcp/
 Test_image/
 output/
 2.1.4/
