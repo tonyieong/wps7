@@ -13,7 +13,7 @@ jobs:
     # wps7 drives ConPTY through node-pty, so the suite only runs on Windows.
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
