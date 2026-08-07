@@ -4,6 +4,7 @@ const { EventEmitter } = require('node:events');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const vm = require('node:vm');
 const WebSocket = require('ws');
 
 const {
@@ -17,6 +18,7 @@ const {
   mobileUserAgent,
   normalizeEmulationMode,
   normalizeViewport,
+  SELECT_POPUP_SCRIPT,
   terminateStaleChromium,
   userAgentMetadata
 } = require('../src/browser');
@@ -260,6 +262,55 @@ test('an invalid background color is ignored rather than sent to Chromium', asyn
   await page.applyBackground('not-a-color');
 
   assert.deepEqual(calls, []);
+});
+
+test('a <select> dropdown is drawn as page content so the capture paths can see it', async () => {
+  // Chromium puts the native <select> popup in a widget outside the page's own
+  // compositing surface, so neither Page.startScreencast nor the WebRTC tab
+  // capture recorded it: the list never appeared in a Browser pane and the
+  // popup nobody could see swallowed the next click.
+  const page = Object.create(RemoteBrowserPage.prototype);
+  const calls = [];
+  page.send = async (method, params) => { calls.push({ method, params }); return {}; };
+
+  await page.installSelectPopup();
+
+  // The hook covers later navigations and subframes; the document the tab was
+  // created with is already loaded, so it needs the script evaluated directly too.
+  const hook = calls.find((call) => call.method === 'Page.addScriptToEvaluateOnNewDocument');
+  const now = calls.find((call) => call.method === 'Runtime.evaluate');
+  assert.equal(hook.params.source, SELECT_POPUP_SCRIPT);
+  assert.equal(now.params.expression, SELECT_POPUP_SCRIPT);
+});
+
+test('the injected dropdown suppresses the native popup and reports the choice to the page', () => {
+  // The script ships to Chromium as a string, so a syntax error would only ever
+  // surface as a silently dead dropdown. Run it against a minimal stub instead.
+  const listeners = [];
+  const target = (owner) => ({
+    addEventListener: (type, handler, capture) => listeners.push({ owner, type, capture: Boolean(capture) })
+  });
+  const context = vm.createContext({ Math });
+  context.window = { ...target('window') };
+  context.document = target('document');
+  context.getComputedStyle = () => ({});
+  vm.runInContext(SELECT_POPUP_SCRIPT, context);
+
+  assert.ok(listeners.some((entry) => entry.owner === 'document' && entry.type === 'mousedown' && entry.capture));
+  assert.ok(listeners.some((entry) => entry.owner === 'document' && entry.type === 'keydown' && entry.capture));
+
+  // Re-injection happens on every navigation through the new-document hook, so a
+  // second run must not stack a duplicate set of listeners.
+  const installed = listeners.length;
+  vm.runInContext(SELECT_POPUP_SCRIPT, context);
+  assert.equal(listeners.length, installed);
+
+  // Cancelling the mousedown is what stops the invisible native popup, and both
+  // events have to bubble or a framework binding (v-model, onChange) never sees
+  // the new value.
+  assert.match(SELECT_POPUP_SCRIPT, /event\.preventDefault\(\);\s*select\.focus/);
+  assert.match(SELECT_POPUP_SCRIPT, /dispatchEvent\(new Event\('input', \{ bubbles: true \}\)\)/);
+  assert.match(SELECT_POPUP_SCRIPT, /dispatchEvent\(new Event\('change', \{ bubbles: true \}\)\)/);
 });
 
 test('a client reporting its theme background updates the shared manager color and Chromium', async () => {

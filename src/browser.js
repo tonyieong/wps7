@@ -108,6 +108,117 @@ function userAgentMetadata(emulationMode) {
 
 const DEFAULT_BACKGROUND_COLOR = '#06111b';
 
+// Chromium draws a <select> dropdown in a native popup widget that lives outside
+// the page's own compositing surface, so neither Page.startScreencast nor the
+// WebRTC tab capture ever records it. In a Browser pane the list simply never
+// appeared, and the popup nobody could see went on swallowing the next click.
+// Suppress the native popup and draw the options as ordinary page content, which
+// both capture paths do see.
+const SELECT_POPUP_SCRIPT = `(() => {
+  if (window.__wps7SelectPopup) return;
+  window.__wps7SelectPopup = true;
+
+  let host = null;
+  let owner = null;
+
+  const close = () => {
+    host?.remove();
+    host = null;
+    owner = null;
+  };
+
+  // Chromium serializes a fully opaque background as rgb(...) and everything else
+  // as rgba(...), so the first rgb() up the tree is the nearest color the popup can
+  // sit on without the page showing through its options.
+  const opaqueBackground = (element) => {
+    for (let node = element; node; node = node.parentElement) {
+      const color = getComputedStyle(node).backgroundColor;
+      if (color.startsWith('rgb(')) return color;
+    }
+    return getComputedStyle(document.documentElement).colorScheme === 'dark' ? '#1f2430' : '#ffffff';
+  };
+
+  const open = (select) => {
+    const rect = select.getBoundingClientRect();
+    const style = getComputedStyle(select);
+    const above = rect.top - 8;
+    const below = window.innerHeight - rect.bottom - 8;
+    // Drop down like every browser does, and only flip up when the space below is
+    // too cramped to be worth it and there is genuinely more room overhead.
+    const drop = below >= 160 || below >= above;
+    const maxHeight = Math.max(96, Math.min(320, drop ? below : above));
+
+    host = document.createElement('div');
+    host.style.cssText = 'all: initial; position: fixed; z-index: 2147483647;'
+      + ' left: ' + rect.left + 'px; width: ' + rect.width + 'px;'
+      + (drop ? ' top: ' + rect.bottom + 'px;' : ' bottom: ' + (window.innerHeight - rect.top) + 'px;');
+    const root = host.attachShadow({ mode: 'closed' });
+    root.innerHTML = '<style>'
+      + '.list { max-height: ' + maxHeight + 'px; overflow-y: auto; box-sizing: border-box;'
+      + ' border: 1px solid rgba(127, 127, 127, .45); border-radius: 6px;'
+      + ' box-shadow: 0 8px 24px rgba(0, 0, 0, .35);'
+      + ' background: ' + opaqueBackground(select) + '; color: ' + style.color + ';'
+      + ' font: ' + style.fontSize + '/1.5 ' + style.fontFamily + '; }'
+      + '.row { padding: 6px 10px; cursor: pointer; white-space: nowrap;'
+      + ' overflow: hidden; text-overflow: ellipsis; }'
+      + '.row:hover { background: rgba(127, 127, 127, .25); }'
+      + '.row[aria-selected="true"] { background: rgba(127, 127, 127, .35); }'
+      + '.row[aria-disabled="true"] { opacity: .5; cursor: default; }'
+      + '</style><div class="list" role="listbox"></div>';
+    const list = root.querySelector('.list');
+    [...select.options].forEach((option, index) => {
+      if (option.hidden) return;
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.setAttribute('role', 'option');
+      row.setAttribute('aria-selected', String(index === select.selectedIndex));
+      if (option.disabled) row.setAttribute('aria-disabled', 'true');
+      row.textContent = option.label || option.text;
+      row.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (option.disabled) return;
+        const changed = select.selectedIndex !== index;
+        close();
+        if (!changed) return;
+        select.selectedIndex = index;
+        select.dispatchEvent(new Event('input', { bubbles: true }));
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      list.append(row);
+    });
+    (document.body || document.documentElement).append(host);
+    list.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
+    owner = select;
+  };
+
+  document.addEventListener('mousedown', (event) => {
+    // A closed shadow root retargets its own events to the host, so this is a
+    // click on an option: leave it to the row's handler.
+    if (host && event.target === host) return;
+    const select = event.target.closest?.('select');
+    const opens = select && !select.disabled && !select.multiple && select.size <= 1;
+    const previous = owner;
+    close();
+    if (!opens) return;
+    // The default action of this mousedown is the native popup nobody can see.
+    event.preventDefault();
+    select.focus({ preventScroll: true });
+    if (select !== previous) open(select);
+  }, true);
+
+  document.addEventListener('keydown', (event) => {
+    if (!host) return;
+    // Escape only dismisses the list; every other key falls through to the select,
+    // which handles it natively once the stale list is gone.
+    if (event.key === 'Escape') event.preventDefault();
+    close();
+  }, true);
+
+  window.addEventListener('scroll', close, true);
+  window.addEventListener('resize', close);
+})();`;
+
 function parseHexColor(value) {
   const match = /^#([0-9a-f]{6})$/i.exec(String(value || '').trim());
   if (!match) return null;
@@ -200,6 +311,7 @@ class RemoteBrowserPage {
     await this.applyBackground(this.manager.themeBackground);
     await this.send('Runtime.enable');
     await this.send('DOM.enable');
+    await this.installSelectPopup();
     await this.send('Runtime.addBinding', { name: this.rtcBinding });
     await this.send('Fetch.enable', {
       patterns: [{ urlPattern: '*', resourceType: 'Document', requestStage: 'Request' }]
@@ -467,6 +579,14 @@ class RemoteBrowserPage {
         userAgentMetadata: userAgentMetadata('desktop')
       });
     }
+  }
+
+  async installSelectPopup() {
+    // The new-document hook covers every later navigation and subframe; the tab
+    // already carries the document it was created with, so it needs the script
+    // evaluated directly as well.
+    await this.send('Page.addScriptToEvaluateOnNewDocument', { source: SELECT_POPUP_SCRIPT }).catch(() => {});
+    await this.send('Runtime.evaluate', { expression: SELECT_POPUP_SCRIPT }).catch(() => {});
   }
 
   async applyBackground(hex) {
@@ -1297,6 +1417,7 @@ module.exports = {
   mobileUserAgent,
   normalizeEmulationMode,
   normalizeViewport,
+  SELECT_POPUP_SCRIPT,
   terminateStaleChromium,
   userAgentMetadata
 };
