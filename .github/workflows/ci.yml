@@ -30,7 +30,10 @@ jobs:
         shell: pwsh
         run: |
           npm run licenses:generate
-          if (-not (git diff --quiet -- THIRD-PARTY-LICENSES.md)) {
+          # --quiet reports through the exit code and prints nothing, so the
+          # result has to be read from $LASTEXITCODE rather than from output.
+          git diff --quiet -- THIRD-PARTY-LICENSES.md
+          if ($LASTEXITCODE -ne 0) {
             git --no-pager diff -- THIRD-PARTY-LICENSES.md
             throw 'THIRD-PARTY-LICENSES.md is stale. Run "npm run licenses:generate" and commit the result.'
           }
