@@ -1593,6 +1593,20 @@ function main() {
     }
   });
 
+  // Express renders the stack trace into the response body for anything that
+  // reaches its built-in handler, which hands the caller absolute paths from
+  // this machine. A malformed JSON body is enough to trigger it. Log the detail
+  // and give the client only the status.
+  app.use((error, req, res, next) => {
+    if (res.headersSent) {
+      next(error);
+      return;
+    }
+    const status = error.status || error.statusCode || 500;
+    appendRuntimeLog(root, `request error ${req.method} ${req.originalUrl} ${status} ${error.message}`);
+    res.status(status).json({ error: status === 400 ? 'Invalid request body.' : 'Request failed.' });
+  });
+
   const wss = new WebSocketServer({ server, path: '/ws' });
   wss.on('connection', (ws, req) => {
     // Upgrades bypass the Express middleware stack, and WebSocket is exempt from

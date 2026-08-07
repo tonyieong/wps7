@@ -34,6 +34,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Packaging moved from the archived `vercel/pkg` to `@yao-pkg/pkg`, and the
   bundled runtime moved from Node 18 (end of life) to Node 22. node-pty builds
   against Node-API, so the ConPTY addon is ABI-stable across that jump.
+- Dependencies: express 4 to 5.2.1, ws to 8.21.3, and node-pty to 0.14.1. The
+  express upgrade was verified against the live server, covering `:param`
+  routes, JSON body parsing, static files, status codes and the WebSocket
+  upgrade path, because its rewritten path-to-regexp is the usual breaking
+  change and the unit suite does not exercise routing.
+
+### Security
+
+- Request errors no longer fall through to Express's built-in handler, which
+  rendered the stack trace — including this machine's absolute paths — into the
+  response body. A malformed JSON body was enough to trigger it. The detail now
+  goes to `data/runtime.log` and the caller gets only a status and a short
+  message. This affected express 4 as well; it was found while verifying the
+  upgrade.
 
 ### Removed
 
