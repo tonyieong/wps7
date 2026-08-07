@@ -1,0 +1,20 @@
+# Keep line endings stable across checkouts. Without this, Git hands Windows
+# working copies CRLF while generated files (THIRD-PARTY-LICENSES.md) are
+# written with LF, which makes the CI staleness check fail on whitespace alone.
+* text=auto eol=lf
+
+# Windows script hosts are happier with CRLF.
+*.ps1 text eol=crlf
+*.psm1 text eol=crlf
+*.vbs text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Never touch binaries.
+*.png binary
+*.jpg binary
+*.ico binary
+*.exe binary
+*.dll binary
+*.woff binary
+*.woff2 binary
