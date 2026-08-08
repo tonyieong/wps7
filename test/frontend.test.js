@@ -96,14 +96,20 @@ test('sidebar brand is the dedicated collapse control', () => {
   assert.match(appSource, /<span class="rail-brand-mark" aria-hidden="true">W7<\/span><span class="rail-label">WPS7<\/span>/);
 });
 
-test('sidebar keeps only a divider above session panes and lists every pane on a flat row', () => {
+test('sidebar keeps only a divider above pane tabs and lists every tab on a flat row', () => {
   assert.doesNotMatch(appSource, /class="sidebar-header"/);
   assert.doesNotMatch(appSource, />Sessions<|>Persistent workspaces</);
   assert.match(appSource, /class="sidebar-divider" aria-hidden="true"/);
   assert.match(appSource, /function sidebarPaneRows\(\)/);
-  const rowsSource = appSource.slice(appSource.indexOf('function sidebarPaneRows'), appSource.indexOf('function renderSidebarPaneItem'));
+  const rowsSource = appSource.slice(appSource.indexOf('function sidebarPaneTabs'), appSource.indexOf('function renderSidebarPaneItem'));
   // Every row names its own workspace, with no indent or tree branch to decode.
-  assert.match(rowsSource, /label: `\$\{session\.name\}\/\$\{pane\.title\}`/);
+  assert.match(rowsSource, /paneTabs\(pane\)\.map\(\(tab\) => \(\{ tabId: tab\.id, tabKind: paneTabKind\(pane\), label: paneTabLabel\(pane, tab\) \}\)\)/);
+  assert.match(rowsSource, /browserTabs[\s\S]*?tab\.title \|\| 'New tab'/);
+  assert.match(rowsSource, /notepadTabs[\s\S]*?notepadTabLabel\(tab\)/);
+  assert.match(rowsSource, /label: `\$\{session\.name\}\/\$\{label\}`/);
+  assert.match(appSource, /data-sidebar-pane-tab="\$\{tabId\}" data-sidebar-pane-tab-kind="\$\{tabKind\}"/);
+  const linksSource = appSource.slice(appSource.indexOf('function wirePaneLinks'), appSource.indexOf('function findAll'));
+  assert.match(linksSource, /activateSidebarPaneTab\(button\.dataset\.paneLink, button\.dataset\.sidebarPaneTabKind, button\.dataset\.sidebarPaneTab\)/);
   assert.doesNotMatch(rowsSource, /└─|├─|branch/);
   assert.doesNotMatch(appSource, /session-branch/);
   assert.doesNotMatch(styles, /session-branch/);
@@ -421,7 +427,7 @@ test('activating a pane scrolls it into view, honouring reduced motion', () => {
   assert.match(source, /matchMedia\?\.\('\(prefers-reduced-motion: reduce\)'\)\.matches/);
   assert.match(source, /behavior: reduceMotion \? 'auto' : behavior/);
   assert.match(source, /inline: 'nearest'/);
-  assert.match(appSource, /button\.dataset\.paneLink === state\.activePaneId\);\s*\}\);\s*ensureActivePaneVisible\(\);/);
+  assert.match(appSource, /sidebarPaneRowActive\(found\.pane, button\.dataset\.sidebarPaneTab\)\);\s*\}\);\s*ensureActivePaneVisible\(\);/);
   assert.match(appSource, /window\.addEventListener\('resize', updateVisualViewport\)/);
 });
 
@@ -1221,9 +1227,11 @@ test('file rows use solid icons, dim hidden entries, and toggle select all', () 
 });
 
 test('appearance stores separate light and dark choices with separate custom palettes', () => {
-  for (const theme of ['WPS7 Dark', 'WPS7 Light', 'Apple Dark', 'Apple Light', 'Claude Dark', 'Claude Light', 'Codex Dark', 'Codex Light', 'Custom']) {
+  for (const theme of ['WPS7 Dark', 'WPS7 Light', 'Slate Dark', 'Slate Light', 'Ember Dark', 'Ember Light', 'Forest Dark', 'Forest Light', 'Custom']) {
     assert.match(appSource, new RegExp(theme));
   }
+  const presetsSource = appSource.slice(appSource.indexOf('const themePresets'), appSource.indexOf('const customThemeDefaults'));
+  assert.doesNotMatch(presetsSource, /label: '(?:Apple|Claude|Codex) /);
   for (const field of ['mode', 'selected_light', 'selected_dark', 'ink', 'panel', 'rail', 'surface', 'line', 'text', 'muted', 'accent', 'warn', 'danger', 'terminal_bg', 'terminal_fg', 'light_ink', 'light_panel', 'light_rail', 'light_surface', 'light_line', 'light_text', 'light_muted', 'light_accent', 'light_warn', 'light_danger', 'light_terminal_bg', 'light_terminal_fg']) {
     assert.match(appSource, new RegExp(`custom_theme\\.${field}`));
   }
