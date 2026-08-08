@@ -12,7 +12,11 @@ tools/nssm/nssm.exe
 Test_image/
 output/
 2.1.4/
-example-test.png
-wps7-signedin.png
-wps7-test.png
+
+# Nothing at the repo root should be an image or a binary. A mistyped build
+# output (dist\wps7-new.exe losing its separator) lands here as a 68 MB file
+# that "git add -A" would otherwise commit.
+/*.png
+/*.jpg
+/*.exe
 
