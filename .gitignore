@@ -18,5 +18,8 @@ output/
 # that "git add -A" would otherwise commit.
 /*.png
 /*.jpg
+/*.jpeg
+/*.gif
+/*.webp
 /*.exe
 
