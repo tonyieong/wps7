@@ -323,7 +323,7 @@ test('workspace exposes multi-tab notepad panes with line numbers and text-file 
   assert.match(appSource, /class="notepad-tab-strip" data-notepad-tab-strip/);
   assert.match(appSource, /function editNotepadTabPath\(paneId, tabId\)/);
   assert.match(appSource, /editNotepadTabPath\(paneId, tabElement\.dataset\.notepadTab\)/);
-  assert.match(appSource, /event\.target\.closest\('\.pane-close, button, input, \[data-browser-tab\], \[data-notepad-tab\], \[data-pane-tab\], \.pane-kind-icon'\)/);
+  assert.match(appSource, /event\.target\.closest\('\.pane-close, button, input, \[data-browser-tab\], \[data-notepad-tab\], \[data-pane-tab\]'\)/);
   assert.match(appSource, /class="notepad-gutter"/);
   assert.match(appSource, /class="notepad-editor"/);
   assert.match(appSource, /event\.ctrlKey && key === 's'/);
@@ -577,8 +577,11 @@ test('usage cards reflow to fit the pane width and refreshing keeps the current 
 });
 
 test('mobile terminal sends touch movement through the xterm scroll surface with a compact virtual key row', () => {
-  assert.match(appSource, /function installMobileTerminalTouchScroll\(element, term\)/);
+  assert.match(appSource, /function installMobileTerminalTouchScroll\(element, term, openContextMenu\)/);
   assert.match(appSource, /new WheelEvent\('wheel'/);
+  // Dragging down pulls older output back into view, so the text follows the
+  // finger instead of running away from it.
+  assert.match(appSource, /const deltaY = nextY - lastY/);
   assert.doesNotMatch(appSource, /term\.scrollLines\(-lines\)/);
   assert.match(styles, /\.app\.mode-mobile \.terminal[\s\S]*?touch-action:\s*none/s);
   assert.match(appSource, /class="mobile-keybar"/);
@@ -588,13 +591,22 @@ test('mobile terminal sends touch movement through the xterm scroll surface with
 });
 
 test('mobile terminal long press selects a word without breaking touch scrolling', () => {
-  assert.match(appSource, /installMobileTerminalTouchScroll\(element, term\)/);
+  assert.match(appSource, /installMobileTerminalTouchScroll\(element, term, \(clientX, clientY\) => \{/);
   assert.match(appSource, /const longPressDelay = 500/);
   assert.match(appSource, /function terminalCellAtTouch\(element, term, touch\)/);
   assert.match(appSource, /function selectTerminalWordAtTouch\(element, term, touch\)/);
   assert.match(appSource, /term\.select\(/);
   assert.match(appSource, /classList\.add\('touch-selecting'\)/);
   assert.match(styles, /\.terminal\.touch-selecting/);
+});
+
+test('the terminal menu waits for the finger to lift so a selection can still be dragged open', () => {
+  // The browser fires contextmenu partway through the long press, while the
+  // selection is still being dragged; that one is dropped.
+  assert.match(appSource, /if \(touchScroll\.isTouchActive\(\)\) \{\s*return;\s*\}/);
+  assert.match(appSource, /return \{ isTouchActive: \(\) => touchActive \};/);
+  const touchEnd = appSource.slice(appSource.indexOf("element.addEventListener('touchend'"), appSource.indexOf("element.addEventListener('touchcancel'"));
+  assert.match(touchEnd, /openContextMenu\?\.\(touch\.clientX, touch\.clientY\)/);
 });
 
 test('mobile Ctrl keeps terminal focus and modifies the next software-keyboard character', () => {
@@ -816,6 +828,18 @@ test('dragging a pane moves it by whole cells', () => {
   assert.match(source, /x: startLayout\.x \+ \(cell\.x - startCell\.x\)/);
   assert.match(source, /y: startLayout\.y \+ \(cell\.y - startCell\.y\)/);
   assert.match(source, /paneElement\.classList\.add\('dragging'\)/);
+});
+
+test('the pane kind icon drags the pane and still toggles focus mode on double click', () => {
+  const source = appSource.slice(appSource.indexOf('function startPaneMove'), appSource.indexOf('async function savePaneLayoutLocal'));
+  // preventDefault on pointerdown suppresses the compatibility dblclick, and
+  // capturing on the title bar retargets it away from the icon, so a drag that
+  // starts on the icon does neither.
+  assert.match(source, /const icon = event\.target\.closest\('\.pane-kind-icon'\);\s*if \(!icon\) \{\s*event\.preventDefault\(\);\s*\}/);
+  assert.match(source, /const dragSurface = icon \|\| title;\s*dragSurface\.setPointerCapture\(event\.pointerId\)/);
+  assert.match(source, /dragSurface\.addEventListener\('pointermove', onMove\)/);
+  assert.match(source, /dragSurface\.addEventListener\('pointerup', onUp\)/);
+  assert.match(appSource, /function wirePaneKindIcon\(root\)[\s\S]*?togglePaneFocus\(icon\.closest\('\[data-pane\]'\)\?\.dataset\.pane\)/);
 });
 
 test('the whiteboard pane lazy-loads a fully offline Excalidraw', () => {
