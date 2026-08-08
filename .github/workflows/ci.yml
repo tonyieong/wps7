@@ -30,6 +30,9 @@ jobs:
         shell: pwsh
         run: |
           npm run licenses:generate
+          if ($LASTEXITCODE -ne 0) {
+            throw 'License generation failed. Every production dependency must include a license text.'
+          }
           # --quiet reports through the exit code and prints nothing, so the
           # result has to be read from $LASTEXITCODE rather than from output.
           git diff --quiet -- THIRD-PARTY-LICENSES.md

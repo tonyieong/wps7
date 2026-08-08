@@ -11,8 +11,10 @@ test('creates default config with localhost port 5000', () => {
   assert.equal(config.server.host, '127.0.0.1');
   assert.equal(config.server.port, 5000);
   assert.equal(config.ui.terminal_font_family, 'Consolas, "Cascadia Mono", monospace');
+  assert.equal(config.ui.grid_size, 400);
+  assert.equal(config.ui.vertical_slots, 2);
   assert.equal(config.ui.default_pane_width, 6);
-  assert.equal(config.ui.default_pane_height, 12);
+  assert.equal(config.ui.default_pane_height, 2);
   assert.equal(config.ui.terminal_font_size, 13);
   assert.equal(config.ui.mobile_terminal_font_size, 12);
   assert.equal(config.ui.file_pane_font_size, 13);
@@ -95,6 +97,22 @@ test('falls back to default port when config port is invalid', () => {
   fs.writeFileSync(path.join(root, 'config.toml'), '[server]\nport = "hello"\n');
   const { config } = loadConfig(root);
   assert.equal(config.server.port, 5000);
+});
+
+test('adds workspace defaults to an older config file', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'));
+  const configPath = path.join(root, 'config.toml');
+  fs.writeFileSync(configPath, '[ui]\nsidebar_width = 286\n');
+
+  const { config } = loadConfig(root);
+
+  assert.equal(config.ui.grid_size, 400);
+  assert.equal(config.ui.vertical_slots, 2);
+  assert.equal(config.ui.default_pane_height, 2);
+  const saved = fs.readFileSync(configPath, 'utf8');
+  assert.match(saved, /grid_size = 400/);
+  assert.match(saved, /vertical_slots = 2/);
+  assert.match(saved, /default_pane_height = 2/);
 });
 
 test('shell args load profile without clearing restored scrollback', () => {

@@ -23,6 +23,7 @@
       "tools/**/*",
       "scripts/**/*",
       "public/**/*",
+      "node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/*.node",
       "node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/conpty/**/*",
       "node_modules/systray2/traybin/**/*"
     ]

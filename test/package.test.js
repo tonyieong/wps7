@@ -14,6 +14,10 @@ test('Windows package includes the bundled ConPTY runtime', () => {
     assets.includes('node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/conpty/**/*'),
     'pkg assets must include conpty.dll and OpenConsole.exe'
   );
+  assert.ok(
+    assets.includes('node_modules/@homebridge/node-pty-prebuilt-multiarch/build/Release/*.node'),
+    'pkg assets must include the native node-pty modules'
+  );
 });
 
 test('portable Windows restart waits for the old process before relaunching', () => {
@@ -100,5 +104,11 @@ test('the redistributable ships its license notices', () => {
   const notices = fs.readFileSync(path.join(root, 'THIRD-PARTY-LICENSES.md'), 'utf8');
   for (const dependency of Object.keys(packageJson.dependencies)) {
     assert.ok(notices.includes(`### ${dependency}@`), `${dependency} must appear in THIRD-PARTY-LICENSES.md`);
+  }
+  for (const dependency of ['@xterm/addon-serialize', '@xterm/headless', 'rc']) {
+    const start = notices.indexOf(`### ${dependency}@`);
+    const end = notices.indexOf('\n### ', start + 1);
+    const section = notices.slice(start, end === -1 ? undefined : end);
+    assert.match(section, /```/, `${dependency} must include its license text`);
   }
 });

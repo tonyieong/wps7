@@ -5665,8 +5665,8 @@
     mountPaneContent(pane);
   }
 
-  const DEFAULT_GRID_SIZE = 120;
-  const DEFAULT_VERTICAL_SLOTS = 12;
+  const DEFAULT_GRID_SIZE = 400;
+  const DEFAULT_VERTICAL_SLOTS = 2;
   const MAX_VERTICAL_SLOTS = 24;
   const DEFAULT_PANE_CELLS = 6;
   const BOARD_RESERVE_COLUMNS = 4;
@@ -6897,7 +6897,7 @@
                 <label>Grid cell width (px)<input name="ui.grid_size" type="number" min="20" max="400" step="10" value="${escapeAttr(settings.ui.grid_size)}"></label>
                 <label>Rows per screen<input name="ui.vertical_slots" type="number" min="1" max="24" value="${escapeAttr(settings.ui.vertical_slots)}"></label>
                 <label>New pane width (cells)<input name="ui.default_pane_width" type="number" min="1" max="48" value="${escapeAttr(settings.ui.default_pane_width ?? 6)}"></label>
-                <label>New pane height (cells)<input name="ui.default_pane_height" type="number" min="1" max="${escapeAttr(settings.ui.vertical_slots)}" value="${escapeAttr(settings.ui.default_pane_height ?? 12)}"></label>
+                <label>New pane height (cells)<input name="ui.default_pane_height" type="number" min="1" max="${escapeAttr(settings.ui.vertical_slots)}" value="${escapeAttr(settings.ui.default_pane_height ?? 2)}"></label>
               </div>
             </section>
             <section class="settings-section" id="settings-persistence">

@@ -52,10 +52,10 @@ const defaultConfig = {
   },
   ui: {
     sidebar_width: 286,
-    grid_size: 120,
-    vertical_slots: 12,
+    grid_size: 400,
+    vertical_slots: 2,
     default_pane_width: 6,
-    default_pane_height: 12,
+    default_pane_height: 2,
     terminal_font_family: 'Consolas, "Cascadia Mono", monospace',
     terminal_font_size: 13,
     mobile_terminal_font_size: 12,
@@ -166,12 +166,12 @@ mobile_keybar_buttons = ${formatTomlValue(defaultMobileKeybarButtons)}
 sidebar_width = 286
 # Board grid. Cell width is fixed in pixels; cell height is the viewport height
 # divided by vertical_slots. Pane sizes are always whole cells.
-grid_size = 120
-vertical_slots = 12
+grid_size = 400
+vertical_slots = 2
 # Width, in cells, given to a newly created pane.
 default_pane_width = 6
 # Height, in cells, given to a newly created pane. Capped at vertical_slots.
-default_pane_height = 12
+default_pane_height = 2
 terminal_font_family = "Consolas, \\"Cascadia Mono\\", monospace"
 terminal_font_size = 13
 mobile_terminal_font_size = 12
@@ -321,6 +321,8 @@ notepad_autosave = ${defaultConfig.ui.notepad_autosave}
   }
 
   if (/^\[ui\]\s*$/m.test(nextText)) {
+    nextText = ensureTomlKey(nextText, 'ui', 'grid_size', defaultConfig.ui.grid_size);
+    nextText = ensureTomlKey(nextText, 'ui', 'vertical_slots', defaultConfig.ui.vertical_slots);
     nextText = ensureTomlKey(nextText, 'ui', 'default_pane_width', defaultConfig.ui.default_pane_width);
     nextText = ensureTomlKey(nextText, 'ui', 'default_pane_height', defaultConfig.ui.default_pane_height);
     nextText = ensureTomlKey(nextText, 'ui', 'terminal_font_family', defaultConfig.ui.terminal_font_family);

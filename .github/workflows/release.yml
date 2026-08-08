@@ -12,22 +12,58 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
 
+      - name: Ensure the tag is on main
+        shell: pwsh
+        run: |
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor $env:GITHUB_SHA FETCH_HEAD
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Release tags must point to a commit reachable from main.'
+          }
+
+      - name: Ensure the tag matches package version
+        shell: pwsh
+        run: |
+          $packageVersion = (node -p "require('./package.json').version").Trim()
+          if ("v$packageVersion" -ne $env:GITHUB_REF_NAME) {
+            throw "Tag $env:GITHUB_REF_NAME does not match package.json version v$packageVersion."
+          }
+
       - run: npm ci
 
+      - run: npm run lint
+
       - run: npm test
+
+      - name: Third-party notices are current
+        shell: pwsh
+        run: |
+          npm run licenses:generate
+          if ($LASTEXITCODE -ne 0) {
+            throw 'License generation failed. Every production dependency must include a license text.'
+          }
+          git diff --quiet -- THIRD-PARTY-LICENSES.md
+          if ($LASTEXITCODE -ne 0) {
+            git --no-pager diff -- THIRD-PARTY-LICENSES.md
+            throw 'THIRD-PARTY-LICENSES.md is stale. Run "npm run licenses:generate" and commit the result.'
+          }
 
       - run: npm run package:win
 
       - name: Assemble the release archive
         shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          $version = "${{ github.ref_name }}"
+          $version = $env:RELEASE_TAG
           $stage = "staging/wps7-$version-windows-x64"
           New-Item -ItemType Directory -Path $stage -Force | Out-Null
           Copy-Item dist/wps7.exe, dist/start-wps7.vbs $stage
@@ -51,6 +87,7 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
         run: |
           # wps7 ships unsigned, so SmartScreen will warn. The checksum file is
           # the only way a downloader can verify what they got.
@@ -58,14 +95,14 @@ jobs:
           Verify your download before running it:
 
           ``````powershell
-          Get-FileHash .\wps7-${{ github.ref_name }}-windows-x64.zip -Algorithm SHA256
+          Get-FileHash .\wps7-$($env:RELEASE_TAG)-windows-x64.zip -Algorithm SHA256
           ``````
 
           Compare the result against ``SHA256SUMS.txt``. This build is not code
           signed, so Windows SmartScreen will show an unknown publisher warning.
           "@
-          gh release create "${{ github.ref_name }}" `
-            "wps7-${{ github.ref_name }}-windows-x64.zip" SHA256SUMS.txt `
-            --title "wps7 ${{ github.ref_name }}" `
+          gh release create $env:RELEASE_TAG `
+            "wps7-$($env:RELEASE_TAG)-windows-x64.zip" SHA256SUMS.txt `
+            --title "wps7 $($env:RELEASE_TAG)" `
             --notes $notes `
             --verify-tag

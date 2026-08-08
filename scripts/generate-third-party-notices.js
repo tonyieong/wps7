@@ -5,7 +5,12 @@ const fs = require('fs');
 const path = require('path');
 
 const root = path.join(__dirname, '..');
-const LICENSE_FILES = ['LICENSE', 'LICENSE.md', 'LICENSE.txt', 'LICENCE', 'LICENCE.md', 'COPYING'];
+const LICENSE_FILE_PATTERN = /^LICEN[CS]E(?:[._-].*)?$/i;
+const COPYING_FILES = new Set(['COPYING', 'COPYING.md', 'COPYING.txt']);
+const LICENSE_SOURCE_OVERRIDES = {
+  '@xterm/addon-serialize': path.join(root, 'node_modules', '@xterm', 'xterm', 'LICENSE'),
+  '@xterm/headless': path.join(root, 'node_modules', '@xterm', 'xterm', 'LICENSE')
+};
 
 // Front-end code we vendored by hand, so it has no package.json to read.
 const VENDORED = [
@@ -75,12 +80,20 @@ function resolvePackageDir(name, fromDir) {
   }
 }
 
-function readLicenseText(dir) {
-  for (const file of LICENSE_FILES) {
-    const target = path.join(dir, file);
-    if (fs.existsSync(target)) {
-      return fs.readFileSync(target, 'utf8').trim();
-    }
+function readLicenseText(dir, packageName) {
+  const files = fs.readdirSync(dir)
+    .filter((file) => LICENSE_FILE_PATTERN.test(file) || COPYING_FILES.has(file))
+    .sort();
+  if (files.length) {
+    return files
+      .map((file) => fs.readFileSync(path.join(dir, file), 'utf8').replace(/[ \t]+$/gm, '').trim())
+      .filter(Boolean)
+      .join('\n\n');
+  }
+
+  const fallback = LICENSE_SOURCE_OVERRIDES[packageName];
+  if (fallback && fs.existsSync(fallback)) {
+    return fs.readFileSync(fallback, 'utf8').replace(/[ \t]+$/gm, '').trim();
   }
   return '';
 }
@@ -119,7 +132,7 @@ function collectProductionPackages() {
       version: manifest.version,
       license: licenseId(manifest),
       homepage: manifest.homepage || (manifest.repository && (manifest.repository.url || manifest.repository)) || '',
-      text: readLicenseText(dir)
+      text: readLicenseText(dir, manifest.name)
     });
     for (const dependency of Object.keys(manifest.dependencies || {})) {
       queue.push({ name: dependency, from: dir });
@@ -184,5 +197,6 @@ fs.writeFileSync(output, render(packages));
 const missing = packages.filter((item) => !item.text).map((item) => item.name);
 process.stdout.write(`Wrote ${path.relative(root, output)} covering ${packages.length} npm packages and ${VENDORED.length} vendored components.\n`);
 if (missing.length) {
-  process.stdout.write(`No license file found in: ${missing.join(', ')}\n`);
+  process.stderr.write(`No license file found in: ${missing.join(', ')}\n`);
+  process.exitCode = 1;
 }

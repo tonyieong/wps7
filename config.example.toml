@@ -28,26 +28,29 @@ args = ["-NoLogo", "-NoExit", "-Command", "try { Set-PSReadLineOption -Predictio
 [persistence]
 # Hot reload.
 autosave_minutes = 15
-scrollback_lines = 100000
+scrollback_lines = 10000
 
 [terminal]
 # Hot reload.
+backend = "conpty_screen"
+reconnect_scrollback_lines = 2000
 resize_debounce_ms = 100
 auto_scroll_on_resize = false
 cursor_blink = true
 browser_notifications = false
+mobile_keybar_buttons = [{ label = "Esc", action = "shortcut", value = "Escape", enabled = true }, { label = "Tab", action = "shortcut", value = "Tab", enabled = true }, { label = "Ctrl", action = "modifier", value = "Control", enabled = true }, { label = "←", action = "shortcut", value = "ArrowLeft", enabled = true }, { label = "↓", action = "shortcut", value = "ArrowDown", enabled = true }, { label = "↑", action = "shortcut", value = "ArrowUp", enabled = true }, { label = "→", action = "shortcut", value = "ArrowRight", enabled = true }, { label = "^C", action = "shortcut", value = "Ctrl+C", enabled = true }, { label = "^D", action = "shortcut", value = "Ctrl+D", enabled = true }, { label = "^Z", action = "shortcut", value = "Ctrl+Z", enabled = true }, { label = "^L", action = "shortcut", value = "Ctrl+L", enabled = true }, { label = "^R", action = "shortcut", value = "Ctrl+R", enabled = true }]
 
 [ui]
 # Hot reload after saving settings in the web UI.
 sidebar_width = 286
 # Board grid. Cell width is fixed in pixels; cell height is the viewport height
 # divided by vertical_slots. Pane sizes are always whole cells.
-grid_size = 120
-vertical_slots = 12
+grid_size = 400
+vertical_slots = 2
 # Width, in cells, given to a newly created pane.
 default_pane_width = 6
 # Height, in cells, given to a newly created pane. Capped at vertical_slots.
-default_pane_height = 12
+default_pane_height = 2
 terminal_font_family = "Consolas, \"Cascadia Mono\", monospace"
 terminal_font_size = 13
 mobile_terminal_font_size = 12
