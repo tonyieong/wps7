@@ -76,9 +76,9 @@ wps7 prefers `pwsh.exe` and falls back to `powershell.exe`. If fallback is used,
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup and
-[AGENTS.md](AGENTS.md) for the repository conventions. Report security issues
-privately through the process in [SECURITY.md](SECURITY.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup and the
+repository conventions. Report security issues privately through the process in
+[SECURITY.md](SECURITY.md).
 
 ## License
 
