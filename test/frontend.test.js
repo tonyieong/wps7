@@ -1232,6 +1232,14 @@ test('appearance stores separate light and dark choices with separate custom pal
   }
   const presetsSource = appSource.slice(appSource.indexOf('const themePresets'), appSource.indexOf('const customThemeDefaults'));
   assert.doesNotMatch(presetsSource, /label: '(?:Apple|Claude|Codex) /);
+  for (const themeId of ['slate-dark', 'slate-light', 'ember-dark', 'ember-light', 'forest-dark', 'forest-light']) {
+    assert.match(presetsSource, new RegExp(`'${themeId}'`));
+  }
+  assert.doesNotMatch(presetsSource, /'(?:apple|claude|codex)-(?:dark|light)'/);
+  const themeValidationSource = mainSource.slice(mainSource.indexOf('const lightThemeIds'), mainSource.indexOf("if (updates.custom_theme.mode"));
+  assert.match(themeValidationSource, /'slate-light'.*'ember-light'.*'forest-light'/);
+  assert.match(themeValidationSource, /'slate-dark'.*'ember-dark'.*'forest-dark'/);
+  assert.doesNotMatch(themeValidationSource, /'(?:apple|claude|codex)-(?:dark|light)'/);
   for (const field of ['mode', 'selected_light', 'selected_dark', 'ink', 'panel', 'rail', 'surface', 'line', 'text', 'muted', 'accent', 'warn', 'danger', 'terminal_bg', 'terminal_fg', 'light_ink', 'light_panel', 'light_rail', 'light_surface', 'light_line', 'light_text', 'light_muted', 'light_accent', 'light_warn', 'light_danger', 'light_terminal_bg', 'light_terminal_fg']) {
     assert.match(appSource, new RegExp(`custom_theme\\.${field}`));
   }
@@ -1239,6 +1247,9 @@ test('appearance stores separate light and dark choices with separate custom pal
   assert.match(appSource, /data-theme-mode="dark"/);
   assert.match(appSource, /function selectedThemeForMode\(mode\)/);
   assert.match(appSource, /selected_\$\{mode\}/);
+  assert.match(appSource, /themePresets\[selected\]\?\.mode === mode/);
+  assert.match(appSource, /const selectedLight = selectedThemeForMode\('light'\)/);
+  assert.match(appSource, /const selectedDark = selectedThemeForMode\('dark'\)/);
   assert.match(appSource, /custom_theme:\s*customThemeFromForm\(form\)/);
   assert.match(mainSource, /custom_theme:\s*config\.custom_theme/);
   assert.match(mainSource, /if \(updates\.custom_theme\)/);

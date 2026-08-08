@@ -439,8 +439,8 @@ function sanitizeSettingsUpdates(updates) {
   }
   if (updates.custom_theme) {
     next.custom_theme = {};
-    const lightThemeIds = ['wps-light', 'apple-light', 'claude-light', 'codex-light', 'custom-light'];
-    const darkThemeIds = ['wps-dark', 'apple-dark', 'claude-dark', 'codex-dark', 'custom-dark'];
+    const lightThemeIds = ['wps-light', 'slate-light', 'ember-light', 'forest-light', 'custom-light'];
+    const darkThemeIds = ['wps-dark', 'slate-dark', 'ember-dark', 'forest-dark', 'custom-dark'];
     for (const [key, themeIds] of [['selected_light', lightThemeIds], ['selected_dark', darkThemeIds]]) {
       if (themeIds.includes(updates.custom_theme[key])) {
         next.custom_theme[key] = updates.custom_theme[key];

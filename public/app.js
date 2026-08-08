@@ -2,12 +2,12 @@
   const themePresets = {
     'wps-dark': { label: 'WPS7 Dark', mode: 'dark', ink: '#08131f', panel: '#0e1c2a', rail: '#0b1926', terminal: '#07131e', surfaceRaised: '#142536', surfaceSoft: '#102131', line: '#25394a', lineStrong: '#385064', text: '#f2f6f7', muted: '#91a3b2', accent: '#48d6b2', accentStrong: '#22b993', warn: '#f1b84b', danger: '#ff7474', shadow: 'rgba(0, 0, 0, .34)', terminalBg: '#06111b', terminalFg: '#eef5f4' },
     'wps-light': { label: 'WPS7 Light', mode: 'light', ink: '#f5f7f8', panel: '#ffffff', rail: '#f2f5f6', terminal: '#f8fafb', surfaceRaised: '#ffffff', surfaceSoft: '#edf3f3', line: '#d7e0e4', lineStrong: '#b9c8cf', text: '#14202b', muted: '#667582', accent: '#159d83', accentStrong: '#0d806a', warn: '#8a4f00', danger: '#c43d4b', shadow: 'rgba(31, 49, 61, .14)', terminalBg: '#ffffff', terminalFg: '#17232d' },
-    'apple-dark': { label: 'Slate Dark', mode: 'dark', ink: '#101114', panel: '#1c1c1e', rail: '#161618', terminal: '#0b0c0f', surfaceRaised: '#242428', surfaceSoft: '#202024', line: '#38383d', lineStrong: '#54545b', text: '#f5f5f7', muted: '#a1a1a6', accent: '#0a84ff', accentStrong: '#409cff', warn: '#ffd60a', danger: '#ff453a', shadow: 'rgba(0, 0, 0, .34)', terminalBg: '#0b0c0f', terminalFg: '#f5f5f7' },
-    'apple-light': { label: 'Slate Light', mode: 'light', ink: '#f2f2f7', panel: '#ffffff', rail: '#f7f7fa', terminal: '#fbfbfd', surfaceRaised: '#ffffff', surfaceSoft: '#e9e9ee', line: '#d1d1d6', lineStrong: '#aeaeb2', text: '#1c1c1e', muted: '#636366', accent: '#0066cc', accentStrong: '#004f9e', warn: '#7a4b00', danger: '#c9342f', shadow: 'rgba(31, 31, 35, .14)', terminalBg: '#ffffff', terminalFg: '#1c1c1e' },
-    'claude-dark': { label: 'Ember Dark', mode: 'dark', ink: '#1f1b18', panel: '#29231f', rail: '#241f1b', terminal: '#171411', surfaceRaised: '#342c27', surfaceSoft: '#302823', line: '#4a3e36', lineStrong: '#685548', text: '#f5eee8', muted: '#b5a79b', accent: '#e58b55', accentStrong: '#f0a36d', warn: '#f2c14e', danger: '#ff7a70', shadow: 'rgba(20, 12, 7, .38)', terminalBg: '#171411', terminalFg: '#f5eee8' },
-    'claude-light': { label: 'Ember Light', mode: 'light', ink: '#f7f3ee', panel: '#fffaf5', rail: '#f1ebe4', terminal: '#fffdf9', surfaceRaised: '#ffffff', surfaceSoft: '#eee5dc', line: '#d8cbc0', lineStrong: '#bca99b', text: '#2d2723', muted: '#6f6258', accent: '#b84f23', accentStrong: '#963d1c', warn: '#7f4d00', danger: '#b93434', shadow: 'rgba(72, 49, 34, .14)', terminalBg: '#fffdf9', terminalFg: '#2d2723' },
-    'codex-dark': { label: 'Forest Dark', mode: 'dark', ink: '#111311', panel: '#181b18', rail: '#141714', terminal: '#0b0d0c', surfaceRaised: '#202420', surfaceSoft: '#1c201c', line: '#303730', lineStrong: '#465046', text: '#edf3ee', muted: '#9aa79d', accent: '#52d273', accentStrong: '#2fbd56', warn: '#f2b84b', danger: '#ff6b6b', shadow: 'rgba(0, 0, 0, .36)', terminalBg: '#0b0d0c', terminalFg: '#edf3ee' },
-    'codex-light': { label: 'Forest Light', mode: 'light', ink: '#f3f5f2', panel: '#ffffff', rail: '#eef1ed', terminal: '#fcfdfb', surfaceRaised: '#ffffff', surfaceSoft: '#e7ece6', line: '#d0d7cf', lineStrong: '#aeb9ad', text: '#182019', muted: '#5d6b60', accent: '#147a36', accentStrong: '#0c652a', warn: '#7c4d00', danger: '#b7333e', shadow: 'rgba(28, 45, 31, .14)', terminalBg: '#fcfdfb', terminalFg: '#182019' }
+    'slate-dark': { label: 'Slate Dark', mode: 'dark', ink: '#101114', panel: '#1c1c1e', rail: '#161618', terminal: '#0b0c0f', surfaceRaised: '#242428', surfaceSoft: '#202024', line: '#38383d', lineStrong: '#54545b', text: '#f5f5f7', muted: '#a1a1a6', accent: '#0a84ff', accentStrong: '#409cff', warn: '#ffd60a', danger: '#ff453a', shadow: 'rgba(0, 0, 0, .34)', terminalBg: '#0b0c0f', terminalFg: '#f5f5f7' },
+    'slate-light': { label: 'Slate Light', mode: 'light', ink: '#f2f2f7', panel: '#ffffff', rail: '#f7f7fa', terminal: '#fbfbfd', surfaceRaised: '#ffffff', surfaceSoft: '#e9e9ee', line: '#d1d1d6', lineStrong: '#aeaeb2', text: '#1c1c1e', muted: '#636366', accent: '#0066cc', accentStrong: '#004f9e', warn: '#7a4b00', danger: '#c9342f', shadow: 'rgba(31, 31, 35, .14)', terminalBg: '#ffffff', terminalFg: '#1c1c1e' },
+    'ember-dark': { label: 'Ember Dark', mode: 'dark', ink: '#1f1b18', panel: '#29231f', rail: '#241f1b', terminal: '#171411', surfaceRaised: '#342c27', surfaceSoft: '#302823', line: '#4a3e36', lineStrong: '#685548', text: '#f5eee8', muted: '#b5a79b', accent: '#e58b55', accentStrong: '#f0a36d', warn: '#f2c14e', danger: '#ff7a70', shadow: 'rgba(20, 12, 7, .38)', terminalBg: '#171411', terminalFg: '#f5eee8' },
+    'ember-light': { label: 'Ember Light', mode: 'light', ink: '#f7f3ee', panel: '#fffaf5', rail: '#f1ebe4', terminal: '#fffdf9', surfaceRaised: '#ffffff', surfaceSoft: '#eee5dc', line: '#d8cbc0', lineStrong: '#bca99b', text: '#2d2723', muted: '#6f6258', accent: '#b84f23', accentStrong: '#963d1c', warn: '#7f4d00', danger: '#b93434', shadow: 'rgba(72, 49, 34, .14)', terminalBg: '#fffdf9', terminalFg: '#2d2723' },
+    'forest-dark': { label: 'Forest Dark', mode: 'dark', ink: '#111311', panel: '#181b18', rail: '#141714', terminal: '#0b0d0c', surfaceRaised: '#202420', surfaceSoft: '#1c201c', line: '#303730', lineStrong: '#465046', text: '#edf3ee', muted: '#9aa79d', accent: '#52d273', accentStrong: '#2fbd56', warn: '#f2b84b', danger: '#ff6b6b', shadow: 'rgba(0, 0, 0, .36)', terminalBg: '#0b0d0c', terminalFg: '#edf3ee' },
+    'forest-light': { label: 'Forest Light', mode: 'light', ink: '#f3f5f2', panel: '#ffffff', rail: '#eef1ed', terminal: '#fcfdfb', surfaceRaised: '#ffffff', surfaceSoft: '#e7ece6', line: '#d0d7cf', lineStrong: '#aeb9ad', text: '#182019', muted: '#5d6b60', accent: '#147a36', accentStrong: '#0c652a', warn: '#7c4d00', danger: '#b7333e', shadow: 'rgba(28, 45, 31, .14)', terminalBg: '#fcfdfb', terminalFg: '#182019' }
   };
   const customThemeDefaults = {
     selected_light: 'wps-light', selected_dark: 'wps-dark', mode: 'dark',
@@ -160,7 +160,8 @@
 
   function selectedThemeForMode(mode) {
     const custom = { ...customThemeDefaults, ...(state.config?.custom_theme || {}), ...(state.customThemeDraft || {}) };
-    return custom[`selected_${mode}`] || `wps-${mode}`;
+    const selected = custom[`selected_${mode}`];
+    return themePresets[selected]?.mode === mode || selected === `custom-${mode}` ? selected : `wps-${mode}`;
   }
 
   function pairedThemeId() {
@@ -6827,8 +6828,8 @@
     let savedTheme = state.theme;
     let savedDisplayMode = state.displayMode;
     let savedTerminalDensity = state.mobileTerminalDensity;
-    const selectedLight = state.customThemeDraft.selected_light;
-    const selectedDark = state.customThemeDraft.selected_dark;
+    const selectedLight = selectedThemeForMode('light');
+    const selectedDark = selectedThemeForMode('dark');
     const notificationCapability = browserNotificationCapability();
     const overlay = document.createElement('div');
     overlay.className = 'settings-overlay';

@@ -221,8 +221,8 @@ test('updates known config values while preserving loadability', () => {
       claude_home: 'C:\\Users\\Admin\\.claude'
     },
     custom_theme: {
-      selected_light: 'claude-light',
-      selected_dark: 'codex-dark',
+      selected_light: 'ember-light',
+      selected_dark: 'forest-dark',
       mode: 'light',
       ink: '#f0f0f0',
       panel: '#ffffff',
@@ -291,8 +291,8 @@ test('updates known config values while preserving loadability', () => {
   assert.equal(config.usage.codex_home, 'C:\\Users\\Admin\\.codex');
   assert.equal(config.usage.claude_home, 'C:\\Users\\Admin\\.claude');
   assert.equal(config.custom_theme.mode, 'light');
-  assert.equal(config.custom_theme.selected_light, 'claude-light');
-  assert.equal(config.custom_theme.selected_dark, 'codex-dark');
+  assert.equal(config.custom_theme.selected_light, 'ember-light');
+  assert.equal(config.custom_theme.selected_dark, 'forest-dark');
   assert.equal(config.custom_theme.accent, '#0055aa');
   assert.equal(config.custom_theme.light_accent, '#2255aa');
   assert.match(fs.readFileSync(path.join(root, 'config.toml'), 'utf8'), /\[custom_theme\][\s\S]*accent = "#0055aa"/);
