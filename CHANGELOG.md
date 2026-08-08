@@ -41,6 +41,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   change and the unit suite does not exercise routing. node-pty was verified by
   driving a real ConPTY session in the packaged executable.
 
+### Fixed
+
+- `start-wps7.vbs` now explains why it cannot start instead of letting Windows
+  Script Host report `80070002` on the `shell.Run` line. Downloading the
+  GitHub-generated "Source code" archive, or double clicking the launcher inside
+  the Windows zip viewer, leaves no `wps7.exe` beside the script; the launcher
+  detects both cases and says what to do. The release notes and both READMEs now
+  name the asset to download.
+
 ### Security
 
 - Request errors no longer fall through to Express's built-in handler, which

@@ -18,7 +18,15 @@
 > 若要用在信任網路以外的環境，請把 wps7 放在能終結 TLS 的反向代理後面。
 > 詳見 [SECURITY.md](SECURITY.md)。
 
-## 執行
+## 下載
+
+請到[發行頁面](../../releases)下載 `wps7-<版本>-windows-x64.zip`。GitHub 一併產生的
+「Source code」壓縮檔只包含原始碼，裡面沒有 `wps7.exe`。
+
+連按兩下 `start-wps7.vbs` 之前，請先把整個 zip 解壓縮到資料夾。直接在 Windows 的
+壓縮檔檢視器裡開啟啟動器，只會把那一個檔案解到暫存目錄，執行檔仍留在壓縮檔內。
+
+## 從原始碼執行
 
 ```powershell
 npm install

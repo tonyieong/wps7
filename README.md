@@ -20,7 +20,17 @@ to any browser on your machine, and rebuilds the layout after a reboot.
 > output travel unencrypted. For anything beyond a trusted network, put wps7
 > behind a reverse proxy that terminates TLS. See [SECURITY.md](SECURITY.md).
 
-## Run
+## Download
+
+Take `wps7-<version>-windows-x64.zip` from the [releases page](../../releases).
+The "Source code" archives GitHub generates beside it hold the source tree only,
+without `wps7.exe`.
+
+Extract the zip to a folder before double clicking `start-wps7.vbs`. Opening the
+launcher inside the Windows zip viewer unpacks that one file to a temp directory
+and leaves the executable in the archive.
+
+## Run from source
 
 ```powershell
 npm install

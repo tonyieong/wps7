@@ -92,6 +92,14 @@ jobs:
           # wps7 ships unsigned, so SmartScreen will warn. The checksum file is
           # the only way a downloader can verify what they got.
           $notes = @"
+          Download **wps7-$($env:RELEASE_TAG)-windows-x64.zip** from the assets
+          below. The "Source code" archives GitHub adds to every release hold the
+          source tree only, without wps7.exe.
+
+          Extract the zip to a folder before double clicking start-wps7.vbs.
+          Opening the launcher inside the Windows zip viewer unpacks that one
+          file to a temp directory and leaves the executable in the archive.
+
           Verify your download before running it:
 
           ``````powershell
