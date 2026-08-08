@@ -23,3 +23,9 @@ output/
 /*.webp
 /*.exe
 
+# AI assistant instructions. These carry local deployment details (the port
+# 5001 instance, control-token paths, the swap-in-place flow) that only apply
+# to one machine. Contributor-facing conventions live in CONTRIBUTING.md.
+AGENTS.md
+CLAUDE.md
+

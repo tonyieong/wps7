@@ -86,9 +86,8 @@ wps7 優先使用 `pwsh.exe`，找不到時才退回 `powershell.exe`。若使�
 
 ## 參與開發
 
-開發環境設定請參閱 [CONTRIBUTING.md](CONTRIBUTING.md)，儲存庫慣例請參閱
-[AGENTS.md](AGENTS.md)。安全性問題請依照 [SECURITY.md](SECURITY.md) 的流程私下回報，
-不要開公開的 issue。
+開發環境設定與儲存庫慣例請參閱 [CONTRIBUTING.md](CONTRIBUTING.md)。安全性問題請依照
+[SECURITY.md](SECURITY.md) 的流程私下回報，不要開公開的 issue。
 
 ## 授權
 
