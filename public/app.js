@@ -5520,10 +5520,18 @@
   }
 
   function startPaneMove(event) {
-    if (event.button !== 0 || event.target.closest('.pane-close, button, input, [data-browser-tab], [data-notepad-tab], [data-pane-tab], .pane-kind-icon')) {
+    if (event.button !== 0 || event.target.closest('.pane-close, button, input, [data-browser-tab], [data-notepad-tab], [data-pane-tab]')) {
       return;
     }
-    event.preventDefault();
+    // The kind icon drags the pane like the rest of the title bar, but it also
+    // toggles focus mode on double click. preventDefault() on pointerdown would
+    // suppress the compatibility dblclick, and capturing the pointer on the
+    // title bar would retarget that dblclick there, so a drag started on the
+    // icon captures on the icon itself and leaves the default action alone.
+    const icon = event.target.closest('.pane-kind-icon');
+    if (!icon) {
+      event.preventDefault();
+    }
 
     const title = event.currentTarget;
     const paneId = title.dataset.paneTitle;
@@ -5541,7 +5549,8 @@
     let nextLayout = startLayout;
     let moved = false;
 
-    title.setPointerCapture(event.pointerId);
+    const dragSurface = icon || title;
+    dragSurface.setPointerCapture(event.pointerId);
     const onMove = (moveEvent) => {
       if (!moved && Math.abs(moveEvent.clientX - startX) + Math.abs(moveEvent.clientY - startY) < 6) {
         return;
@@ -5561,8 +5570,8 @@
       paneElement.classList.toggle('invalid', wouldOverlap(found.tab, paneId, nextLayout));
     };
     const onUp = async () => {
-      title.removeEventListener('pointermove', onMove);
-      title.removeEventListener('pointerup', onUp);
+      dragSurface.removeEventListener('pointermove', onMove);
+      dragSurface.removeEventListener('pointerup', onUp);
       paneElement.classList.remove('dragging', 'invalid');
       if (!moved) {
         return;
@@ -5580,8 +5589,8 @@
       }
       await setActivePane(paneId);
     };
-    title.addEventListener('pointermove', onMove);
-    title.addEventListener('pointerup', onUp);
+    dragSurface.addEventListener('pointermove', onMove);
+    dragSurface.addEventListener('pointerup', onUp);
   }
 
   async function savePaneLayoutLocal(paneId, layout) {
@@ -5782,11 +5791,18 @@
     const fit = new FitAddon.FitAddon();
     term.loadAddon(fit);
     term.open(element);
-    installMobileTerminalTouchScroll(element, term);
+    const touchScroll = installMobileTerminalTouchScroll(element, term, (clientX, clientY) => {
+      openTerminalContextMenu(terminalTabId, clientX, clientY);
+    });
     fitTerminal(term, fit, true);
     element.addEventListener('click', () => term.focus());
     element.addEventListener('contextmenu', (event) => {
       event.preventDefault();
+      // A long press fires this halfway through the gesture; that menu belongs
+      // to touchend, once the selection is final.
+      if (touchScroll.isTouchActive()) {
+        return;
+      }
       openTerminalContextMenu(terminalTabId, event.clientX, event.clientY);
     });
     term.attachCustomKeyEventHandler((event) => terminalShortcut(terminalTabId, event));
@@ -6123,7 +6139,7 @@
     term.select(start.column, start.row, Math.max(1, length));
   }
 
-  function installMobileTerminalTouchScroll(element, term) {
+  function installMobileTerminalTouchScroll(element, term, openContextMenu) {
     const scrollSurface = element.querySelector('.xterm-scrollable-element');
     const longPressDelay = 500;
     const moveTolerance = 10;
@@ -6133,6 +6149,7 @@
     let longPressTimer = 0;
     let selecting = false;
     let selectionAnchor = null;
+    let touchActive = false;
     const cancelLongPress = () => {
       window.clearTimeout(longPressTimer);
       longPressTimer = 0;
@@ -6145,6 +6162,7 @@
         lastY = 0;
         return;
       }
+      touchActive = true;
       const touch = event.touches[0];
       lastY = touch.clientY;
       startX = touch.clientX;
@@ -6179,7 +6197,9 @@
         return;
       }
       const nextY = touch.clientY;
-      const deltaY = lastY - nextY;
+      // Dragging down pulls older output back into view, so the text follows the
+      // finger the way a page does under a touch.
+      const deltaY = nextY - lastY;
       lastY = nextY;
       if (!deltaY) {
         return;
@@ -6196,7 +6216,14 @@
       cancelLongPress();
       if (selecting) {
         event.preventDefault();
+        // The menu waits for the finger to lift, so the long press can still be
+        // dragged to grow the selection before anything covers the terminal.
+        const touch = event.changedTouches[0];
+        if (touch) {
+          openContextMenu?.(touch.clientX, touch.clientY);
+        }
       }
+      touchActive = false;
       lastY = 0;
       selecting = false;
       selectionAnchor = null;
@@ -6204,11 +6231,13 @@
     }, { passive: false, capture: true });
     element.addEventListener('touchcancel', () => {
       cancelLongPress();
+      touchActive = false;
       lastY = 0;
       selecting = false;
       selectionAnchor = null;
       element.classList.remove('touch-selecting');
     }, { passive: true, capture: true });
+    return { isTouchActive: () => touchActive };
   }
 
   function createTerminalWriter(term, element) {

@@ -131,6 +131,38 @@ test('shell args load profile without clearing restored scrollback', () => {
   assert.deepEqual(config.restore.allowlist, []);
 });
 
+test('shell args turn PSReadLine command predictions back on', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'));
+  fs.writeFileSync(path.join(root, 'config.toml'), [
+    '[shell]',
+    'args = ["-NoLogo", "-NoExit", "-Command", "try { Set-PSReadLineOption -PredictionSource None } catch {}"]',
+    ''
+  ].join('\n'));
+
+  const { config } = loadConfig(root);
+  assert.equal(config.shell.args.some((arg) => arg.includes('-PredictionSource History')), true);
+  assert.equal(config.shell.args.some((arg) => arg.includes('-PredictionSource None')), false);
+  assert.deepEqual(loadConfig(fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'))).config.shell.args, [
+    '-NoLogo',
+    '-NoExit',
+    '-Command',
+    'try { Set-PSReadLineOption -PredictionSource History } catch {}'
+  ]);
+});
+
+test('shell extra_path is added to older configs and stays out of the web UI', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'));
+  fs.writeFileSync(path.join(root, 'config.toml'), '[shell]\npreferred = "pwsh.exe"\n');
+
+  const { config } = loadConfig(root);
+  assert.deepEqual(config.shell.extra_path, []);
+  assert.match(fs.readFileSync(path.join(root, 'config.toml'), 'utf8'), /^extra_path = \[\]$/m);
+
+  // The shell runs as the wps7 account, so PATH entries are config.toml only.
+  updateConfigFile(root, { shell: { extra_path: ['C:\\Users\\someone\\AppData\\Roaming\\npm'] } });
+  assert.deepEqual(loadConfig(root).config.shell.extra_path, []);
+});
+
 test('updates known config values while preserving loadability', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'));
   loadConfig(root);

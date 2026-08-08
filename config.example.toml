@@ -23,7 +23,14 @@ password_hash = ""
 # Hot reload for new panes only. Existing PowerShell processes keep their current executable and args.
 preferred = "pwsh.exe"
 fallback = "powershell.exe"
-args = ["-NoLogo", "-NoExit", "-Command", "try { Set-PSReadLineOption -PredictionSource None } catch {}"]
+args = ["-NoLogo", "-NoExit", "-Command", "try { Set-PSReadLineOption -PredictionSource History } catch {}"]
+# Folders appended to PATH for new panes. Installed as a Windows service, wps7
+# runs as LocalSystem and inherits only the machine PATH, so user-scoped tools
+# go missing: npm's global folder, where claude and codex land, is one of them.
+# extra_path = ["C:\\Users\\yourname\\AppData\\Roaming\\npm"]
+# The service account runs whatever those folders hold, so it is editable here
+# only, never through the web UI.
+extra_path = []
 
 [persistence]
 # Hot reload.

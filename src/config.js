@@ -17,6 +17,11 @@ const defaultMobileKeybarButtons = [
   { label: '^R', action: 'shortcut', value: 'Ctrl+R', enabled: true }
 ];
 
+// PSReadLine's inline prediction is what greys the rest of a remembered command
+// after the prompt; History is its own default, set explicitly so a profile that
+// turned it off still gets it back in a wps7 pane.
+const defaultShellArgsLine = 'args = ["-NoLogo", "-NoExit", "-Command", "try { Set-PSReadLineOption -PredictionSource History } catch {}"]';
+
 const defaultConfig = {
   server: {
     host: '127.0.0.1',
@@ -34,8 +39,9 @@ const defaultConfig = {
       '-NoLogo',
       '-NoExit',
       '-Command',
-      'try { Set-PSReadLineOption -PredictionSource None } catch {}'
-    ]
+      'try { Set-PSReadLineOption -PredictionSource History } catch {}'
+    ],
+    extra_path: []
   },
   persistence: {
     autosave_minutes: 15,
@@ -144,7 +150,14 @@ password_hash = ""
 # Hot reload for new panes only. Existing PowerShell processes keep their current executable and args.
 preferred = "pwsh.exe"
 fallback = "powershell.exe"
-args = ["-NoLogo", "-NoExit", "-Command", "try { Set-PSReadLineOption -PredictionSource None } catch {}"]
+${defaultShellArgsLine}
+# Folders appended to PATH for new panes. Installed as a Windows service, wps7
+# runs as LocalSystem and inherits only the machine PATH, so user-scoped tools
+# go missing: npm's global folder, where claude and codex land, is one of them.
+# extra_path = ["C:\\\\Users\\\\yourname\\\\AppData\\\\Roaming\\\\npm"]
+# The service account runs whatever those folders hold, so it is editable here
+# only, never through the web UI.
+extra_path = []
 
 [persistence]
 # Hot reload.
@@ -296,9 +309,14 @@ function normalizeConfigText(configText) {
     .replace(/^port\s*=\s*5_000\s*$/m, 'port = 5000')
     .replace(/^scrollback_lines\s*=\s*100_000\s*$/m, 'scrollback_lines = 100000')
     .replace(/^allowlist\s*=\s*\[\s*"codex"\s*\]\s*$/m, 'allowlist = []')
-    .replace(/^args\s*=\s*\["-NoLogo",\s*"-NoProfile",\s*"-NoExit",\s*"-Command",\s*"try \{ Set-PSReadLineOption -PredictionSource None \} catch \{\}; Clear-Host"\]\s*$/m, 'args = ["-NoLogo", "-NoExit", "-Command", "try { Set-PSReadLineOption -PredictionSource None } catch {}"]')
-    .replace(/^args\s*=\s*\["-NoLogo",\s*"-NoExit",\s*"-Command",\s*"try \{ Set-PSReadLineOption -PredictionSource None \} catch \{\}; Clear-Host"\]\s*$/m, 'args = ["-NoLogo", "-NoExit", "-Command", "try { Set-PSReadLineOption -PredictionSource None } catch {}"]')
-    .replace(/^args\s*=\s*\[\s*\]\s*$/m, 'args = ["-NoLogo", "-NoExit", "-Command", "try { Set-PSReadLineOption -PredictionSource None } catch {}"]');
+    .replace(/^args\s*=\s*\["-NoLogo",\s*"-NoProfile",\s*"-NoExit",\s*"-Command",\s*"try \{ Set-PSReadLineOption -PredictionSource None \} catch \{\}; Clear-Host"\]\s*$/m, defaultShellArgsLine)
+    .replace(/^args\s*=\s*\["-NoLogo",\s*"-NoExit",\s*"-Command",\s*"try \{ Set-PSReadLineOption -PredictionSource None \} catch \{\}; Clear-Host"\]\s*$/m, defaultShellArgsLine)
+    // Predictions used to be turned off for every pane; the setting is worth
+    // more than the tidier prompt, so an untouched shell line gets them back.
+    .replace(/^args\s*=\s*\["-NoLogo",\s*"-NoExit",\s*"-Command",\s*"try \{ Set-PSReadLineOption -PredictionSource None \} catch \{\}"\]\s*$/m, defaultShellArgsLine)
+    .replace(/^args\s*=\s*\[\s*\]\s*$/m, defaultShellArgsLine);
+
+  nextText = ensureTomlKey(nextText, 'shell', 'extra_path', defaultConfig.shell.extra_path);
 
   if (!/^\[ui\]\s*$/m.test(nextText)) {
     nextText = `${nextText.trimEnd()}
