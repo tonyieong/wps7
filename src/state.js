@@ -1130,17 +1130,24 @@ function rescaleLayout(layout, fromSlots, toSlots) {
   };
 }
 
-// The board grows to the right, so a new pane opens past the rightmost edge at
-// the configured default height. It is the one placement that never disturbs
-// what is already there, which matters more than packing the board tightly.
+// A new pane takes the leftmost free space it fits in, topmost first, so
+// closing a pane in the middle of the board leaves a gap the next one reuses
+// instead of the board only ever growing sideways. Nothing already placed is
+// disturbed: past the rightmost edge is always free, so the scan ends there.
 function appendLayout(panes, verticalSlots, paneWidth = DEFAULT_PANE_CELLS, paneHeight = verticalSlots) {
   const slots = clampVerticalSlots(verticalSlots);
   const width = clampPaneWidth(paneWidth);
   const height = clampPaneHeight(paneHeight, slots);
-  const right = panes.reduce((max, pane) => {
-    const layout = sanitizeLayout(pane.layout, slots, width);
-    return Math.max(max, layout.x + layout.w);
-  }, 0);
+  const taken = panes.map((pane) => sanitizeLayout(pane.layout, slots, width));
+  const right = taken.reduce((max, layout) => Math.max(max, layout.x + layout.w), 0);
+  for (let x = 0; x < right; x += 1) {
+    for (let y = 0; y + height <= slots; y += 1) {
+      const candidate = { x, y, w: width, h: height };
+      if (!taken.some((layout) => overlaps(candidate, layout))) {
+        return candidate;
+      }
+    }
+  }
   return { x: right, y: 0, w: width, h: height };
 }
 

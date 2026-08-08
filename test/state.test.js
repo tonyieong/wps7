@@ -214,11 +214,13 @@ test('a configured default pane height sizes the first pane and every new pane',
   const firstPane = store.state.sessions[0].tabs[0].panes[0];
   assert.deepEqual(firstPane.layout, { x: 0, y: 0, w: 6, h: 4 });
 
+  // Panes shorter than the board leave room underneath, and that room is to the
+  // left of anything a new column would open, so it gets filled first.
   const secondPane = store.splitPane(firstPane.id, 'horizontal');
-  assert.deepEqual(secondPane.layout, { x: 6, y: 0, w: 6, h: 4 });
+  assert.deepEqual(secondPane.layout, { x: 0, y: 4, w: 6, h: 4 });
 
   const thirdPane = store.createFilesPane(secondPane.id, 'C:\\');
-  assert.deepEqual(thirdPane.layout, { x: 12, y: 0, w: 6, h: 4 });
+  assert.deepEqual(thirdPane.layout, { x: 0, y: 8, w: 6, h: 4 });
 
   const session = store.createSession();
   assert.deepEqual(session.tabs[0].panes[0].layout, { x: 0, y: 0, w: 6, h: 4 });
@@ -274,7 +276,7 @@ test('new panes open past the rightmost edge at full height', () => {
   }
 });
 
-test('a new pane clears the rightmost edge even when panes were moved', () => {
+test('a new pane fills the leftmost free space before clearing the rightmost edge', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
   const store = new StateStore(root, 100);
   store.load();
@@ -282,7 +284,12 @@ test('a new pane clears the rightmost edge even when panes were moved', () => {
 
   assert.equal(store.placePane(paneId, { x: 10, y: 0, w: 3, h: 12 }), true);
   const next = store.splitPane(paneId, 'horizontal');
-  assert.deepEqual(next.layout, { x: 13, y: 0, w: 6, h: 12 });
+  assert.deepEqual(next.layout, { x: 0, y: 0, w: 6, h: 12 });
+
+  // Cells 0-5 and 10-12 are taken now, so the six-cell gap the third pane needs
+  // is no longer on the left and the board grows instead.
+  const third = store.splitPane(paneId, 'horizontal');
+  assert.deepEqual(third.layout, { x: 13, y: 0, w: 6, h: 12 });
 });
 
 test('loading legacy cell layouts migrates them to grid cells', () => {
