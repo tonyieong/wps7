@@ -837,6 +837,21 @@ test('the whiteboard pane lazy-loads a fully offline Excalidraw', () => {
   }
 });
 
+test('a whiteboard that slides re-reads its screen offsets', () => {
+  // Excalidraw only re-reads its container offsets when the container resizes,
+  // so scrolling the board, dragging a pane to other cells, or opening the
+  // sidebar used to leave the pointer mapped to the pane's old position.
+  assert.match(appSource, /excalidrawAPI: \(api\) => \{ entry\.api = api; \}/);
+  assert.match(appSource, /for \(const entry of state\.whiteboards\.values\(\)\) \{\s*entry\.api\?\.refresh\(\);/);
+
+  const grid = appSource.slice(appSource.indexOf('function wirePaneGrid'), appSource.indexOf('function wireBoardScroll'));
+  assert.match(grid, /grid\.addEventListener\('scroll', refreshWhiteboardOffsets, \{ passive: true \}\)/);
+  assert.match(grid, /new ResizeObserver\(refreshWhiteboardOffsets\)\.observe\(grid\)/);
+
+  const layout = appSource.slice(appSource.indexOf('function applyPaneLayoutStyle'), appSource.indexOf('function applyPaneLayoutUpdates'));
+  assert.match(layout, /refreshWhiteboardOffsets\(\);/);
+});
+
 test('the freeform canvas, its camera, and the in-house drawing layer are gone', () => {
   for (const symbol of [
     'activeCamera', 'clampZoom', 'applyCameraTransform', 'pointerToWorld', 'saveCameraSoon',

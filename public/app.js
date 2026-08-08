@@ -1230,10 +1230,12 @@
       return; // the pane was closed while the vendor bundle was loading
     }
     const root = window.ReactDOM.createRoot(host);
-    state.whiteboards.set(pane.id, root);
+    const entry = { root, api: null };
+    state.whiteboards.set(pane.id, entry);
     root.render(window.React.createElement(window.ExcalidrawLib.Excalidraw, {
       initialData: parseWhiteboard(pane.whiteboard),
       theme: state.theme.includes('light') ? 'light' : 'dark',
+      excalidrawAPI: (api) => { entry.api = api; },
       // appState carries live-session values (collaborators is a Map), so only
       // the few fields worth restoring are persisted.
       onChange: (elements, appState) => saveWhiteboardSoon(pane.id, {
@@ -1263,10 +1265,29 @@
   }
 
   function disposeWhiteboards() {
-    for (const root of state.whiteboards.values()) {
-      root.unmount();
+    for (const entry of state.whiteboards.values()) {
+      entry.root.unmount();
     }
     state.whiteboards.clear();
+  }
+
+  // Excalidraw caches its container's screen offsets and only re-reads them when
+  // the container resizes, so a whiteboard that merely slides -- the board
+  // scrolling sideways, a drag onto other cells, the sidebar opening -- keeps
+  // mapping the pointer to where the canvas used to be. Its own scroll
+  // detection cannot help here: it only follows a vertically scrolling
+  // ancestor, and the board scrolls horizontally.
+  let whiteboardOffsetFrame = 0;
+  function refreshWhiteboardOffsets() {
+    if (whiteboardOffsetFrame || state.whiteboards.size === 0) {
+      return;
+    }
+    whiteboardOffsetFrame = window.requestAnimationFrame(() => {
+      whiteboardOffsetFrame = 0;
+      for (const entry of state.whiteboards.values()) {
+        entry.api?.refresh();
+      }
+    });
   }
 
   function render() {
@@ -5326,6 +5347,11 @@
       }
       await createPane();
     };
+    // Scrolling the board, and anything that resizes the board itself (the
+    // sidebar opening, the viewport changing), slides every pane sideways
+    // without resizing it.
+    grid.addEventListener('scroll', refreshWhiteboardOffsets, { passive: true });
+    new ResizeObserver(refreshWhiteboardOffsets).observe(grid);
     grid.addEventListener('wheel', (event) => {
       const paneEl = event.ctrlKey && event.shiftKey ? event.target.closest?.('[data-pane]') : null;
       if (!paneEl) {
@@ -5618,6 +5644,7 @@
     }
     paneElement.style.gridColumn = `${layout.x + 1} / span ${layout.w}`;
     paneElement.style.gridRow = `${layout.y + 1} / span ${layout.h}`;
+    refreshWhiteboardOffsets();
     syncPaneTitleWidth(paneElement);
     paneElement.querySelectorAll('[data-paged-toolbar]').forEach(updatePagedToolbar);
   }
