@@ -30,6 +30,12 @@ Extract the zip to a folder before double clicking `start-wps7.vbs`. Opening the
 launcher inside the Windows zip viewer unpacks that one file to a temp directory
 and leaves the executable in the archive.
 
+wps7 is not code signed, so SmartScreen warns the first time a downloaded build
+runs. Compare the SHA256 with `SHA256SUMS.txt`, then clear the download mark
+before extracting — right click the zip, open Properties, tick Unblock, press OK.
+Otherwise start `wps7.exe` once yourself and choose "More info" then "Run
+anyway"; dismissing that prompt is what makes the launcher report `800704C7`.
+
 ## Run from source
 
 ```powershell

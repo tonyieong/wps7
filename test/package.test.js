@@ -77,8 +77,8 @@ function runLauncher(files) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-launcher-'));
   try {
     fs.copyFileSync(path.join(__dirname, '..', 'start-wps7.vbs'), path.join(directory, 'start-wps7.vbs'));
-    for (const [name, source] of Object.entries(files)) {
-      fs.copyFileSync(source, path.join(directory, name));
+    for (const [name, contents] of Object.entries(files)) {
+      fs.writeFileSync(path.join(directory, name), contents);
     }
     return spawnSync('cscript.exe', ['//nologo', path.join(directory, 'start-wps7.vbs')], { encoding: 'utf8' });
   } finally {
@@ -89,7 +89,7 @@ function runLauncher(files) {
 test('the launcher explains a missing executable instead of dying inside Run', { skip: process.platform !== 'win32' }, () => {
   // GitHub always offers the "Source code" archives beside the release asset,
   // and that source tree has no wps7.exe.
-  const sourceArchive = runLauncher({ 'package.json': path.join(__dirname, '..', 'package.json') });
+  const sourceArchive = runLauncher({ 'package.json': '{}' });
   assert.equal(sourceArchive.status, 1);
   assert.match(sourceArchive.stdout, /npm run package:win/);
 
@@ -110,9 +110,27 @@ test('the launcher still starts the executable that ships beside it', { skip: pr
   // rundll32.exe stands in for the packaged build: called with no arguments it
   // exits immediately and prints nothing.
   const standIn = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'rundll32.exe');
-  const launched = runLauncher({ 'wps7.exe': standIn });
+  const launched = runLauncher({ 'wps7.exe': fs.readFileSync(standIn) });
   assert.equal(launched.status, 0);
   assert.equal(launched.stdout.trim(), '');
+});
+
+test('the launcher reports a refused launch instead of the raw script host error', { skip: process.platform !== 'win32' }, () => {
+  const refused = runLauncher({ 'wps7.exe': 'not a portable executable' });
+  assert.equal(refused.status, 1);
+  assert.match(refused.stdout, /could not be started/);
+  // Which Win32 code a malformed image produces varies by Windows build, so
+  // only the shape of the report is pinned.
+  assert.match(refused.stdout, /error 8007[0-9A-F]{4}/);
+  assert.doesNotMatch(refused.stdout + refused.stderr, /start-wps7\.vbs\(\d+/);
+
+  // SmartScreen warns on the first run of a downloaded build because wps7 is
+  // unsigned, and dismissing that prompt fails Run with ERROR_CANCELLED. Only
+  // the real prompt produces it, so the branch itself cannot be driven here.
+  const launcherSource = fs.readFileSync(path.join(__dirname, '..', 'start-wps7.vbs'), 'utf8');
+  assert.match(launcherSource, /Hex\(launchError\) = "800704C7"/);
+  assert.match(launcherSource, /SmartScreen/);
+  assert.match(launcherSource, /Run anyway/);
 });
 
 test('a fatal error saves state and logs before the process exits', () => {

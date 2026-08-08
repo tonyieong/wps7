@@ -49,6 +49,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the Windows zip viewer, leaves no `wps7.exe` beside the script; the launcher
   detects both cases and says what to do. The release notes and both READMEs now
   name the asset to download.
+- `start-wps7.vbs` also traps failures from `shell.Run`. wps7 ships unsigned, so
+  SmartScreen questions the first run of a downloaded build, and dismissing that
+  prompt used to surface as a bare `800704C7` dialog. The launcher now names the
+  cause and points at the two ways out: unblock the zip before extracting, or
+  run `wps7.exe` once and choose "Run anyway".
 
 ### Security
 

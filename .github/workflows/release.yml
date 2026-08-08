@@ -108,6 +108,11 @@ jobs:
 
           Compare the result against ``SHA256SUMS.txt``. This build is not code
           signed, so Windows SmartScreen will show an unknown publisher warning.
+
+          Once the checksum matches, clear the download mark before extracting:
+          right click the zip, open Properties, tick Unblock, press OK. Otherwise
+          start wps7.exe once yourself and choose "More info" then "Run anyway" -
+          dismissing that prompt makes start-wps7.vbs report error 800704C7.
           "@
           gh release create $env:RELEASE_TAG `
             "wps7-$($env:RELEASE_TAG)-windows-x64.zip" SHA256SUMS.txt `

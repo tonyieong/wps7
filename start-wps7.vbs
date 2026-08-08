@@ -24,4 +24,22 @@ If Not fso.FileExists(core) Then
   WScript.Quit 1
 End If
 
+On Error Resume Next
 shell.Run Chr(34) & core & Chr(34), 0, False
+launchError = Err.Number
+On Error Goto 0
+
+If launchError <> 0 Then
+  If Hex(launchError) = "800704C7" Then
+    ' ERROR_CANCELLED. A copy that still carries the downloaded-from-the-internet
+    ' mark raises SmartScreen, and Run only reports that the prompt was dismissed.
+    WScript.Echo "wps7.exe did not start because a Windows security prompt was dismissed." & vbCrLf & vbCrLf & _
+      "wps7 is not code signed, so SmartScreen asks before a freshly downloaded copy runs. " & _
+      "Start wps7.exe directly once and choose ""More info"" then ""Run anyway"" - this launcher works from then on." & vbCrLf & vbCrLf & _
+      "To skip the prompt, unblock the download before extracting it: right click the zip, open Properties, tick Unblock, press OK, and extract it again."
+  Else
+    WScript.Echo "wps7.exe could not be started." & vbCrLf & vbCrLf & _
+      "Windows reported error " & Hex(launchError) & " for:" & vbCrLf & core
+  End If
+  WScript.Quit 1
+End If
