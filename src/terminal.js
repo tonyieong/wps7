@@ -1,7 +1,7 @@
 const pty = require('@homebridge/node-pty-prebuilt-multiarch');
 const { Terminal: HeadlessTerminal } = require('@xterm/headless');
 const { SerializeAddon } = require('@xterm/addon-serialize');
-const { normalizeCwd } = require('./shell');
+const { normalizeCwd, shellEnv } = require('./shell');
 
 const OUTPUT_FLUSH_MS = 16;
 const DEFAULT_COLS = 100;
@@ -128,12 +128,12 @@ class TerminalManager {
         cols: DEFAULT_COLS,
         rows: DEFAULT_ROWS,
         cwd: normalizeCwd(target.cwd, this.root),
-        env: {
+        env: shellEnv(this.config, {
           ...process.env,
           TERM: 'xterm-256color',
           COLORTERM: 'truecolor',
           FORCE_COLOR: '1'
-        }
+        })
       })
     );
     runtime.proc = proc;
