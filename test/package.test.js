@@ -41,6 +41,36 @@ test('portable tray module remains valid JavaScript for pkg discovery', () => {
   assert.doesNotThrow(() => require('../src/tray'));
 });
 
+// The packaged exe runs on the windows subsystem with no console, so console
+// output disappears. A tray that dies has to say so in data/runtime.log, or the
+// server keeps running with no icon and nothing explaining why.
+test('tray diagnostics reach the runtime log rather than a missing console', () => {
+  assert.doesNotMatch(traySource, /console\.(error|log|warn)/);
+  assert.match(traySource, /child\.on\('error'/);
+  assert.match(traySource, /log\(`started pid=/);
+  assert.match(traySource, /child\.on\('exit', \(code, signal\) => \{\s*\n\s*log\(`exited code=/);
+  assert.match(mainSource, /log: \(message\) => appendRuntimeLog\(root, `tray \$\{message\}`\)/);
+});
+
+// Losing the icon strands a server that has no console and no other UI, so the
+// tray is relaunched — but a tray that cannot start must not be retried forever.
+test('a tray that dies on its own is relaunched, within a limit', () => {
+  assert.match(traySource, /restartTimer = setTimeout\(launch, TRAY_RESTART_DELAY_MS\)/);
+  assert.match(traySource, /if \(failures > TRAY_RESTART_LIMIT\)/);
+  assert.match(traySource, /failures = Date\.now\(\) - startedAt >= TRAY_HEALTHY_MS \? 1 : failures \+ 1/);
+  // Shutdown kills the tray itself; relaunching it there would strand a child.
+  assert.match(traySource, /if \(stopping\) \{\s*\n\s*return;/);
+  assert.match(traySource, /kill\(exitNode = true\) \{\s*\n\s*stopping = true;/);
+  assert.match(traySource, /clearTimeout\(restartTimer\)/);
+});
+
+test('the tray Exit item stops the server', () => {
+  assert.match(traySource, /\$exitItem = \$menu\.Items\.Add\('Exit'\)/);
+  assert.match(traySource, /\$exitItem\.add_Click\(\{ \[Console\]::Out\.WriteLine\('exit'\)/);
+  assert.match(traySource, /line === 'exit'\)\s*\{\s*\n\s*shutdown\(\);/);
+  assert.match(mainSource, /shutdown: \(\) => stopRuntime\(\)/);
+});
+
 // A Windows service runs in session 0, where it has no interactive desktop and
 // no access to the signed-in user's profile. Starting at logon instead is what
 // puts terminal panes, GUI programs and CLI credentials in one session.

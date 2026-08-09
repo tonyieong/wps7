@@ -1633,7 +1633,10 @@ function main() {
       save: () => store.save(),
       openBrowser,
       restart: () => stopRuntime({ restart: true }),
-      shutdown: () => stopRuntime()
+      shutdown: () => stopRuntime(),
+      // The packaged exe is on the windows subsystem and has no console, so
+      // anything the tray writes to stderr would otherwise be lost.
+      log: (message) => appendRuntimeLog(root, `tray ${message}`)
     });
     if (config.server.open_browser) {
       openBrowser(url);
