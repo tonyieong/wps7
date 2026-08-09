@@ -83,8 +83,7 @@ npm run package:win
 The packaged executable is written to `dist/wps7.exe`. pkg builds on a
 console-subsystem Node binary, which would give the server a console window for
 as long as it runs, so packaging rewrites the PE subsystem to `windows`. Double
-clicking `dist/wps7.exe` starts it with no console. `dist/start-wps7.vbs` still
-works and is kept for existing shortcuts.
+clicking `dist/wps7.exe` starts it with no console.
 
 ## Restore model
 

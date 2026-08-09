@@ -11,7 +11,7 @@
     "test": "node --test",
     "lint": "eslint .",
     "licenses:generate": "node scripts\\generate-third-party-notices.js",
-    "package:win": "pkg . --targets node22-win-x64 --output dist/wps7.exe && node scripts\\set-windows-subsystem.js dist\\wps7.exe && powershell -NoProfile -ExecutionPolicy Bypass -Command \"Remove-Item 'dist\\scripts\\scripts','dist\\assets\\assets','dist\\tools\\tools' -Recurse -Force -ErrorAction SilentlyContinue; New-Item -ItemType Directory dist\\scripts,dist\\assets,dist\\tools -Force | Out-Null; Copy-Item start-wps7.vbs dist\\start-wps7.vbs -Force; Copy-Item scripts\\* dist\\scripts -Recurse -Force; Copy-Item assets\\* dist\\assets -Recurse -Force; if (Test-Path tools) { Copy-Item tools\\* dist\\tools -Recurse -Force }\"",
+    "package:win": "pkg . --targets node22-win-x64 --output dist/wps7.exe && node scripts\\set-windows-subsystem.js dist\\wps7.exe && powershell -NoProfile -ExecutionPolicy Bypass -Command \"Remove-Item 'dist\\scripts\\scripts','dist\\assets\\assets','dist\\tools\\tools' -Recurse -Force -ErrorAction SilentlyContinue; New-Item -ItemType Directory dist\\scripts,dist\\assets,dist\\tools -Force | Out-Null; Copy-Item scripts\\* dist\\scripts -Recurse -Force; Copy-Item assets\\* dist\\assets -Recurse -Force; if (Test-Path tools) { Copy-Item tools\\* dist\\tools -Recurse -Force }\"",
     "nssm:install": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\install-nssm.ps1",
     "startup:install": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\install-wps7-startup.ps1",
     "startup:repair": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\repair-wps7-paths.ps1",

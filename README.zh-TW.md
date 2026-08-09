@@ -86,7 +86,6 @@ npm run package:win
 打包後的執行檔會輸出到 `dist/wps7.exe`。pkg 是以主控台子系統（console subsystem）的
 Node 執行檔為基底建置的，那會讓伺服器在整個執行期間都掛著一個主控台視窗，因此打包時會
 把 PE 子系統改寫成 `windows`。連按兩下 `dist/wps7.exe` 就會在沒有主控台視窗的情況下啟動。
-`dist/start-wps7.vbs` 仍可運作，保留給既有的捷徑使用。
 
 ## 還原機制
 

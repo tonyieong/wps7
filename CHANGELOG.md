@@ -45,23 +45,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Packaging rewrites the PE subsystem of `dist/wps7.exe` from `console` to
   `windows`. pkg builds on a console-subsystem Node binary, so Explorer opened a
-  console window that stayed for the life of the server, and hiding it was the
-  only job `start-wps7.vbs` had. Redirected stdout and stderr still reach NSSM's
-  log files, which is how the service records output.
-
-### Fixed
-
-- `start-wps7.vbs` now explains why it cannot start instead of letting Windows
-  Script Host report `80070002` on the `shell.Run` line. Downloading the
-  GitHub-generated "Source code" archive, or double clicking the launcher inside
-  the Windows zip viewer, leaves no `wps7.exe` beside the script; the launcher
-  detects both cases and says what to do. The release notes and both READMEs now
-  name the asset to download.
-- `start-wps7.vbs` also traps failures from `shell.Run`. wps7 ships unsigned, so
-  SmartScreen questions the first run of a downloaded build, and dismissing that
-  prompt used to surface as a bare `800704C7` dialog. The launcher now names the
-  cause and points at the two ways out: unblock the zip before extracting, or
-  run `wps7.exe` once and choose "Run anyway".
+  console window that stayed for the life of the server. Redirected stdout and
+  stderr still reach the log files a service manager points them at.
+- The release notes and both READMEs name the asset to download. The
+  GitHub-generated "Source code" archives contain no `wps7.exe`, and extracting
+  the release zip is required before running anything from it.
 
 ### Security
 
@@ -76,3 +64,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `nssm.exe` and a stray `tray_windows_release.exe` from version control. NSSM is
   now downloaded and hash-verified at install time.
+- `start-wps7.vbs`. Hiding the console window was the only thing it did, and the
+  packaged exe no longer opens one. Double click `wps7.exe` instead.

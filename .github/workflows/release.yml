@@ -66,7 +66,7 @@ jobs:
           $version = $env:RELEASE_TAG
           $stage = "staging/wps7-$version-windows-x64"
           New-Item -ItemType Directory -Path $stage -Force | Out-Null
-          Copy-Item dist/wps7.exe, dist/start-wps7.vbs $stage
+          Copy-Item dist/wps7.exe $stage
           Copy-Item dist/scripts, dist/assets -Destination $stage -Recurse
           # These travel with the binary because the packaged exe embeds every
           # production dependency and their licenses require the notices.
@@ -96,9 +96,9 @@ jobs:
           below. The "Source code" archives GitHub adds to every release hold the
           source tree only, without wps7.exe.
 
-          Extract the zip to a folder before double clicking start-wps7.vbs.
-          Opening the launcher inside the Windows zip viewer unpacks that one
-          file to a temp directory and leaves the executable in the archive.
+          Extract the zip to a folder, then double click wps7.exe. Opening it
+          inside the Windows zip viewer unpacks that one file to a temp
+          directory and leaves the rest in the archive.
 
           Verify your download before running it:
 
@@ -111,8 +111,8 @@ jobs:
 
           Once the checksum matches, clear the download mark before extracting:
           right click the zip, open Properties, tick Unblock, press OK. Otherwise
-          start wps7.exe once yourself and choose "More info" then "Run anyway" -
-          dismissing that prompt makes start-wps7.vbs report error 800704C7.
+          the first run raises SmartScreen, where "More info" then "Run anyway"
+          lets it through.
           "@
           gh release create $env:RELEASE_TAG `
             "wps7-$($env:RELEASE_TAG)-windows-x64.zip" SHA256SUMS.txt `

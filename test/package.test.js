@@ -71,69 +71,6 @@ test('Windows packaging clears stale nested resource folders', () => {
   assert.match(command, /Remove-Item 'dist\\scripts\\scripts','dist\\assets\\assets','dist\\tools\\tools' -Recurse -Force -ErrorAction SilentlyContinue/);
 });
 
-// Double clicking the launcher runs it under wscript.exe, where WScript.Echo is
-// a dialog. cscript.exe prints the same text, so the launcher can be exercised
-// for real instead of only pattern matched.
-function runLauncher(files) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-launcher-'));
-  try {
-    fs.copyFileSync(path.join(__dirname, '..', 'start-wps7.vbs'), path.join(directory, 'start-wps7.vbs'));
-    for (const [name, contents] of Object.entries(files)) {
-      fs.writeFileSync(path.join(directory, name), contents);
-    }
-    return spawnSync('cscript.exe', ['//nologo', path.join(directory, 'start-wps7.vbs')], { encoding: 'utf8' });
-  } finally {
-    fs.rmSync(directory, { recursive: true, force: true });
-  }
-}
-
-test('the launcher explains a missing executable instead of dying inside Run', { skip: process.platform !== 'win32' }, () => {
-  // GitHub always offers the "Source code" archives beside the release asset,
-  // and that source tree has no wps7.exe.
-  const sourceArchive = runLauncher({ 'package.json': '{}' });
-  assert.equal(sourceArchive.status, 1);
-  assert.match(sourceArchive.stdout, /npm run package:win/);
-
-  // Opening the launcher inside the Windows zip viewer unpacks this one file to
-  // a temp folder and leaves wps7.exe in the archive.
-  const zipViewer = runLauncher({});
-  assert.equal(zipViewer.status, 1);
-  assert.match(zipViewer.stdout, /[Ee]xtract/);
-
-  // The raw Windows Script Host error names a temp path and a line number, and
-  // tells the reader nothing about what to do next.
-  for (const attempt of [sourceArchive, zipViewer]) {
-    assert.doesNotMatch(attempt.stdout + attempt.stderr, /start-wps7\.vbs\(\d+/);
-  }
-});
-
-test('the launcher still starts the executable that ships beside it', { skip: process.platform !== 'win32' }, () => {
-  // rundll32.exe stands in for the packaged build: called with no arguments it
-  // exits immediately and prints nothing.
-  const standIn = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'rundll32.exe');
-  const launched = runLauncher({ 'wps7.exe': fs.readFileSync(standIn) });
-  assert.equal(launched.status, 0);
-  assert.equal(launched.stdout.trim(), '');
-});
-
-test('the launcher reports a refused launch instead of the raw script host error', { skip: process.platform !== 'win32' }, () => {
-  const refused = runLauncher({ 'wps7.exe': 'not a portable executable' });
-  assert.equal(refused.status, 1);
-  assert.match(refused.stdout, /could not be started/);
-  // Which Win32 code a malformed image produces varies by Windows build, so
-  // only the shape of the report is pinned.
-  assert.match(refused.stdout, /error 8007[0-9A-F]{4}/);
-  assert.doesNotMatch(refused.stdout + refused.stderr, /start-wps7\.vbs\(\d+/);
-
-  // SmartScreen warns on the first run of a downloaded build because wps7 is
-  // unsigned, and dismissing that prompt fails Run with ERROR_CANCELLED. Only
-  // the real prompt produces it, so the branch itself cannot be driven here.
-  const launcherSource = fs.readFileSync(path.join(__dirname, '..', 'start-wps7.vbs'), 'utf8');
-  assert.match(launcherSource, /Hex\(launchError\) = "800704C7"/);
-  assert.match(launcherSource, /SmartScreen/);
-  assert.match(launcherSource, /Run anyway/);
-});
-
 test('packaging leaves the executable on the windows subsystem', { skip: process.platform !== 'win32' }, () => {
   assert.match(packageJson.scripts['package:win'], /node scripts\\set-windows-subsystem\.js dist\\wps7\.exe/);
 
