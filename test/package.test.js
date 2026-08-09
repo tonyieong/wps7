@@ -1,8 +1,11 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const test = require('node:test');
 const packageJson = require('../package.json');
+const { setWindowsGuiSubsystem, subsystemOffset } = require('../scripts/set-windows-subsystem');
 
 const mainSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'main.js'), 'utf8');
 const traySource = fs.readFileSync(path.join(__dirname, '..', 'src', 'tray.js'), 'utf8');
@@ -38,11 +41,33 @@ test('portable tray module remains valid JavaScript for pkg discovery', () => {
   assert.doesNotThrow(() => require('../src/tray'));
 });
 
-test('installed service controls and tray follow the packaged runtime root', () => {
+// A Windows service runs in session 0, where it has no interactive desktop and
+// no access to the signed-in user's profile. Starting at logon instead is what
+// puts terminal panes, GUI programs and CLI credentials in one session.
+test('startup installs a logon shortcut rather than a service', () => {
   assert.match(startupInstallerSource, /\$runtimeRoot = Resolve-Wps7RuntimeRoot/);
-  assert.match(startupInstallerSource, /Join-Path \$runtimeRoot 'scripts\\control-wps7-service\.ps1'/);
-  assert.match(startupInstallerSource, /Join-Path \$runtimeRoot 'scripts\\wps7-tray-companion\.ps1'/);
+  assert.match(startupInstallerSource, /\$shortcut\.TargetPath = \$executable/);
   assert.match(startupInstallerSource, /\$shortcut\.WorkingDirectory = \$runtimeRoot/);
+  // Comments explain the removed service, so only the code is checked for it.
+  const installerCode = startupInstallerSource.split(/\r?\n/).filter((line) => !line.trim().startsWith('#')).join('\n');
+  assert.doesNotMatch(installerCode, /nssm|New-Service|Register-ScheduledTask/i);
+  // No service account means nothing has to ask for a Windows password.
+  assert.doesNotMatch(installerCode, /-AsSecureString|ObjectName/);
+  // Exposing a PowerShell gateway on a LAN without a password stays refused.
+  assert.match(startupInstallerSource, /auth\.password_hash/);
+});
+
+test('startup clears a previous service installation', () => {
+  const uninstallSource = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'uninstall-wps7-startup.ps1'), 'utf8');
+  assert.match(startupInstallerSource, /uninstall-wps7-startup\.ps1/);
+  assert.match(startupInstallerSource, /Get-Service -Name 'wps7-server'/);
+  for (const task of ['wps7-service-start', 'wps7-service-restart', 'wps7-service-stop']) {
+    assert.ok(uninstallSource.includes(task), `${task} must be removed on uninstall`);
+  }
+  assert.match(uninstallSource, /sc\.exe delete wps7-server/);
+  assert.match(uninstallSource, /Remove-NetFirewallRule/);
+  // Only the steps that change machine state elevate; removing a shortcut does not.
+  assert.match(uninstallSource, /if \(\$legacyService -or \$legacyTaskNames\.Count -gt 0 -or \$firewallRules\.Count -gt 0\)/);
 });
 
 test('moved installations include a path repair command', () => {
@@ -50,22 +75,71 @@ test('moved installations include a path repair command', () => {
   assert.ok(fs.existsSync(repairPath), 'repair-wps7-paths.ps1 must exist');
   const repairSource = fs.readFileSync(repairPath, 'utf8');
   assert.equal(packageJson.scripts['startup:repair'], 'powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\repair-wps7-paths.ps1');
-  assert.match(repairSource, /Unregister-ScheduledTask/);
-  assert.match(repairSource, /Register-ScheduledTask/);
-  assert.match(repairSource, /wps7 tray\.lnk/);
-  assert.match(repairSource, /install-wps7-startup\.ps1/);
+  assert.match(repairSource, /\$shortcut\.TargetPath = \$executable/);
+  assert.match(repairSource, /wps7\.lnk/);
+  // The shortcut is the only registration left, so repairing it needs no rights.
+  assert.doesNotMatch(repairSource, /RunAs|Register-ScheduledTask|nssm/i);
+});
+
+test('the service stack is gone from the scripts and the npm commands', () => {
+  const scripts = fs.readdirSync(path.join(__dirname, '..', 'scripts'));
+  for (const removed of ['install-nssm.ps1', 'control-wps7-service.ps1', 'wps7-tray-companion.ps1']) {
+    assert.ok(!scripts.includes(removed), `${removed} must not come back`);
+  }
+  assert.equal(packageJson.scripts['nssm:install'], undefined);
+  // Both runtime modes existed for the service: NSSM owned the restart, and it
+  // set WPS7_HEADLESS=1 because session 0 could not show a tray icon. Nothing
+  // sets either now, so the server must not read them.
+  assert.doesNotMatch(mainSource, /WPS7_SERVICE_MANAGED|serviceManaged|WPS7_HEADLESS|isHeadlessMode/);
+  // The tray is unconditional, which is the whole point of running at logon.
+  assert.match(mainSource, /^ {4}trayController = startTray\(\{$/m);
 });
 
 test('Windows packaging refreshes generated folders without nesting them', () => {
   const command = packageJson.scripts['package:win'];
   assert.match(command, /Copy-Item scripts\\\* dist\\scripts/);
   assert.match(command, /Copy-Item assets\\\* dist\\assets/);
-  assert.match(command, /Copy-Item tools\\\* dist\\tools/);
+  // tools/ held nothing but the downloaded nssm.exe, so packaging no longer
+  // has a directory to copy or an asset glob to embed.
+  assert.doesNotMatch(command, /tools/);
+  assert.ok(!(packageJson.pkg?.assets || []).includes('tools/**/*'));
 });
 
 test('Windows packaging clears stale nested resource folders', () => {
   const command = packageJson.scripts['package:win'];
-  assert.match(command, /Remove-Item 'dist\\scripts\\scripts','dist\\assets\\assets','dist\\tools\\tools' -Recurse -Force -ErrorAction SilentlyContinue/);
+  assert.match(command, /Remove-Item 'dist\\scripts\\scripts','dist\\assets\\assets' -Recurse -Force -ErrorAction SilentlyContinue/);
+});
+
+test('packaging leaves the executable on the windows subsystem', { skip: process.platform !== 'win32' }, () => {
+  assert.match(packageJson.scripts['package:win'], /node scripts\\set-windows-subsystem\.js dist\\wps7\.exe/);
+
+  // The packaged exe is pkg's Node base with the project appended, so the base
+  // this suite runs on carries the subsystem packaging has to rewrite. Only the
+  // headers are needed, and the binary is far too large to copy for that.
+  const head = Buffer.alloc(4096);
+  const handle = fs.openSync(process.execPath, 'r');
+  try {
+    fs.readSync(handle, head, 0, head.length, 0);
+  } finally {
+    fs.closeSync(handle);
+  }
+  assert.equal(head.readUInt16LE(subsystemOffset(head)), 3, 'the pkg base is a console binary');
+
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-subsystem-'));
+  try {
+    // hostname.exe is a small console program, so the rewrite can be applied to
+    // a real binary and the result actually run.
+    const copy = path.join(directory, 'stand-in.exe');
+    fs.copyFileSync(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'hostname.exe'), copy);
+    const offset = subsystemOffset(fs.readFileSync(copy));
+
+    assert.equal(setWindowsGuiSubsystem(copy), true);
+    assert.equal(fs.readFileSync(copy).readUInt16LE(offset), 2);
+    assert.equal(setWindowsGuiSubsystem(copy), false, 'rewriting an already patched exe is a no-op');
+    assert.equal(spawnSync(copy).status, 0, 'the rewritten binary still runs');
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test('a fatal error saves state and logs before the process exits', () => {

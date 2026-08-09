@@ -18,7 +18,20 @@
 > 若要用在信任網路以外的環境，請把 wps7 放在能終結 TLS 的反向代理後面。
 > 詳見 [SECURITY.md](SECURITY.md)。
 
-## 執行
+## 下載
+
+請到[發行頁面](../../releases)下載 `wps7-<版本>-windows-x64.zip`。GitHub 一併產生的
+「Source code」壓縮檔只包含原始碼，裡面沒有 `wps7.exe`。
+
+請先把整個 zip 解壓縮到資料夾，再連按兩下 `wps7.exe`。直接在 Windows 的壓縮檔檢視器
+裡開啟任何檔案，只會把那一個檔案解到暫存目錄，其餘檔案仍留在壓縮檔內。
+
+wps7 沒有程式碼簽章，因此下載回來的版本第一次執行時 SmartScreen 會提出警告。請先用
+`SHA256SUMS.txt` 比對 SHA256，然後在解壓縮前清除下載標記 —— 對 zip 按右鍵、開啟內容、
+勾選「解除封鎖」、按確定。或者自己先執行一次 `wps7.exe`，選擇「更多資訊」再選「仍要
+執行」；取消該提示正是啟動器回報 `800704C7` 的原因。
+
+## 從原始碼執行
 
 ```powershell
 npm install
@@ -29,36 +42,32 @@ npm start
 
 執行打包後的版本時，`config.toml`、`data/` 與記錄檔會放在執行檔旁邊。
 
-## 開機自動啟動
+## 登入時自動啟動
 
-若要讓網頁伺服器在 Windows 登入前就啟動，並在登入後顯示系統匣圖示：
+若要讓 wps7 在你每次登入時自動啟動：
 
 ```powershell
-npm run nssm:install
 npm run startup:install
 ```
 
-安裝程式會用 NSSM 把伺服器註冊成 Windows 服務，並為系統匣圖示建立一個屬於該使用者的
-啟動捷徑。
+這會建立指向 `wps7.exe` 的 `Startup\wps7.lnk`。wps7 便以你的身分、在你自己的工作階段
+中執行，系統匣圖示也顯示在那裡。
 
-- `wps7-server`：由 NSSM 管理的 Windows 服務，開機時以無介面模式啟動伺服器。
-- `Startup\wps7 tray.lnk`：登入後啟動系統匣圖示。
-- `wps7-service-start` / `wps7-service-restart` / `wps7-service-stop`：系統匣選單使用的
-  提權隨選工作。
+在你的工作階段中執行，其他功能才成立：從終端窗格啟動的 GUI 程式會出現在你的桌面上，
+窗格繼承到的是你的對應磁碟機與環境變數，用量窗格也找得到你 profile 裡的 Codex 與
+Claude Code 登入。Windows 服務做不到這些，因為服務執行於工作階段 0，既沒有互動桌面，
+也是以它自己的帳戶執行。
 
-`npm run nssm:install` 會從 `nssm.cc` 下載 NSSM 的發行版本、驗證其 SHA256，並存放到
-`tools\nssm\nssm.exe`。你也可以自行把 `nssm.exe` 放到該位置，或把 NSSM 安裝到 `PATH`。
-Windows 在登入前沒有工作列，因此必須等到有使用者工作階段之後圖示才會出現。安裝程式會
-詢問一次你的 Windows 密碼，因為該服務與提權控制工作都是以你的帳戶身分執行。
+這裡沒有任何步驟需要系統管理員權限。安裝只有兩種情況會要求提權：移除舊版所安裝的服務，
+以及在 `server.host = "0.0.0.0"` 時開啟防火牆連接埠。
 
-系統匣圖示是面向使用者的控制介面。它獨立於伺服器運作，提供開啟、啟動、儲存、重新啟動、
-停止、檢視記錄與診斷等功能。工具提示與選單狀態每隔數秒會依據服務與本機執行狀態更新。
+系統匣圖示提供開啟網頁介面、立即儲存、重新啟動 wps7 與結束。
 
 如果你為了區域網路存取而設定 `server.host = "0.0.0.0"`，請先設定一組強度足夠的網頁密碼。
 安裝程式在沒有 `auth.password_hash` 的情況下會拒絕把 wps7 暴露到區域網路，因為這個程式
 提供的是瀏覽器對 PowerShell 的存取權。
 
-若要移除服務、系統匣捷徑、控制工作與防火牆規則：
+若要移除啟動捷徑，以及舊版服務安裝殘留的任何項目：
 
 ```powershell
 npm run startup:uninstall
@@ -70,8 +79,9 @@ npm run startup:uninstall
 npm run package:win
 ```
 
-打包後的執行檔會輸出到 `dist/wps7.exe`。連按兩下 `dist/start-wps7.vbs` 即可在不顯示
-主控台視窗的情況下啟動。
+打包後的執行檔會輸出到 `dist/wps7.exe`。pkg 是以主控台子系統（console subsystem）的
+Node 執行檔為基底建置的，那會讓伺服器在整個執行期間都掛著一個主控台視窗，因此打包時會
+把 PE 子系統改寫成 `windows`。連按兩下 `dist/wps7.exe` 就會在沒有主控台視窗的情況下啟動。
 
 ## 還原機制
 
@@ -103,4 +113,3 @@ wps7 會重新散布第三方程式碼：打包後的執行檔內嵌了所有正
 - [Excalidraw](https://github.com/excalidraw/excalidraw) 提供白板窗格的功能。
 - [xterm.js](https://github.com/xtermjs/xterm.js) 提供終端窗格的功能。
 - [CodexBar](https://github.com/steipete/CodexBar) 啟發了用量窗格的設計。
-- [NSSM](https://nssm.cc/) 讓 wps7 能以 Windows 服務的形式執行。

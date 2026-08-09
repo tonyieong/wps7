@@ -70,14 +70,6 @@ function writeRuntimeInfo(root, config) {
   }, null, 2));
 }
 
-function isHeadlessMode() {
-  return process.env.WPS7_HEADLESS === '1';
-}
-
-function isServiceManagedMode() {
-  return process.env.WPS7_SERVICE_MANAGED === '1';
-}
-
 function stateCounts(store) {
   let panes = 0;
   for (const session of store.state.sessions || []) {
@@ -547,11 +539,7 @@ if ($Arguments.Count -gt 0) {
       cwd: root,
       detached: true,
       stdio: 'ignore',
-      windowsHide: true,
-      env: {
-        ...process.env,
-        WPS7_HEADLESS: process.env.WPS7_HEADLESS || ''
-      }
+      windowsHide: true
     });
     appendRuntimeLog(root, `spawned relaunch helper pid=${child.pid || 'unknown'} exe=${process.execPath} args=${JSON.stringify(args)}`);
     child.on('error', (error) => {
@@ -564,11 +552,7 @@ if ($Arguments.Count -gt 0) {
     cwd: root,
     detached: true,
     stdio: 'ignore',
-    windowsHide: true,
-    env: {
-      ...process.env,
-      WPS7_HEADLESS: process.env.WPS7_HEADLESS || ''
-    }
+    windowsHide: true
   });
   appendRuntimeLog(root, `spawned replacement pid=${child.pid || 'unknown'} exe=${process.execPath} args=${JSON.stringify(args)}`);
   child.on('error', (error) => {
@@ -581,8 +565,6 @@ function main() {
   const root = appRoot();
   ensurePackagedIcon(root);
   const config = loadConfig(root).config;
-  const headless = isHeadlessMode();
-  const serviceManaged = isServiceManagedMode();
   const startedAt = Date.now();
   const controlToken = loadOrCreateControlToken(root);
   let shell = resolveShell(config);
@@ -755,7 +737,7 @@ function main() {
       const minimaxApiKey = process.env.MINIMAX_CODING_API_KEY || process.env.MINIMAX_API_KEY || config.usage.minimax_api_key;
       const usageLog = (message) => appendRuntimeLog(root, `usage ${message}`);
       const value = await usage.fetchUsageOverview({
-        codex: config.usage.show_codex !== false ? () => usage.fetchCodexUsage({ codexHome: config.usage.codex_home || undefined }) : null,
+        codex: config.usage.show_codex !== false ? () => usage.fetchCodexUsage({ codexHome: config.usage.codex_home || undefined, log: usageLog }) : null,
         claude: config.usage.show_claude !== false ? () => usage.fetchClaudeUsage({ claudeHome: config.usage.claude_home || undefined, log: usageLog }) : null,
         minimax: config.usage.show_minimax !== false
           ? () => usage.fetchMiniMaxUsage({ apiKey: minimaxApiKey, region: config.usage.minimax_region })
@@ -790,7 +772,7 @@ function main() {
       const response = applyLoadedConfig(loaded.config);
       res.json({ ...response, restarting: shouldRestart });
       if (shouldRestart) {
-        setTimeout(() => stopRuntime({ restart: !serviceManaged }), 250).unref();
+        setTimeout(() => stopRuntime({ restart: true }), 250).unref();
       }
     } catch (error) {
       configReloadError = error.message;
@@ -1281,8 +1263,6 @@ function main() {
       pid: process.pid,
       host: config.server.host,
       port: config.server.port,
-      headless,
-      serviceManaged,
       uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
       configLoaded: !configReloadError,
       configReloadError,
@@ -1293,14 +1273,10 @@ function main() {
 
   app.post('/api/runtime/restart', requireRuntimeControl(controlToken), (req, res) => {
     res.json({ ok: true });
-    setTimeout(() => stopRuntime({ restart: !serviceManaged }), 100).unref();
+    setTimeout(() => stopRuntime({ restart: true }), 100).unref();
   });
 
   app.post('/api/runtime/shutdown', requireRuntimeControl(controlToken), (req, res) => {
-    if (serviceManaged) {
-      res.status(409).json({ error: 'wps7 is service managed. Stop the Windows service instead.' });
-      return;
-    }
     res.json({ ok: true });
     setTimeout(() => stopRuntime(), 100).unref();
   });
@@ -1649,19 +1625,17 @@ function main() {
 
   server.listen(config.server.port, config.server.host, () => {
     writeRuntimeInfo(root, config);
-    appendRuntimeLog(root, `listening pid=${process.pid} host=${config.server.host} port=${config.server.port} headless=${headless} serviceManaged=${serviceManaged}`);
+    appendRuntimeLog(root, `listening pid=${process.pid} host=${config.server.host} port=${config.server.port}`);
     const url = `http://${config.server.host === '0.0.0.0' ? '127.0.0.1' : config.server.host}:${config.server.port}`;
-    if (!headless) {
-      trayController = startTray({
-        root,
-        url,
-        save: () => store.save(),
-        openBrowser,
-        restart: () => stopRuntime({ restart: true }),
-        shutdown: () => stopRuntime()
-      });
-    }
-    if (!headless && config.server.open_browser) {
+    trayController = startTray({
+      root,
+      url,
+      save: () => store.save(),
+      openBrowser,
+      restart: () => stopRuntime({ restart: true }),
+      shutdown: () => stopRuntime()
+    });
+    if (config.server.open_browser) {
       openBrowser(url);
     }
   });

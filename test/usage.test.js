@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { PassThrough } = require('node:stream');
-const { fetchClaudeUsage, fetchCodexUsage, fetchMiniMaxUsage, fetchUsageOverview, systemNodeFetch } = require('../src/usage');
+const { fetchClaudeUsage, fetchCodexUsage, fetchMiniMaxUsage, fetchUsageOverview, resolveCliHome, systemNodeFetch } = require('../src/usage');
 
 function fakeNodeSpawn(handler) {
   const calls = [];
@@ -394,4 +394,68 @@ test('usage overview omits disabled providers', async () => {
   });
 
   assert.deepEqual(overview.providers.map((provider) => provider.provider), ['claude']);
+});
+
+// codex login / claude write credentials under the profile of whoever ran them,
+// so an account that never ran them has to look at the profiles beside its own.
+function profileTree(logins) {
+  const profileRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-profiles-'));
+  for (const [index, { user, subfolder, marker }] of logins.entries()) {
+    const home = path.join(profileRoot, user, subfolder);
+    fs.mkdirSync(home, { recursive: true });
+    const file = path.join(home, marker);
+    fs.writeFileSync(file, '{}');
+    // Spread the timestamps so "most recent login" is unambiguous.
+    const when = new Date(Date.now() - (logins.length - index) * 60000);
+    fs.utimesSync(file, when, when);
+  }
+  return profileRoot;
+}
+
+test('the CLI home falls back to a signed-in profile beside this account', () => {
+  const profileRoot = profileTree([
+    { user: 'older', subfolder: '.codex', marker: 'auth.json' },
+    { user: 'newer', subfolder: '.codex', marker: 'auth.json' },
+    { user: 'wrong-cli', subfolder: '.claude', marker: '.credentials.json' }
+  ]);
+  const homedir = path.join(profileRoot, 'service-account');
+  fs.mkdirSync(homedir, { recursive: true });
+
+  const home = resolveCliHome({ subfolder: '.codex', marker: 'auth.json', homedir, profileRoot });
+  assert.equal(home, path.join(profileRoot, 'newer', '.codex'));
+
+  // An explicit setting and the CLI's own variable both win over the search.
+  assert.equal(
+    resolveCliHome({ configured: 'C:\\pinned', subfolder: '.codex', marker: 'auth.json', homedir, profileRoot }),
+    'C:\\pinned'
+  );
+  assert.equal(
+    resolveCliHome({ fromEnv: 'C:\\from-env', subfolder: '.codex', marker: 'auth.json', homedir, profileRoot }),
+    'C:\\from-env'
+  );
+
+  fs.rmSync(profileRoot, { recursive: true, force: true });
+});
+
+test('the CLI home prefers this account and survives an unreadable profile root', () => {
+  const profileRoot = profileTree([{ user: 'other', subfolder: '.codex', marker: 'auth.json' }]);
+  const homedir = path.join(profileRoot, 'mine');
+  fs.mkdirSync(path.join(homedir, '.codex'), { recursive: true });
+  fs.writeFileSync(path.join(homedir, '.codex', 'auth.json'), '{}');
+
+  // Its own login is used without reading anyone else's profile.
+  assert.equal(
+    resolveCliHome({ subfolder: '.codex', marker: 'auth.json', homedir, profileRoot }),
+    path.join(homedir, '.codex')
+  );
+
+  // Nothing signed in anywhere reachable still names where a login would land,
+  // which is also what happens when the profile root cannot be listed at all.
+  const bare = path.join(profileRoot, 'bare');
+  assert.equal(
+    resolveCliHome({ subfolder: '.claude', marker: '.credentials.json', homedir: bare, profileRoot: path.join(profileRoot, 'missing') }),
+    path.join(bare, '.claude')
+  );
+
+  fs.rmSync(profileRoot, { recursive: true, force: true });
 });

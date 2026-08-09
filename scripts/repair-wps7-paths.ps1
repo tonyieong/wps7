@@ -16,46 +16,18 @@ function Resolve-Wps7RuntimeRoot {
   throw "wps7.exe was not found below $Root."
 }
 
-$identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
-$principal = New-Object System.Security.Principal.WindowsPrincipal($identity)
-if (!$principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
-  $arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Root `"$Root`""
-  Write-Host 'Restarting path repair as Administrator...'
-  $process = Start-Process -FilePath 'powershell.exe' -ArgumentList $arguments -Verb RunAs -Wait -PassThru
-  exit $process.ExitCode
-}
-
 $runtimeRoot = Resolve-Wps7RuntimeRoot
-$controlScript = Join-Path $runtimeRoot 'scripts\control-wps7-service.ps1'
-$trayScript = Join-Path $runtimeRoot 'scripts\wps7-tray-companion.ps1'
-if (!(Test-Path -LiteralPath $controlScript) -or !(Test-Path -LiteralPath $trayScript)) {
-  throw "Packaged scripts are missing below $runtimeRoot. Run npm run package:win first."
-}
+$executable = Join-Path $runtimeRoot 'wps7.exe'
 
-& $controlScript -Action Repair -Root $runtimeRoot
-
-$controlSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 5)
-$user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
-foreach ($actionName in @('Start', 'Restart', 'Stop')) {
-  $taskName = "wps7-service-$($actionName.ToLowerInvariant())"
-  $taskAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$controlScript`" -Root `"$runtimeRoot`" -Action $actionName"
-  if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
-    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
-  }
-  Register-ScheduledTask -TaskName $taskName -Action $taskAction -Settings $controlSettings -User $user -RunLevel Highest | Out-Null
-}
-
+# The shortcut stores an absolute path, so moving the folder leaves it pointing
+# at the old one. It is the only registration wps7 owns, which is why repairing
+# a moved install needs no elevation.
 $shell = New-Object -ComObject WScript.Shell
-$shortcutPath = Join-Path $shell.SpecialFolders.Item('Startup') 'wps7 tray.lnk'
+$shortcutPath = Join-Path $shell.SpecialFolders.Item('Startup') 'wps7.lnk'
 $shortcut = $shell.CreateShortcut($shortcutPath)
-$shortcut.TargetPath = 'powershell.exe'
-$shortcut.Arguments = "-NoProfile -STA -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$trayScript`" -Root `"$runtimeRoot`""
+$shortcut.TargetPath = $executable
 $shortcut.WorkingDirectory = $runtimeRoot
-$shortcut.WindowStyle = 7
-$shortcut.Description = 'wps7 tray icon'
+$shortcut.Description = 'wps7 terminal workspace'
 $shortcut.Save()
 
-Write-Host "Repaired wps7 service paths: $runtimeRoot"
-Write-Host 'Repaired service control tasks: wps7-service-start, wps7-service-restart, wps7-service-stop'
-Write-Host "Repaired tray startup shortcut: $shortcutPath"
-Write-Host "If the service account itself must change, rerun install-wps7-startup.ps1."
+Write-Host "Repaired startup shortcut: $shortcutPath -> $executable"

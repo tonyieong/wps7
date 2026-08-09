@@ -5,7 +5,6 @@ tmp-file-pane-test/
 qa-backup-*/
 config.toml
 *.log
-tools/nssm/nssm.exe
 
 # Development scratch: screenshots and generated mockups kept out of the repo.
 .playwright-mcp/

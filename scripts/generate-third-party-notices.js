@@ -55,13 +55,6 @@ const VENDORED = [
     license: 'MIT',
     copyright: 'Copyright (c) 2020 Excalidraw',
     homepage: 'https://github.com/excalidraw/excalidraw'
-  },
-  {
-    name: 'NSSM',
-    location: 'downloaded at install time to tools/nssm/nssm.exe',
-    license: 'Public Domain',
-    copyright: 'Iain Patterson',
-    homepage: 'https://nssm.cc/'
   }
 ];
 

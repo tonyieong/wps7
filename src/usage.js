@@ -283,9 +283,59 @@ function codexUsageResult(payload) {
   };
 }
 
-async function fetchCodexUsage({ codexHome, fetchImpl = defaultFetch, spawnImpl = spawn } = {}) {
-  const home = codexHome || process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
+// The CLIs write their credentials under the profile of whoever ran `codex
+// login` or `claude`, so wps7 running as a different account finds nothing in
+// its own. The other profiles beside it are then the only place left to look.
+// Reading them needs the privileges to do so and skips whatever it cannot open.
+// A terminal pane can already read the same files, so this reaches no further
+// than the rest of wps7 does.
+function signedInProfileHomes({ subfolder, marker, profileRoot }) {
+  let entries;
+  try {
+    entries = fs.readdirSync(profileRoot, { withFileTypes: true });
+  } catch (error) {
+    return [];
+  }
+  return entries
+    .filter((entry) => entry.isDirectory())
+    .flatMap((entry) => {
+      const home = path.join(profileRoot, entry.name, subfolder);
+      try {
+        return [{ home, updatedAt: fs.statSync(path.join(home, marker)).mtimeMs }];
+      } catch (error) {
+        return [];
+      }
+    })
+    // The most recently written credentials belong to the most recent login.
+    .sort((left, right) => right.updatedAt - left.updatedAt)
+    .map((candidate) => candidate.home);
+}
+
+function resolveCliHome({ configured, fromEnv, subfolder, marker, homedir = os.homedir(), profileRoot }) {
+  if (configured) {
+    return configured;
+  }
+  if (fromEnv) {
+    return fromEnv;
+  }
+  const own = path.join(homedir, subfolder);
+  if (fs.existsSync(path.join(own, marker))) {
+    return own;
+  }
+  // Falling back to the account's own folder keeps the "not signed in" message
+  // pointing at the place a login would land.
+  return signedInProfileHomes({ subfolder, marker, profileRoot: profileRoot || path.dirname(homedir) })[0] || own;
+}
+
+async function fetchCodexUsage({ codexHome, fetchImpl = defaultFetch, spawnImpl = spawn, log = () => {} } = {}) {
+  const home = resolveCliHome({
+    configured: codexHome,
+    fromEnv: process.env.CODEX_HOME,
+    subfolder: '.codex',
+    marker: 'auth.json'
+  });
   const authPath = path.join(home, 'auth.json');
+  log(`codex home=${home} homedir=${os.homedir()} configured=${codexHome || 'unset'}`);
   if (!fs.existsSync(authPath)) {
     throw new Error('Codex is not signed in on this server.');
   }
@@ -422,7 +472,12 @@ function refreshClaudeLogin({ claudeHome, credentialsPath, previousAccessToken, 
 }
 
 async function fetchClaudeUsage({ claudeHome, fetchImpl = defaultFetch, ptyImpl = pty, log = () => {} } = {}) {
-  const home = claudeHome || process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
+  const home = resolveCliHome({
+    configured: claudeHome,
+    fromEnv: process.env.CLAUDE_CONFIG_DIR,
+    subfolder: '.claude',
+    marker: '.credentials.json'
+  });
   const credentialsPath = path.join(home, '.credentials.json');
   log(`claude home=${home} homedir=${os.homedir()} configDirEnv=${process.env.CLAUDE_CONFIG_DIR || 'unset'}`);
   if (!fs.existsSync(credentialsPath)) {
@@ -587,5 +642,6 @@ module.exports = {
   fetchClaudeUsage,
   fetchCodexUsage,
   fetchMiniMaxUsage,
-  fetchUsageOverview
+  fetchUsageOverview,
+  resolveCliHome
 };
