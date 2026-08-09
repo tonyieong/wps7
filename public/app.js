@@ -2,12 +2,12 @@
   const themePresets = {
     'wps-dark': { label: 'WPS7 Dark', mode: 'dark', ink: '#08131f', panel: '#0e1c2a', rail: '#0b1926', terminal: '#07131e', surfaceRaised: '#142536', surfaceSoft: '#102131', line: '#25394a', lineStrong: '#385064', text: '#f2f6f7', muted: '#91a3b2', accent: '#48d6b2', accentStrong: '#22b993', warn: '#f1b84b', danger: '#ff7474', shadow: 'rgba(0, 0, 0, .34)', terminalBg: '#06111b', terminalFg: '#eef5f4' },
     'wps-light': { label: 'WPS7 Light', mode: 'light', ink: '#f5f7f8', panel: '#ffffff', rail: '#f2f5f6', terminal: '#f8fafb', surfaceRaised: '#ffffff', surfaceSoft: '#edf3f3', line: '#d7e0e4', lineStrong: '#b9c8cf', text: '#14202b', muted: '#667582', accent: '#159d83', accentStrong: '#0d806a', warn: '#8a4f00', danger: '#c43d4b', shadow: 'rgba(31, 49, 61, .14)', terminalBg: '#ffffff', terminalFg: '#17232d' },
-    'apple-dark': { label: 'Apple Dark', mode: 'dark', ink: '#101114', panel: '#1c1c1e', rail: '#161618', terminal: '#0b0c0f', surfaceRaised: '#242428', surfaceSoft: '#202024', line: '#38383d', lineStrong: '#54545b', text: '#f5f5f7', muted: '#a1a1a6', accent: '#0a84ff', accentStrong: '#409cff', warn: '#ffd60a', danger: '#ff453a', shadow: 'rgba(0, 0, 0, .34)', terminalBg: '#0b0c0f', terminalFg: '#f5f5f7' },
-    'apple-light': { label: 'Apple Light', mode: 'light', ink: '#f2f2f7', panel: '#ffffff', rail: '#f7f7fa', terminal: '#fbfbfd', surfaceRaised: '#ffffff', surfaceSoft: '#e9e9ee', line: '#d1d1d6', lineStrong: '#aeaeb2', text: '#1c1c1e', muted: '#636366', accent: '#0066cc', accentStrong: '#004f9e', warn: '#7a4b00', danger: '#c9342f', shadow: 'rgba(31, 31, 35, .14)', terminalBg: '#ffffff', terminalFg: '#1c1c1e' },
-    'claude-dark': { label: 'Claude Dark', mode: 'dark', ink: '#1f1b18', panel: '#29231f', rail: '#241f1b', terminal: '#171411', surfaceRaised: '#342c27', surfaceSoft: '#302823', line: '#4a3e36', lineStrong: '#685548', text: '#f5eee8', muted: '#b5a79b', accent: '#e58b55', accentStrong: '#f0a36d', warn: '#f2c14e', danger: '#ff7a70', shadow: 'rgba(20, 12, 7, .38)', terminalBg: '#171411', terminalFg: '#f5eee8' },
-    'claude-light': { label: 'Claude Light', mode: 'light', ink: '#f7f3ee', panel: '#fffaf5', rail: '#f1ebe4', terminal: '#fffdf9', surfaceRaised: '#ffffff', surfaceSoft: '#eee5dc', line: '#d8cbc0', lineStrong: '#bca99b', text: '#2d2723', muted: '#6f6258', accent: '#b84f23', accentStrong: '#963d1c', warn: '#7f4d00', danger: '#b93434', shadow: 'rgba(72, 49, 34, .14)', terminalBg: '#fffdf9', terminalFg: '#2d2723' },
-    'codex-dark': { label: 'Codex Dark', mode: 'dark', ink: '#111311', panel: '#181b18', rail: '#141714', terminal: '#0b0d0c', surfaceRaised: '#202420', surfaceSoft: '#1c201c', line: '#303730', lineStrong: '#465046', text: '#edf3ee', muted: '#9aa79d', accent: '#52d273', accentStrong: '#2fbd56', warn: '#f2b84b', danger: '#ff6b6b', shadow: 'rgba(0, 0, 0, .36)', terminalBg: '#0b0d0c', terminalFg: '#edf3ee' },
-    'codex-light': { label: 'Codex Light', mode: 'light', ink: '#f3f5f2', panel: '#ffffff', rail: '#eef1ed', terminal: '#fcfdfb', surfaceRaised: '#ffffff', surfaceSoft: '#e7ece6', line: '#d0d7cf', lineStrong: '#aeb9ad', text: '#182019', muted: '#5d6b60', accent: '#147a36', accentStrong: '#0c652a', warn: '#7c4d00', danger: '#b7333e', shadow: 'rgba(28, 45, 31, .14)', terminalBg: '#fcfdfb', terminalFg: '#182019' }
+    'slate-dark': { label: 'Slate Dark', mode: 'dark', ink: '#101114', panel: '#1c1c1e', rail: '#161618', terminal: '#0b0c0f', surfaceRaised: '#242428', surfaceSoft: '#202024', line: '#38383d', lineStrong: '#54545b', text: '#f5f5f7', muted: '#a1a1a6', accent: '#0a84ff', accentStrong: '#409cff', warn: '#ffd60a', danger: '#ff453a', shadow: 'rgba(0, 0, 0, .34)', terminalBg: '#0b0c0f', terminalFg: '#f5f5f7' },
+    'slate-light': { label: 'Slate Light', mode: 'light', ink: '#f2f2f7', panel: '#ffffff', rail: '#f7f7fa', terminal: '#fbfbfd', surfaceRaised: '#ffffff', surfaceSoft: '#e9e9ee', line: '#d1d1d6', lineStrong: '#aeaeb2', text: '#1c1c1e', muted: '#636366', accent: '#0066cc', accentStrong: '#004f9e', warn: '#7a4b00', danger: '#c9342f', shadow: 'rgba(31, 31, 35, .14)', terminalBg: '#ffffff', terminalFg: '#1c1c1e' },
+    'ember-dark': { label: 'Ember Dark', mode: 'dark', ink: '#1f1b18', panel: '#29231f', rail: '#241f1b', terminal: '#171411', surfaceRaised: '#342c27', surfaceSoft: '#302823', line: '#4a3e36', lineStrong: '#685548', text: '#f5eee8', muted: '#b5a79b', accent: '#e58b55', accentStrong: '#f0a36d', warn: '#f2c14e', danger: '#ff7a70', shadow: 'rgba(20, 12, 7, .38)', terminalBg: '#171411', terminalFg: '#f5eee8' },
+    'ember-light': { label: 'Ember Light', mode: 'light', ink: '#f7f3ee', panel: '#fffaf5', rail: '#f1ebe4', terminal: '#fffdf9', surfaceRaised: '#ffffff', surfaceSoft: '#eee5dc', line: '#d8cbc0', lineStrong: '#bca99b', text: '#2d2723', muted: '#6f6258', accent: '#b84f23', accentStrong: '#963d1c', warn: '#7f4d00', danger: '#b93434', shadow: 'rgba(72, 49, 34, .14)', terminalBg: '#fffdf9', terminalFg: '#2d2723' },
+    'forest-dark': { label: 'Forest Dark', mode: 'dark', ink: '#111311', panel: '#181b18', rail: '#141714', terminal: '#0b0d0c', surfaceRaised: '#202420', surfaceSoft: '#1c201c', line: '#303730', lineStrong: '#465046', text: '#edf3ee', muted: '#9aa79d', accent: '#52d273', accentStrong: '#2fbd56', warn: '#f2b84b', danger: '#ff6b6b', shadow: 'rgba(0, 0, 0, .36)', terminalBg: '#0b0d0c', terminalFg: '#edf3ee' },
+    'forest-light': { label: 'Forest Light', mode: 'light', ink: '#f3f5f2', panel: '#ffffff', rail: '#eef1ed', terminal: '#fcfdfb', surfaceRaised: '#ffffff', surfaceSoft: '#e7ece6', line: '#d0d7cf', lineStrong: '#aeb9ad', text: '#182019', muted: '#5d6b60', accent: '#147a36', accentStrong: '#0c652a', warn: '#7c4d00', danger: '#b7333e', shadow: 'rgba(28, 45, 31, .14)', terminalBg: '#fcfdfb', terminalFg: '#182019' }
   };
   const customThemeDefaults = {
     selected_light: 'wps-light', selected_dark: 'wps-dark', mode: 'dark',
@@ -160,7 +160,8 @@
 
   function selectedThemeForMode(mode) {
     const custom = { ...customThemeDefaults, ...(state.config?.custom_theme || {}), ...(state.customThemeDraft || {}) };
-    return custom[`selected_${mode}`] || `wps-${mode}`;
+    const selected = custom[`selected_${mode}`];
+    return themePresets[selected]?.mode === mode || selected === `custom-${mode}` ? selected : `wps-${mode}`;
   }
 
   function pairedThemeId() {
@@ -426,17 +427,39 @@
     return session && session.tabs[0];
   }
 
-  // One flat row per pane: every row names its own workspace, so no row depends
-  // on the one above it to be read.
+  function sidebarPaneTabs(pane) {
+    if (pane.type === 'terminal' || pane.type === 'files') {
+      return paneTabs(pane).map((tab) => ({ tabId: tab.id, tabKind: paneTabKind(pane), label: paneTabLabel(pane, tab) }));
+    }
+    if (pane.type === 'browser') {
+      return (pane.browserTabs || []).map((tab) => ({ tabId: tab.id, tabKind: 'browser', label: tab.title || 'New tab' }));
+    }
+    if (pane.type === 'notepad') {
+      return (pane.notepadTabs || []).map((tab) => ({ tabId: tab.id, tabKind: 'notepad', label: notepadTabLabel(tab) }));
+    }
+    return [{ tabId: '', tabKind: '', label: pane.title }];
+  }
+
+  // One flat row per pane tab: every row names its own workspace, so no row
+  // depends on the one above it to be read.
   function sidebarPaneRows() {
     return state.sessions.flatMap((session) => session.tabs
       .flatMap((tab) => tab.panes)
-      .map((pane) => ({ session, pane, label: `${session.name}/${pane.title}` })));
+      .flatMap((pane) => sidebarPaneTabs(pane)
+        .map(({ tabId, tabKind, label }) => ({ session, pane, tabId, tabKind, label: `${session.name}/${label}` }))));
   }
 
-  function renderSidebarPaneItem({ session, pane, label }) {
+  function sidebarPaneRowActive(pane, tabId) {
+    if (pane.id !== state.activePaneId) return false;
+    if (!tabId) return true;
+    if (pane.type === 'browser') return pane.activeBrowserTabId === tabId;
+    if (pane.type === 'notepad') return pane.activeNotepadTabId === tabId;
+    return activePaneTabId(pane) === tabId;
+  }
+
+  function renderSidebarPaneItem({ session, pane, tabId, tabKind, label }) {
     return `
-      <button class="session-item ${pane.id === state.activePaneId ? 'active' : ''}" data-pane-link="${pane.id}" data-session="${session.id}">
+      <button class="session-item ${sidebarPaneRowActive(pane, tabId) ? 'active' : ''}" data-pane-link="${pane.id}" data-session="${session.id}" data-sidebar-pane-tab="${tabId}" data-sidebar-pane-tab-kind="${tabKind}">
         <span data-pane-label>${escapeHtml(label)}</span>
       </button>
     `;
@@ -1795,6 +1818,7 @@
     const strip = paneElement?.querySelector('[data-browser-tab-strip]');
     if (!found || !strip) return;
     strip.innerHTML = renderBrowserTabs(found.pane);
+    renderSidebarPaneList();
     wireBrowserTabs(paneElement, paneId);
     wirePaneKindIcon(strip);
     const active = activeBrowserTab(found.pane);
@@ -2038,6 +2062,7 @@
     let reconnectDelay = 500;
     let frameNumber = 0;
     let pendingNavigation = '';
+    let pendingTabActivation = '';
     let selectedText = '';
     let hasFrame = false;
     let resizeFrame = 0;
@@ -2083,6 +2108,7 @@
       send(message) {
         if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
         else if (message.type === 'navigate') pendingNavigation = message.url;
+        else if (message.type === 'activateTab') pendingTabActivation = message.tabId;
       },
       setAudio(enabled) {
         updateAudio(enabled);
@@ -2148,6 +2174,10 @@
         if (pendingNavigation) {
           connection.send({ type: 'navigate', url: pendingNavigation });
           pendingNavigation = '';
+        }
+        if (pendingTabActivation) {
+          connection.send({ type: 'activateTab', tabId: pendingTabActivation });
+          pendingTabActivation = '';
         }
       };
       socket.onmessage = (event) => {
@@ -2626,6 +2656,7 @@
     const strip = container?.querySelector('[data-notepad-tab-strip]');
     if (!found || !strip) return;
     strip.innerHTML = `<span class="pane-kind-icon" aria-hidden="true">${fileActionIcon('notepad')}</span>${renderNotepadTabs(found.pane)}`;
+    renderSidebarPaneList();
     wireNotepadTabs(container, paneId);
     wirePaneKindIcon(strip);
   }
@@ -2783,6 +2814,7 @@
     const strip = document.querySelector(`[data-pane="${paneId}"] [data-pane-tab-strip]`);
     if (!found || !strip) return;
     strip.innerHTML = renderPaneTabs(found.pane);
+    renderSidebarPaneList();
     wirePaneTabs(strip, paneId);
     wirePaneKindIcon(strip);
   }
@@ -4894,6 +4926,17 @@
     await setActivePane(tab.panes[nextIndex].id);
   }
 
+  async function activateSidebarPaneTab(paneId, tabKind, tabId) {
+    if (!tabId) return;
+    if (tabKind === 'browser') {
+      state.browserConnections.get(paneId)?.send({ type: 'activateTab', tabId });
+    } else if (tabKind === 'notepad') {
+      await activateNotepadTabClient(paneId, tabId);
+    } else {
+      await activatePaneTabClient(paneId, tabId);
+    }
+  }
+
   function wirePaneLinks(root) {
     findAll(root, '[data-pane-link]').forEach((button) => {
       button.onclick = (event) => {
@@ -4901,12 +4944,16 @@
           const found = findPaneState(button.dataset.paneLink);
           if (found && found.session.id === state.activeSessionId) {
             await setActivePane(button.dataset.paneLink);
+            await activateSidebarPaneTab(button.dataset.paneLink, button.dataset.sidebarPaneTabKind, button.dataset.sidebarPaneTab);
+            updateActivePaneUi();
             return;
           }
           state.activeSessionId = button.dataset.session;
           state.activePaneId = button.dataset.paneLink;
           await api(`/api/panes/${state.activePaneId}/activate`, { method: 'POST' });
           await loadState();
+          await activateSidebarPaneTab(button.dataset.paneLink, button.dataset.sidebarPaneTabKind, button.dataset.sidebarPaneTab);
+          updateActivePaneUi();
         });
       };
     });
@@ -5138,17 +5185,7 @@
   }
 
   function updateSidebarLabels() {
-    const rows = new Map(sidebarPaneRows().map((row) => [row.pane.id, row]));
-    app.querySelectorAll('[data-pane-link]').forEach((button) => {
-      const row = rows.get(button.dataset.paneLink);
-      if (!row) {
-        return;
-      }
-      const label = button.querySelector('[data-pane-label]');
-      if (label) {
-        label.textContent = row.label;
-      }
-    });
+    renderSidebarPaneList();
   }
 
   async function setActivePane(paneId, reloadFiles = true) {
@@ -5182,7 +5219,8 @@
       pane.classList.toggle('active', pane.dataset.pane === state.activePaneId);
     });
     app.querySelectorAll('[data-pane-link]').forEach((button) => {
-      button.classList.toggle('active', button.dataset.paneLink === state.activePaneId);
+      const found = findPaneState(button.dataset.paneLink);
+      button.classList.toggle('active', Boolean(found) && sidebarPaneRowActive(found.pane, button.dataset.sidebarPaneTab));
     });
     ensureActivePaneVisible();
   }
@@ -6790,8 +6828,8 @@
     let savedTheme = state.theme;
     let savedDisplayMode = state.displayMode;
     let savedTerminalDensity = state.mobileTerminalDensity;
-    const selectedLight = state.customThemeDraft.selected_light;
-    const selectedDark = state.customThemeDraft.selected_dark;
+    const selectedLight = selectedThemeForMode('light');
+    const selectedDark = selectedThemeForMode('dark');
     const notificationCapability = browserNotificationCapability();
     const overlay = document.createElement('div');
     overlay.className = 'settings-overlay';
