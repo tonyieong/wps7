@@ -40,9 +40,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   upgrade path, because its rewritten path-to-regexp is the usual breaking
   change and the unit suite does not exercise routing. node-pty was verified by
   driving a real ConPTY session in the packaged executable.
-
-### Changed
-
+- Tray diagnostics go to `data/runtime.log` instead of `console.error`. The
+  packaged exe is on the windows subsystem and has no console, so a tray that
+  died left no trace at all; its start, stderr, spawn failure and every exit are
+  now recorded. A failed spawn also has an `error` handler, which previously
+  reached the fatal handler and took the server down with it.
 - Packaging rewrites the PE subsystem of `dist/wps7.exe` from `console` to
   `windows`. pkg builds on a console-subsystem Node binary, so Explorer opened a
   console window that stayed for the life of the server. Redirected stdout and

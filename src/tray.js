@@ -5,14 +5,14 @@ const SysTrayModule = require('systray2');
 
 const SysTray = SysTrayModule.default || SysTrayModule;
 
-function startTray({ root, url, save, openBrowser, restart, shutdown }) {
+function startTray({ root, url, save, openBrowser, restart, shutdown, log = () => {} }) {
   if (process.platform === 'win32') {
-    return startWindowsNotifyIconTray({ root, url, save, openBrowser, restart, shutdown });
+    return startWindowsNotifyIconTray({ root, url, save, openBrowser, restart, shutdown, log });
   }
-  return startPortableTray({ root, url, save, openBrowser, restart, shutdown });
+  return startPortableTray({ root, url, save, openBrowser, restart, shutdown, log });
 }
 
-function startWindowsNotifyIconTray({ root, url, save, openBrowser, restart, shutdown }) {
+function startWindowsNotifyIconTray({ root, url, save, openBrowser, restart, shutdown, log }) {
   const trayDir = path.join(root, 'data', 'tray');
   fs.mkdirSync(trayDir, { recursive: true });
   const scriptPath = path.join(trayDir, 'wps7-notifyicon.ps1');
@@ -58,14 +58,21 @@ function startWindowsNotifyIconTray({ root, url, save, openBrowser, restart, shu
   child.stderr.on('data', (chunk) => {
     const message = chunk.toString('utf8').trim();
     if (message) {
-      console.error(`Tray error: ${message}`);
+      log(`stderr: ${message}`);
     }
   });
-  child.on('exit', (code) => {
-    if (code && code !== 0) {
-      console.error(`Tray exited with code ${code}`);
-    }
+  // Without a handler a failed spawn raises an unhandled 'error' event, which
+  // the fatal handler turns into an exit of the whole server.
+  child.on('error', (error) => {
+    log(`failed to start: ${error.message}`);
   });
+  // Every exit is worth recording, including a clean one: the tray is meant to
+  // outlive everything except shutdown, so code 0 here still means the icon
+  // vanished while the server kept running.
+  child.on('exit', (code, signal) => {
+    log(`exited code=${code} signal=${signal || 'none'}`);
+  });
+  log(`started pid=${child.pid || 'unknown'}`);
 
   return {
     kill(exitNode = true) {
@@ -133,7 +140,7 @@ try {
 `.trim();
 }
 
-function startPortableTray({ root, url, save, openBrowser, restart, shutdown }) {
+function startPortableTray({ root, url, save, openBrowser, restart, shutdown, log }) {
   const icon = realIconPath(root);
   const openItem = {
     title: 'Open Web UI',
@@ -183,13 +190,13 @@ function startPortableTray({ root, url, save, openBrowser, restart, shutdown }) 
 
   tray.ready().then(() => {
     tray.onError((error) => {
-      console.error(`Tray error: ${error.message || error}`);
+      log(`error: ${error.message || error}`);
     });
     tray.onExit((code) => {
-      console.error(`Tray exited with code ${code}`);
+      log(`exited code=${code}`);
     });
   }).catch((error) => {
-    console.error(`Tray failed to start: ${error.message}`);
+    log(`failed to start: ${error.message}`);
   });
 
   return tray;

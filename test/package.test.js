@@ -41,6 +41,24 @@ test('portable tray module remains valid JavaScript for pkg discovery', () => {
   assert.doesNotThrow(() => require('../src/tray'));
 });
 
+// The packaged exe runs on the windows subsystem with no console, so console
+// output disappears. A tray that dies has to say so in data/runtime.log, or the
+// server keeps running with no icon and nothing explaining why.
+test('tray diagnostics reach the runtime log rather than a missing console', () => {
+  assert.doesNotMatch(traySource, /console\.(error|log|warn)/);
+  assert.match(traySource, /child\.on\('error'/);
+  assert.match(traySource, /log\(`started pid=/);
+  assert.match(traySource, /child\.on\('exit', \(code, signal\) => \{\s*\n\s*log\(`exited code=/);
+  assert.match(mainSource, /log: \(message\) => appendRuntimeLog\(root, `tray \$\{message\}`\)/);
+});
+
+test('the tray Exit item stops the server', () => {
+  assert.match(traySource, /\$exitItem = \$menu\.Items\.Add\('Exit'\)/);
+  assert.match(traySource, /\$exitItem\.add_Click\(\{ \[Console\]::Out\.WriteLine\('exit'\)/);
+  assert.match(traySource, /line === 'exit'\)\s*\{\s*\n\s*shutdown\(\);/);
+  assert.match(mainSource, /shutdown: \(\) => stopRuntime\(\)/);
+});
+
 // A Windows service runs in session 0, where it has no interactive desktop and
 // no access to the signed-in user's profile. Starting at logon instead is what
 // puts terminal panes, GUI programs and CLI credentials in one session.
