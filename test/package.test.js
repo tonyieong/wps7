@@ -95,12 +95,15 @@ test('Windows packaging refreshes generated folders without nesting them', () =>
   const command = packageJson.scripts['package:win'];
   assert.match(command, /Copy-Item scripts\\\* dist\\scripts/);
   assert.match(command, /Copy-Item assets\\\* dist\\assets/);
-  assert.match(command, /Copy-Item tools\\\* dist\\tools/);
+  // tools/ held nothing but the downloaded nssm.exe, so packaging no longer
+  // has a directory to copy or an asset glob to embed.
+  assert.doesNotMatch(command, /tools/);
+  assert.ok(!(packageJson.pkg?.assets || []).includes('tools/**/*'));
 });
 
 test('Windows packaging clears stale nested resource folders', () => {
   const command = packageJson.scripts['package:win'];
-  assert.match(command, /Remove-Item 'dist\\scripts\\scripts','dist\\assets\\assets','dist\\tools\\tools' -Recurse -Force -ErrorAction SilentlyContinue/);
+  assert.match(command, /Remove-Item 'dist\\scripts\\scripts','dist\\assets\\assets' -Recurse -Force -ErrorAction SilentlyContinue/);
 });
 
 test('packaging leaves the executable on the windows subsystem', { skip: process.platform !== 'win32' }, () => {

@@ -8,8 +8,8 @@ running instance.
 
 wps7 is a Windows-focused Node.js terminal workspace. Server modules live in
 `src/`, and `main.js` wires the Express and WebSocket routes. Browser code lives
-in `public/`, tests in `test/`, service utilities in `scripts/`, and bundled
-resources in `assets/` and `tools/`.
+in `public/`, tests in `test/`, install and packaging helpers in `scripts/`, and
+bundled resources in `assets/`.
 
 Treat `data/`, `dist/`, and `qa-backup-*` as generated output unless packaging
 or migration is what you are working on.
@@ -28,9 +28,9 @@ wps7 targets Windows and drives ConPTY through
 `@homebridge/node-pty-prebuilt-multiarch`, so the terminal features cannot be
 developed or tested on Linux or macOS.
 
-If you already run wps7 as an installed service, do not develop against that
-instance. Use a separate port and data directory so a crash in your build cannot
-take down the service you rely on.
+If you already have wps7 installed and starting at logon, do not develop against
+that instance. Use a separate port and data directory so a crash in your build
+cannot take down the one you rely on.
 
 ## Code style
 

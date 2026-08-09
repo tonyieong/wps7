@@ -86,3 +86,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   companion existed only because the service could not draw its own icon from
   session 0; `src/tray.js` shows it directly now. `npm run startup:uninstall`
   removes an existing service installation.
+- The `tools/` resource directory, which only ever held the downloaded
+  `nssm.exe`. Packaging no longer copies it or embeds `tools/**/*`.
