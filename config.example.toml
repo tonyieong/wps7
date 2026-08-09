@@ -94,9 +94,8 @@ show_weekly = true
 show_model_weekly = true
 show_credits = true
 # Override the Codex/Claude Code home folder used to find the signed-in CLI
-# credentials (auth.json / .credentials.json). Leave blank to use the current
-# user's home. Needed when wps7.exe runs as a Windows service account (e.g.
-# LocalSystem) whose home folder differs from the account that ran `codex login`
-# / `claude` interactively, e.g. "C:\\Users\\yourname\\.codex".
+# credentials (auth.json / .credentials.json). Leave blank to search: this
+# account's home first, then the other profiles beside it, most recent login
+# first. Set it only to pin one, e.g. "C:\\Users\\yourname\\.codex".
 codex_home = ""
 claude_home = ""

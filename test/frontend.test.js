@@ -523,7 +523,7 @@ test('usage settings configure the MiniMax key and the visible quota windows', (
     assert.match(appSource, new RegExp(`name="usage\\.${key}"`));
     assert.match(appSource, new RegExp(`${key}: form\\.get\\('usage\\.${key}'\\) === 'on'`));
   }
-  assert.match(mainSource, /fetchCodexUsage\(\{ codexHome: config\.usage\.codex_home \|\| undefined \}\)/);
+  assert.match(mainSource, /fetchCodexUsage\(\{ codexHome: config\.usage\.codex_home \|\| undefined, log: usageLog \}\)/);
   assert.match(mainSource, /fetchClaudeUsage\(\{ claudeHome: config\.usage\.claude_home \|\| undefined, log: usageLog \}\)/);
 });
 

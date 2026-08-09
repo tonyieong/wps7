@@ -47,6 +47,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `windows`. pkg builds on a console-subsystem Node binary, so Explorer opened a
   console window that stayed for the life of the server. Redirected stdout and
   stderr still reach the log files a service manager points them at.
+- The Codex and Claude Code home folders are found without configuration. The
+  CLIs write their credentials under the profile of whoever signed in, so when
+  wps7 runs as another account it now searches the profiles beside its own and
+  takes the most recent login. `usage.codex_home` and `usage.claude_home` still
+  pin a folder, but leaving them blank is the normal case.
 - The release notes and both READMEs name the asset to download. The
   GitHub-generated "Source code" archives contain no `wps7.exe`, and extracting
   the release zip is required before running anything from it.

@@ -755,7 +755,7 @@ function main() {
       const minimaxApiKey = process.env.MINIMAX_CODING_API_KEY || process.env.MINIMAX_API_KEY || config.usage.minimax_api_key;
       const usageLog = (message) => appendRuntimeLog(root, `usage ${message}`);
       const value = await usage.fetchUsageOverview({
-        codex: config.usage.show_codex !== false ? () => usage.fetchCodexUsage({ codexHome: config.usage.codex_home || undefined }) : null,
+        codex: config.usage.show_codex !== false ? () => usage.fetchCodexUsage({ codexHome: config.usage.codex_home || undefined, log: usageLog }) : null,
         claude: config.usage.show_claude !== false ? () => usage.fetchClaudeUsage({ claudeHome: config.usage.claude_home || undefined, log: usageLog }) : null,
         minimax: config.usage.show_minimax !== false
           ? () => usage.fetchMiniMaxUsage({ apiKey: minimaxApiKey, region: config.usage.minimax_region })
