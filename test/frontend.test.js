@@ -180,7 +180,7 @@ test('server access uses Local and LAN choices with password-gated automatic res
   assert.match(appSource, /Set a password before enabling LAN access/);
   assert.match(appSource, /payload\.restart_after_save = switchingToLan/);
   assert.match(mainSource, /restart_after_save === true/);
-  assert.match(mainSource, /stopRuntime\(\{ restart: !serviceManaged \}\)/);
+  assert.match(mainSource, /stopRuntime\(\{ restart: true \}\)/);
 });
 
 test('pane grid settings resize existing panes immediately without rebuilding terminals', () => {

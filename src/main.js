@@ -74,10 +74,6 @@ function isHeadlessMode() {
   return process.env.WPS7_HEADLESS === '1';
 }
 
-function isServiceManagedMode() {
-  return process.env.WPS7_SERVICE_MANAGED === '1';
-}
-
 function stateCounts(store) {
   let panes = 0;
   for (const session of store.state.sessions || []) {
@@ -582,7 +578,6 @@ function main() {
   ensurePackagedIcon(root);
   const config = loadConfig(root).config;
   const headless = isHeadlessMode();
-  const serviceManaged = isServiceManagedMode();
   const startedAt = Date.now();
   const controlToken = loadOrCreateControlToken(root);
   let shell = resolveShell(config);
@@ -790,7 +785,7 @@ function main() {
       const response = applyLoadedConfig(loaded.config);
       res.json({ ...response, restarting: shouldRestart });
       if (shouldRestart) {
-        setTimeout(() => stopRuntime({ restart: !serviceManaged }), 250).unref();
+        setTimeout(() => stopRuntime({ restart: true }), 250).unref();
       }
     } catch (error) {
       configReloadError = error.message;
@@ -1282,7 +1277,6 @@ function main() {
       host: config.server.host,
       port: config.server.port,
       headless,
-      serviceManaged,
       uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
       configLoaded: !configReloadError,
       configReloadError,
@@ -1293,14 +1287,10 @@ function main() {
 
   app.post('/api/runtime/restart', requireRuntimeControl(controlToken), (req, res) => {
     res.json({ ok: true });
-    setTimeout(() => stopRuntime({ restart: !serviceManaged }), 100).unref();
+    setTimeout(() => stopRuntime({ restart: true }), 100).unref();
   });
 
   app.post('/api/runtime/shutdown', requireRuntimeControl(controlToken), (req, res) => {
-    if (serviceManaged) {
-      res.status(409).json({ error: 'wps7 is service managed. Stop the Windows service instead.' });
-      return;
-    }
     res.json({ ok: true });
     setTimeout(() => stopRuntime(), 100).unref();
   });
@@ -1649,7 +1639,7 @@ function main() {
 
   server.listen(config.server.port, config.server.host, () => {
     writeRuntimeInfo(root, config);
-    appendRuntimeLog(root, `listening pid=${process.pid} host=${config.server.host} port=${config.server.port} headless=${headless} serviceManaged=${serviceManaged}`);
+    appendRuntimeLog(root, `listening pid=${process.pid} host=${config.server.host} port=${config.server.port} headless=${headless}`);
     const url = `http://${config.server.host === '0.0.0.0' ? '127.0.0.1' : config.server.host}:${config.server.port}`;
     if (!headless) {
       trayController = startTray({

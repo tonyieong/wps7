@@ -41,11 +41,33 @@ test('portable tray module remains valid JavaScript for pkg discovery', () => {
   assert.doesNotThrow(() => require('../src/tray'));
 });
 
-test('installed service controls and tray follow the packaged runtime root', () => {
+// A Windows service runs in session 0, where it has no interactive desktop and
+// no access to the signed-in user's profile. Starting at logon instead is what
+// puts terminal panes, GUI programs and CLI credentials in one session.
+test('startup installs a logon shortcut rather than a service', () => {
   assert.match(startupInstallerSource, /\$runtimeRoot = Resolve-Wps7RuntimeRoot/);
-  assert.match(startupInstallerSource, /Join-Path \$runtimeRoot 'scripts\\control-wps7-service\.ps1'/);
-  assert.match(startupInstallerSource, /Join-Path \$runtimeRoot 'scripts\\wps7-tray-companion\.ps1'/);
+  assert.match(startupInstallerSource, /\$shortcut\.TargetPath = \$executable/);
   assert.match(startupInstallerSource, /\$shortcut\.WorkingDirectory = \$runtimeRoot/);
+  // Comments explain the removed service, so only the code is checked for it.
+  const installerCode = startupInstallerSource.split(/\r?\n/).filter((line) => !line.trim().startsWith('#')).join('\n');
+  assert.doesNotMatch(installerCode, /nssm|New-Service|Register-ScheduledTask/i);
+  // No service account means nothing has to ask for a Windows password.
+  assert.doesNotMatch(installerCode, /-AsSecureString|ObjectName/);
+  // Exposing a PowerShell gateway on a LAN without a password stays refused.
+  assert.match(startupInstallerSource, /auth\.password_hash/);
+});
+
+test('startup clears a previous service installation', () => {
+  const uninstallSource = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'uninstall-wps7-startup.ps1'), 'utf8');
+  assert.match(startupInstallerSource, /uninstall-wps7-startup\.ps1/);
+  assert.match(startupInstallerSource, /Get-Service -Name 'wps7-server'/);
+  for (const task of ['wps7-service-start', 'wps7-service-restart', 'wps7-service-stop']) {
+    assert.ok(uninstallSource.includes(task), `${task} must be removed on uninstall`);
+  }
+  assert.match(uninstallSource, /sc\.exe delete wps7-server/);
+  assert.match(uninstallSource, /Remove-NetFirewallRule/);
+  // Only the steps that change machine state elevate; removing a shortcut does not.
+  assert.match(uninstallSource, /if \(\$legacyService -or \$legacyTaskNames\.Count -gt 0 -or \$firewallRules\.Count -gt 0\)/);
 });
 
 test('moved installations include a path repair command', () => {
@@ -53,10 +75,20 @@ test('moved installations include a path repair command', () => {
   assert.ok(fs.existsSync(repairPath), 'repair-wps7-paths.ps1 must exist');
   const repairSource = fs.readFileSync(repairPath, 'utf8');
   assert.equal(packageJson.scripts['startup:repair'], 'powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\repair-wps7-paths.ps1');
-  assert.match(repairSource, /Unregister-ScheduledTask/);
-  assert.match(repairSource, /Register-ScheduledTask/);
-  assert.match(repairSource, /wps7 tray\.lnk/);
-  assert.match(repairSource, /install-wps7-startup\.ps1/);
+  assert.match(repairSource, /\$shortcut\.TargetPath = \$executable/);
+  assert.match(repairSource, /wps7\.lnk/);
+  // The shortcut is the only registration left, so repairing it needs no rights.
+  assert.doesNotMatch(repairSource, /RunAs|Register-ScheduledTask|nssm/i);
+});
+
+test('the service stack is gone from the scripts and the npm commands', () => {
+  const scripts = fs.readdirSync(path.join(__dirname, '..', 'scripts'));
+  for (const removed of ['install-nssm.ps1', 'control-wps7-service.ps1', 'wps7-tray-companion.ps1']) {
+    assert.ok(!scripts.includes(removed), `${removed} must not come back`);
+  }
+  assert.equal(packageJson.scripts['nssm:install'], undefined);
+  // Nothing sets WPS7_SERVICE_MANAGED any more, so the server must not read it.
+  assert.doesNotMatch(mainSource, /WPS7_SERVICE_MANAGED|serviceManaged/);
 });
 
 test('Windows packaging refreshes generated folders without nesting them', () => {

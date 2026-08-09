@@ -47,6 +47,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `windows`. pkg builds on a console-subsystem Node binary, so Explorer opened a
   console window that stayed for the life of the server. Redirected stdout and
   stderr still reach the log files a service manager points them at.
+- wps7 starts at logon instead of running as a Windows service. `npm run
+  startup:install` now writes a `Startup\wps7.lnk` shortcut and needs no
+  Administrator, no service account and no stored Windows password; it removes a
+  service left by an earlier version, which is the one step that elevates. A
+  service runs in session 0, where it has no interactive desktop and no access
+  to the signed-in user's profile: GUI programs launched from a terminal pane
+  were invisible, and the usage pane could not see the Codex or Claude Code
+  logins. Running as the logged-in user removes all of that.
 - The Codex and Claude Code home folders are found without configuration. The
   CLIs write their credentials under the profile of whoever signed in, so when
   wps7 runs as another account it now searches the profiles beside its own and
@@ -71,3 +79,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now downloaded and hash-verified at install time.
 - `start-wps7.vbs`. Hiding the console window was the only thing it did, and the
   packaged exe no longer opens one. Double click `wps7.exe` instead.
+- The NSSM service stack: `scripts/install-nssm.ps1`,
+  `scripts/control-wps7-service.ps1`, `scripts/wps7-tray-companion.ps1`, the
+  `wps7-service-start` / `-restart` / `-stop` elevated tasks, the
+  `npm run nssm:install` command, and the `WPS7_SERVICE_MANAGED` mode. The tray
+  companion existed only because the service could not draw its own icon from
+  session 0; `src/tray.js` shows it directly now. `npm run startup:uninstall`
+  removes an existing service installation.

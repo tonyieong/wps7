@@ -51,13 +51,6 @@ reproduced here as those licenses require.
 - Upstream: https://github.com/excalidraw/excalidraw
 - Bundled at: `public/vendor/excalidraw/excalidraw-assets/Virgil.woff2`
 
-### NSSM
-
-- License: Public Domain
-- Iain Patterson
-- Upstream: https://nssm.cc/
-- Bundled at: `downloaded at install time to tools/nssm/nssm.exe`
-
 The SIL Open Font License 1.1 full text is available at
 <https://openfontlicense.org/>. Upstream Excalidraw ships these font binaries
 without per-font license files; the attributions above trace each face back to

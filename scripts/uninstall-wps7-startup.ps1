@@ -1,39 +1,49 @@
+param(
+  # install-wps7-startup.ps1 reuses this script to clear a previous service
+  # installation, and rewrites the shortcut itself afterwards.
+  [switch]$KeepShortcut
+)
+
 $ErrorActionPreference = 'Stop'
-function Resolve-Nssm {
-  $root = (Split-Path -Parent (Split-Path -Parent $PSCommandPath))
-  $candidates = @(
-    (Join-Path $root 'tools\nssm\nssm.exe'),
-    (Join-Path $root 'tools\nssm\win64\nssm.exe'),
-    (Join-Path $root 'scripts\nssm.exe'),
-    (Join-Path $root 'dist\tools\nssm\nssm.exe')
-  )
-  foreach ($candidate in $candidates) {
-    if (Test-Path -LiteralPath $candidate) {
-      return $candidate
+
+$legacyService = Get-Service -Name 'wps7-server' -ErrorAction SilentlyContinue
+$legacyTasks = @('wps7-server', 'wps7-tray', 'wps7-service-start', 'wps7-service-restart', 'wps7-service-stop')
+$legacyTaskNames = @($legacyTasks | Where-Object { Get-ScheduledTask -TaskName $_ -ErrorAction SilentlyContinue })
+$firewallRules = @(Get-NetFirewallRule -Group 'wps7' -ErrorAction SilentlyContinue)
+
+# Removing a service, elevated tasks or a firewall rule changes machine state.
+# Nothing else here does, so a plain shortcut removal never asks for anything.
+if ($legacyService -or $legacyTaskNames.Count -gt 0 -or $firewallRules.Count -gt 0) {
+  $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+  $principal = New-Object System.Security.Principal.WindowsPrincipal($identity)
+  if (!$principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    $arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+    if ($KeepShortcut) {
+      $arguments += ' -KeepShortcut'
     }
+    Write-Host 'Restarting as Administrator to remove the previous service registration...'
+    $process = Start-Process -FilePath 'powershell.exe' -ArgumentList $arguments -Verb RunAs -Wait -PassThru
+    exit $process.ExitCode
   }
-  $command = Get-Command nssm.exe -ErrorAction SilentlyContinue
-  if ($command) {
-    return $command.Source
+
+  foreach ($taskName in $legacyTaskNames) {
+    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
   }
-  return ''
+  if ($legacyService) {
+    sc.exe stop wps7-server | Out-Null
+    sc.exe delete wps7-server | Out-Null
+  }
+  if ($firewallRules.Count -gt 0) {
+    $firewallRules | Remove-NetFirewallRule
+  }
+  Write-Host 'Removed the wps7 service, its control tasks, and its firewall rules.'
 }
 
-Unregister-ScheduledTask -TaskName 'wps7-server' -Confirm:$false -ErrorAction SilentlyContinue
-Unregister-ScheduledTask -TaskName 'wps7-tray' -Confirm:$false -ErrorAction SilentlyContinue
-Unregister-ScheduledTask -TaskName 'wps7-service-start' -Confirm:$false -ErrorAction SilentlyContinue
-Unregister-ScheduledTask -TaskName 'wps7-service-restart' -Confirm:$false -ErrorAction SilentlyContinue
-Unregister-ScheduledTask -TaskName 'wps7-service-stop' -Confirm:$false -ErrorAction SilentlyContinue
-$nssm = Resolve-Nssm
-if ($nssm -and (Get-Service -Name 'wps7-server' -ErrorAction SilentlyContinue)) {
-  & $nssm stop wps7-server | Out-Null
-  & $nssm remove wps7-server confirm | Out-Null
-} elseif (Get-Service -Name 'wps7-server' -ErrorAction SilentlyContinue) {
-  sc.exe stop wps7-server | Out-Null
-  sc.exe delete wps7-server | Out-Null
+if (!$KeepShortcut) {
+  $shell = New-Object -ComObject WScript.Shell
+  $startup = $shell.SpecialFolders.Item('Startup')
+  foreach ($name in @('wps7.lnk', 'wps7 tray.lnk')) {
+    Remove-Item -LiteralPath (Join-Path $startup $name) -Force -ErrorAction SilentlyContinue
+  }
+  Write-Host 'Removed the wps7 startup shortcut.'
 }
-$shell = New-Object -ComObject WScript.Shell
-$shortcutPath = Join-Path $shell.SpecialFolders.Item('Startup') 'wps7 tray.lnk'
-Remove-Item -LiteralPath $shortcutPath -Force -ErrorAction SilentlyContinue
-Get-NetFirewallRule -Group 'wps7' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
-Write-Host 'Removed wps7 service, tray startup shortcut, control tasks, legacy tasks, and firewall rules.'
