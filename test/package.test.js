@@ -32,9 +32,17 @@ test('portable Windows restart waits for the old process before relaunching', ()
 });
 
 test('portable tray includes the common status, logs and diagnostics actions', () => {
-  for (const label of ['Status: running', 'Open Web UI', 'Save Now', 'Restart wps7', 'View Logs', 'Diagnostics', 'Exit']) {
+  for (const label of ['Status: running', 'Open Web UI', 'Save Now', 'Restart wps7', 'View Logs', 'Diagnostics']) {
     assert.match(traySource, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
+});
+
+// Stopping the workspace from a menu that sits one slip away from Restart cost
+// more than it was worth. POST /api/runtime/shutdown still stops the server.
+test('the tray offers no way to stop the server', () => {
+  assert.doesNotMatch(traySource, /'Exit'|Add\('Exit'\)|shutdown/);
+  assert.doesNotMatch(mainSource, /shutdown: \(\) => stopRuntime\(\)/);
+  assert.match(mainSource, /app\.post\('\/api\/runtime\/shutdown'/);
 });
 
 test('portable tray module remains valid JavaScript for pkg discovery', () => {

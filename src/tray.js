@@ -5,14 +5,14 @@ const SysTrayModule = require('systray2');
 
 const SysTray = SysTrayModule.default || SysTrayModule;
 
-function startTray({ root, url, save, openBrowser, restart, shutdown }) {
+function startTray({ root, url, save, openBrowser, restart }) {
   if (process.platform === 'win32') {
-    return startWindowsNotifyIconTray({ root, url, save, openBrowser, restart, shutdown });
+    return startWindowsNotifyIconTray({ root, url, save, openBrowser, restart });
   }
-  return startPortableTray({ root, url, save, openBrowser, restart, shutdown });
+  return startPortableTray({ root, url, save, openBrowser, restart });
 }
 
-function startWindowsNotifyIconTray({ root, url, save, openBrowser, restart, shutdown }) {
+function startWindowsNotifyIconTray({ root, url, save, openBrowser, restart }) {
   const trayDir = path.join(root, 'data', 'tray');
   fs.mkdirSync(trayDir, { recursive: true });
   const scriptPath = path.join(trayDir, 'wps7-notifyicon.ps1');
@@ -50,8 +50,6 @@ function startWindowsNotifyIconTray({ root, url, save, openBrowser, restart, shu
         save();
       } else if (line === 'restart') {
         restart();
-      } else if (line === 'exit') {
-        shutdown();
       }
     }
   });
@@ -107,8 +105,6 @@ $restartItem = $menu.Items.Add('Restart wps7')
 $menu.Items.Add('-') | Out-Null
 $logsItem = $menu.Items.Add('View Logs')
 $diagnosticsItem = $menu.Items.Add('Diagnostics')
-$menu.Items.Add('-') | Out-Null
-$exitItem = $menu.Items.Add('Exit')
 
 $openItem.add_Click({ [Console]::Out.WriteLine('open'); [Console]::Out.Flush() })
 $saveItem.add_Click({ [Console]::Out.WriteLine('save'); [Console]::Out.Flush() })
@@ -119,7 +115,6 @@ $diagnosticsItem.add_Click({
   $message = 'Status: running' + $newline + "URL: $Url" + $newline + "Server PID: $ServerPid" + $newline + "Data: $(Join-Path $Root 'data')"
   [System.Windows.Forms.MessageBox]::Show($message, 'WPS7 Diagnostics', 'OK', 'Information') | Out-Null
 })
-$exitItem.add_Click({ [Console]::Out.WriteLine('exit'); [Console]::Out.Flush() })
 $notifyIcon.add_DoubleClick({ [Console]::Out.WriteLine('open'); [Console]::Out.Flush() })
 $notifyIcon.ContextMenuStrip = $menu
 
@@ -133,7 +128,7 @@ try {
 `.trim();
 }
 
-function startPortableTray({ root, url, save, openBrowser, restart, shutdown }) {
+function startPortableTray({ root, url, save, openBrowser, restart }) {
   const icon = realIconPath(root);
   const openItem = {
     title: 'Open Web UI',
@@ -149,13 +144,6 @@ function startPortableTray({ root, url, save, openBrowser, restart, shutdown }) 
     enabled: true,
     click: save
   };
-  const exitItem = {
-    title: 'Exit',
-    tooltip: 'Save and exit wps7',
-    checked: false,
-    enabled: true,
-    click: shutdown
-  };
   const restartItem = {
     title: 'Restart wps7',
     tooltip: 'Restart wps7',
@@ -169,7 +157,7 @@ function startPortableTray({ root, url, save, openBrowser, restart, shutdown }) 
       icon,
       title: 'wps7',
       tooltip: 'wps7 terminal workspace',
-      items: [openItem, saveItem, restartItem, SysTray.separator, exitItem]
+      items: [openItem, saveItem, restartItem]
     },
     debug: Boolean(process.env.WPS7_TRAY_DEBUG),
     copyDir: path.join(root, 'data', 'tray')

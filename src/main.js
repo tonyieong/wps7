@@ -1632,8 +1632,7 @@ function main() {
       url,
       save: () => store.save(),
       openBrowser,
-      restart: () => stopRuntime({ restart: true }),
-      shutdown: () => stopRuntime()
+      restart: () => stopRuntime({ restart: true })
     });
     if (config.server.open_browser) {
       openBrowser(url);
