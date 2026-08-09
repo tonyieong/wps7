@@ -40,6 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   upgrade path, because its rewritten path-to-regexp is the usual breaking
   change and the unit suite does not exercise routing. node-pty was verified by
   driving a real ConPTY session in the packaged executable.
+
+### Changed
+
 - Packaging rewrites the PE subsystem of `dist/wps7.exe` from `console` to
   `windows`. pkg builds on a console-subsystem Node binary, so Explorer opened a
   console window that stayed for the life of the server. Redirected stdout and
@@ -60,9 +63,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The release notes and both READMEs name the asset to download. The
   GitHub-generated "Source code" archives contain no `wps7.exe`, and extracting
   the release zip is required before running anything from it.
-- The tray menu no longer offers Exit. It sat one slip away from Restart wps7,
-  and stopping the workspace by accident costs more than reaching for
-  `POST /api/runtime/shutdown`, which still stops the server.
 
 ### Security
 

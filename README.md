@@ -61,7 +61,7 @@ Running in your session is what makes the rest work: a GUI program started from 
 
 Nothing here needs Administrator. Installing asks for elevation only in two cases: to remove a service installed by an earlier version, and to open a firewall port when `server.host = "0.0.0.0"`.
 
-The tray icon exposes Open Web UI, Save Now, Restart wps7, View Logs, and Diagnostics. It has no Exit: stopping the workspace by a mis-click next to Restart is not worth the convenience, so shutdown goes through `POST /api/runtime/shutdown` with the token in `data/control-token`.
+The tray icon exposes Open Web UI, Save Now, Restart wps7, and Exit.
 
 If you set `server.host = "0.0.0.0"` for LAN access, configure a strong web password first. The installer refuses to expose wps7 on the LAN without `auth.password_hash` because the app provides browser access to PowerShell.
 
