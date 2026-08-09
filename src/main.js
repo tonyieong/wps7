@@ -70,10 +70,6 @@ function writeRuntimeInfo(root, config) {
   }, null, 2));
 }
 
-function isHeadlessMode() {
-  return process.env.WPS7_HEADLESS === '1';
-}
-
 function stateCounts(store) {
   let panes = 0;
   for (const session of store.state.sessions || []) {
@@ -543,11 +539,7 @@ if ($Arguments.Count -gt 0) {
       cwd: root,
       detached: true,
       stdio: 'ignore',
-      windowsHide: true,
-      env: {
-        ...process.env,
-        WPS7_HEADLESS: process.env.WPS7_HEADLESS || ''
-      }
+      windowsHide: true
     });
     appendRuntimeLog(root, `spawned relaunch helper pid=${child.pid || 'unknown'} exe=${process.execPath} args=${JSON.stringify(args)}`);
     child.on('error', (error) => {
@@ -560,11 +552,7 @@ if ($Arguments.Count -gt 0) {
     cwd: root,
     detached: true,
     stdio: 'ignore',
-    windowsHide: true,
-    env: {
-      ...process.env,
-      WPS7_HEADLESS: process.env.WPS7_HEADLESS || ''
-    }
+    windowsHide: true
   });
   appendRuntimeLog(root, `spawned replacement pid=${child.pid || 'unknown'} exe=${process.execPath} args=${JSON.stringify(args)}`);
   child.on('error', (error) => {
@@ -577,7 +565,6 @@ function main() {
   const root = appRoot();
   ensurePackagedIcon(root);
   const config = loadConfig(root).config;
-  const headless = isHeadlessMode();
   const startedAt = Date.now();
   const controlToken = loadOrCreateControlToken(root);
   let shell = resolveShell(config);
@@ -1276,7 +1263,6 @@ function main() {
       pid: process.pid,
       host: config.server.host,
       port: config.server.port,
-      headless,
       uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
       configLoaded: !configReloadError,
       configReloadError,
@@ -1639,19 +1625,17 @@ function main() {
 
   server.listen(config.server.port, config.server.host, () => {
     writeRuntimeInfo(root, config);
-    appendRuntimeLog(root, `listening pid=${process.pid} host=${config.server.host} port=${config.server.port} headless=${headless}`);
+    appendRuntimeLog(root, `listening pid=${process.pid} host=${config.server.host} port=${config.server.port}`);
     const url = `http://${config.server.host === '0.0.0.0' ? '127.0.0.1' : config.server.host}:${config.server.port}`;
-    if (!headless) {
-      trayController = startTray({
-        root,
-        url,
-        save: () => store.save(),
-        openBrowser,
-        restart: () => stopRuntime({ restart: true }),
-        shutdown: () => stopRuntime()
-      });
-    }
-    if (!headless && config.server.open_browser) {
+    trayController = startTray({
+      root,
+      url,
+      save: () => store.save(),
+      openBrowser,
+      restart: () => stopRuntime({ restart: true }),
+      shutdown: () => stopRuntime()
+    });
+    if (config.server.open_browser) {
       openBrowser(url);
     }
   });

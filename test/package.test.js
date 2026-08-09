@@ -87,8 +87,12 @@ test('the service stack is gone from the scripts and the npm commands', () => {
     assert.ok(!scripts.includes(removed), `${removed} must not come back`);
   }
   assert.equal(packageJson.scripts['nssm:install'], undefined);
-  // Nothing sets WPS7_SERVICE_MANAGED any more, so the server must not read it.
-  assert.doesNotMatch(mainSource, /WPS7_SERVICE_MANAGED|serviceManaged/);
+  // Both runtime modes existed for the service: NSSM owned the restart, and it
+  // set WPS7_HEADLESS=1 because session 0 could not show a tray icon. Nothing
+  // sets either now, so the server must not read them.
+  assert.doesNotMatch(mainSource, /WPS7_SERVICE_MANAGED|serviceManaged|WPS7_HEADLESS|isHeadlessMode/);
+  // The tray is unconditional, which is the whole point of running at logon.
+  assert.match(mainSource, /^ {4}trayController = startTray\(\{$/m);
 });
 
 test('Windows packaging refreshes generated folders without nesting them', () => {

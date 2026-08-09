@@ -88,3 +88,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   removes an existing service installation.
 - The `tools/` resource directory, which only ever held the downloaded
   `nssm.exe`. Packaging no longer copies it or embeds `tools/**/*`.
+- `WPS7_HEADLESS`. NSSM set it because a service in session 0 cannot show a tray
+  icon; with wps7 running at logon the tray always applies, so the server no
+  longer reads the variable and `startTray()` is unconditional.
