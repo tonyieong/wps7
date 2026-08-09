@@ -23,8 +23,8 @@
 請到[發行頁面](../../releases)下載 `wps7-<版本>-windows-x64.zip`。GitHub 一併產生的
 「Source code」壓縮檔只包含原始碼，裡面沒有 `wps7.exe`。
 
-連按兩下 `start-wps7.vbs` 之前，請先把整個 zip 解壓縮到資料夾。直接在 Windows 的
-壓縮檔檢視器裡開啟啟動器，只會把那一個檔案解到暫存目錄，執行檔仍留在壓縮檔內。
+請先把整個 zip 解壓縮到資料夾，再連按兩下 `wps7.exe`。直接在 Windows 的壓縮檔檢視器
+裡開啟任何檔案，只會把那一個檔案解到暫存目錄，其餘檔案仍留在壓縮檔內。
 
 wps7 沒有程式碼簽章，因此下載回來的版本第一次執行時 SmartScreen 會提出警告。請先用
 `SHA256SUMS.txt` 比對 SHA256，然後在解壓縮前清除下載標記 —— 對 zip 按右鍵、開啟內容、
@@ -83,8 +83,10 @@ npm run startup:uninstall
 npm run package:win
 ```
 
-打包後的執行檔會輸出到 `dist/wps7.exe`。連按兩下 `dist/start-wps7.vbs` 即可在不顯示
-主控台視窗的情況下啟動。
+打包後的執行檔會輸出到 `dist/wps7.exe`。pkg 是以主控台子系統（console subsystem）的
+Node 執行檔為基底建置的，那會讓伺服器在整個執行期間都掛著一個主控台視窗，因此打包時會
+把 PE 子系統改寫成 `windows`。連按兩下 `dist/wps7.exe` 就會在沒有主控台視窗的情況下啟動。
+`dist/start-wps7.vbs` 仍可運作，保留給既有的捷徑使用。
 
 ## 還原機制
 

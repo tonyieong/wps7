@@ -41,6 +41,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   change and the unit suite does not exercise routing. node-pty was verified by
   driving a real ConPTY session in the packaged executable.
 
+### Changed
+
+- Packaging rewrites the PE subsystem of `dist/wps7.exe` from `console` to
+  `windows`. pkg builds on a console-subsystem Node binary, so Explorer opened a
+  console window that stayed for the life of the server, and hiding it was the
+  only job `start-wps7.vbs` had. Redirected stdout and stderr still reach NSSM's
+  log files, which is how the service records output.
+
 ### Fixed
 
 - `start-wps7.vbs` now explains why it cannot start instead of letting Windows

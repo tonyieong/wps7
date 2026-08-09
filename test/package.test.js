@@ -5,6 +5,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const test = require('node:test');
 const packageJson = require('../package.json');
+const { setWindowsGuiSubsystem, subsystemOffset } = require('../scripts/set-windows-subsystem');
 
 const mainSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'main.js'), 'utf8');
 const traySource = fs.readFileSync(path.join(__dirname, '..', 'src', 'tray.js'), 'utf8');
@@ -131,6 +132,38 @@ test('the launcher reports a refused launch instead of the raw script host error
   assert.match(launcherSource, /Hex\(launchError\) = "800704C7"/);
   assert.match(launcherSource, /SmartScreen/);
   assert.match(launcherSource, /Run anyway/);
+});
+
+test('packaging leaves the executable on the windows subsystem', { skip: process.platform !== 'win32' }, () => {
+  assert.match(packageJson.scripts['package:win'], /node scripts\\set-windows-subsystem\.js dist\\wps7\.exe/);
+
+  // The packaged exe is pkg's Node base with the project appended, so the base
+  // this suite runs on carries the subsystem packaging has to rewrite. Only the
+  // headers are needed, and the binary is far too large to copy for that.
+  const head = Buffer.alloc(4096);
+  const handle = fs.openSync(process.execPath, 'r');
+  try {
+    fs.readSync(handle, head, 0, head.length, 0);
+  } finally {
+    fs.closeSync(handle);
+  }
+  assert.equal(head.readUInt16LE(subsystemOffset(head)), 3, 'the pkg base is a console binary');
+
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-subsystem-'));
+  try {
+    // hostname.exe is a small console program, so the rewrite can be applied to
+    // a real binary and the result actually run.
+    const copy = path.join(directory, 'stand-in.exe');
+    fs.copyFileSync(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'hostname.exe'), copy);
+    const offset = subsystemOffset(fs.readFileSync(copy));
+
+    assert.equal(setWindowsGuiSubsystem(copy), true);
+    assert.equal(fs.readFileSync(copy).readUInt16LE(offset), 2);
+    assert.equal(setWindowsGuiSubsystem(copy), false, 'rewriting an already patched exe is a no-op');
+    assert.equal(spawnSync(copy).status, 0, 'the rewritten binary still runs');
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test('a fatal error saves state and logs before the process exits', () => {

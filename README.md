@@ -26,9 +26,9 @@ Take `wps7-<version>-windows-x64.zip` from the [releases page](../../releases).
 The "Source code" archives GitHub generates beside it hold the source tree only,
 without `wps7.exe`.
 
-Extract the zip to a folder before double clicking `start-wps7.vbs`. Opening the
-launcher inside the Windows zip viewer unpacks that one file to a temp directory
-and leaves the executable in the archive.
+Extract the zip to a folder, then double click `wps7.exe`. Opening anything
+inside the Windows zip viewer unpacks that one file to a temp directory and
+leaves the rest in the archive.
 
 wps7 is not code signed, so SmartScreen warns the first time a downloaded build
 runs. Compare the SHA256 with `SHA256SUMS.txt`, then clear the download mark
@@ -80,7 +80,11 @@ npm run startup:uninstall
 npm run package:win
 ```
 
-The packaged executable is written to `dist/wps7.exe`. Double click `dist/start-wps7.vbs` to launch it without showing a console window.
+The packaged executable is written to `dist/wps7.exe`. pkg builds on a
+console-subsystem Node binary, which would give the server a console window for
+as long as it runs, so packaging rewrites the PE subsystem to `windows`. Double
+clicking `dist/wps7.exe` starts it with no console. `dist/start-wps7.vbs` still
+works and is kept for existing shortcuts.
 
 ## Restore model
 
