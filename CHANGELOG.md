@@ -40,6 +40,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   upgrade path, because its rewritten path-to-regexp is the usual breaking
   change and the unit suite does not exercise routing. node-pty was verified by
   driving a real ConPTY session in the packaged executable.
+- A tray that exits while the server is still running is relaunched after two
+  seconds. The icon is the only way into a process with no console, so losing it
+  left wps7 running and unreachable. Shutdown is exempt, and a tray that keeps
+  dying immediately is given up on after five attempts rather than respawned
+  forever; every step is in `data/runtime.log`.
 - Tray diagnostics go to `data/runtime.log` instead of `console.error`. The
   packaged exe is on the windows subsystem and has no console, so a tray that
   died left no trace at all; its start, stderr, spawn failure and every exit are

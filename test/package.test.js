@@ -52,6 +52,18 @@ test('tray diagnostics reach the runtime log rather than a missing console', () 
   assert.match(mainSource, /log: \(message\) => appendRuntimeLog\(root, `tray \$\{message\}`\)/);
 });
 
+// Losing the icon strands a server that has no console and no other UI, so the
+// tray is relaunched — but a tray that cannot start must not be retried forever.
+test('a tray that dies on its own is relaunched, within a limit', () => {
+  assert.match(traySource, /restartTimer = setTimeout\(launch, TRAY_RESTART_DELAY_MS\)/);
+  assert.match(traySource, /if \(failures > TRAY_RESTART_LIMIT\)/);
+  assert.match(traySource, /failures = Date\.now\(\) - startedAt >= TRAY_HEALTHY_MS \? 1 : failures \+ 1/);
+  // Shutdown kills the tray itself; relaunching it there would strand a child.
+  assert.match(traySource, /if \(stopping\) \{\s*\n\s*return;/);
+  assert.match(traySource, /kill\(exitNode = true\) \{\s*\n\s*stopping = true;/);
+  assert.match(traySource, /clearTimeout\(restartTimer\)/);
+});
+
 test('the tray Exit item stops the server', () => {
   assert.match(traySource, /\$exitItem = \$menu\.Items\.Add\('Exit'\)/);
   assert.match(traySource, /\$exitItem\.add_Click\(\{ \[Console\]::Out\.WriteLine\('exit'\)/);

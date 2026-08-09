@@ -63,6 +63,8 @@ Nothing here needs Administrator. Installing asks for elevation only in two case
 
 The tray icon exposes Open Web UI, Save Now, Restart wps7, View Logs, Diagnostics, and Exit. Exit saves state and stops the server.
 
+If the icon disappears while wps7 is still running, it is relaunched a couple of seconds later; a tray that fails to start five times in a row is given up on. `data/runtime.log` records each attempt.
+
 If you set `server.host = "0.0.0.0"` for LAN access, configure a strong web password first. The installer refuses to expose wps7 on the LAN without `auth.password_hash` because the app provides browser access to PowerShell.
 
 To remove the startup shortcut, and any leftovers from an older service install:

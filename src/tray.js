@@ -5,6 +5,12 @@ const SysTrayModule = require('systray2');
 
 const SysTray = SysTrayModule.default || SysTrayModule;
 
+// A tray that survives this long was usable, so the next death is treated as
+// a fresh problem rather than part of a failing run.
+const TRAY_HEALTHY_MS = 30000;
+const TRAY_RESTART_DELAY_MS = 2000;
+const TRAY_RESTART_LIMIT = 5;
+
 function startTray({ root, url, save, openBrowser, restart, shutdown, log = () => {} }) {
   if (process.platform === 'win32') {
     return startWindowsNotifyIconTray({ root, url, save, openBrowser, restart, shutdown, log });
@@ -17,66 +23,94 @@ function startWindowsNotifyIconTray({ root, url, save, openBrowser, restart, shu
   fs.mkdirSync(trayDir, { recursive: true });
   const scriptPath = path.join(trayDir, 'wps7-notifyicon.ps1');
   fs.writeFileSync(scriptPath, windowsNotifyIconScript(), 'utf8');
+  const iconPath = realIconPath(root);
 
-  const child = spawn('powershell.exe', [
-    '-NoProfile',
-    '-STA',
-    '-ExecutionPolicy',
-    'Bypass',
-    '-File',
-    scriptPath,
-    '-IconPath',
-    realIconPath(root),
-    '-Root',
-    root,
-    '-Url',
-    url,
-    '-ServerPid',
-    String(process.pid)
-  ], {
-    windowsHide: true,
-    stdio: ['ignore', 'pipe', 'pipe']
-  });
+  let child = null;
+  let stopping = false;
+  let failures = 0;
+  let restartTimer = null;
 
-  let stdout = '';
-  child.stdout.on('data', (chunk) => {
-    stdout += chunk.toString('utf8');
-    const lines = stdout.split(/\r?\n/);
-    stdout = lines.pop() || '';
-    for (const line of lines) {
-      if (line === 'open') {
-        openBrowser(url);
-      } else if (line === 'save') {
-        save();
-      } else if (line === 'restart') {
-        restart();
-      } else if (line === 'exit') {
-        shutdown();
+  function launch() {
+    const startedAt = Date.now();
+    let stdout = '';
+    child = spawn('powershell.exe', [
+      '-NoProfile',
+      '-STA',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      scriptPath,
+      '-IconPath',
+      iconPath,
+      '-Root',
+      root,
+      '-Url',
+      url,
+      '-ServerPid',
+      String(process.pid)
+    ], {
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk.toString('utf8');
+      const lines = stdout.split(/\r?\n/);
+      stdout = lines.pop() || '';
+      for (const line of lines) {
+        if (line === 'open') {
+          openBrowser(url);
+        } else if (line === 'save') {
+          save();
+        } else if (line === 'restart') {
+          restart();
+        } else if (line === 'exit') {
+          shutdown();
+        }
       }
-    }
-  });
-  child.stderr.on('data', (chunk) => {
-    const message = chunk.toString('utf8').trim();
-    if (message) {
-      log(`stderr: ${message}`);
-    }
-  });
-  // Without a handler a failed spawn raises an unhandled 'error' event, which
-  // the fatal handler turns into an exit of the whole server.
-  child.on('error', (error) => {
-    log(`failed to start: ${error.message}`);
-  });
-  // Every exit is worth recording, including a clean one: the tray is meant to
-  // outlive everything except shutdown, so code 0 here still means the icon
-  // vanished while the server kept running.
-  child.on('exit', (code, signal) => {
-    log(`exited code=${code} signal=${signal || 'none'}`);
-  });
-  log(`started pid=${child.pid || 'unknown'}`);
+    });
+    child.stderr.on('data', (chunk) => {
+      const message = chunk.toString('utf8').trim();
+      if (message) {
+        log(`stderr: ${message}`);
+      }
+    });
+    // Without a handler a failed spawn raises an unhandled 'error' event, which
+    // the fatal handler turns into an exit of the whole server.
+    child.on('error', (error) => {
+      log(`failed to start: ${error.message}`);
+    });
+    child.on('exit', (code, signal) => {
+      log(`exited code=${code} signal=${signal || 'none'}`);
+      if (stopping) {
+        return;
+      }
+      // The icon is the only way into a server that has no console, so losing
+      // it strands the process. A tray that ran long enough to be usable starts
+      // the count over; one that keeps dying immediately is broken, and
+      // relaunching it forever would just spin.
+      failures = Date.now() - startedAt >= TRAY_HEALTHY_MS ? 1 : failures + 1;
+      if (failures > TRAY_RESTART_LIMIT) {
+        log(`not restarting after ${failures} failed starts`);
+        return;
+      }
+      log(`restarting in ${TRAY_RESTART_DELAY_MS}ms (attempt ${failures})`);
+      restartTimer = setTimeout(launch, TRAY_RESTART_DELAY_MS);
+      restartTimer.unref();
+    });
+    log(`started pid=${child.pid || 'unknown'}`);
+  }
+
+  launch();
 
   return {
     kill(exitNode = true) {
-      if (!child.killed) {
+      stopping = true;
+      if (restartTimer) {
+        clearTimeout(restartTimer);
+        restartTimer = null;
+      }
+      if (child && !child.killed) {
         child.kill();
       }
       if (exitNode) {
