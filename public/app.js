@@ -67,7 +67,8 @@
     theme: ({ dark: 'wps-dark', light: 'wps-light', custom: 'custom-dark' })[localStorage.getItem('wps7.theme')] || localStorage.getItem('wps7.theme') || 'wps-dark',
     customThemeDraft: null,
     whiteboards: new Map(),
-    focusedPaneId: ''
+    focusedPaneId: '',
+    paneFocusEscapeAt: 0
   };
 
   const app = document.getElementById('app');
@@ -4825,6 +4826,8 @@
     });
   }
 
+  const PANE_FOCUS_ESCAPE_MS = 500;
+
   function togglePaneFocus(paneId) {
     if (!paneId) {
       return;
@@ -4869,7 +4872,35 @@
     backdrop.className = 'pane-focus-backdrop';
     backdrop.setAttribute('data-pane-focus-backdrop', '');
     app.querySelector('.app')?.appendChild(backdrop);
+    state.paneFocusEscapeAt = 0;
+    document.addEventListener('keydown', paneFocusKeydown, true);
     setActivePane(paneId, paneElement.dataset.paneType !== 'files');
+  }
+
+  // Capture phase, so Escape leaves focus mode from every pane type instead of
+  // being swallowed by xterm or the whiteboard canvas. Rename fields and text
+  // inputs keep their own cancel meaning; xterm's helper textarea is neither.
+  // A focused terminal keeps its Escape key, which vim, less and PSReadLine all
+  // need, so there it takes a second Escape in quick succession to leave.
+  function paneFocusKeydown(event) {
+    if (event.key !== 'Escape') {
+      state.paneFocusEscapeAt = 0;
+      return;
+    }
+    if (event.target.closest?.('.inline-rename, input')) {
+      return;
+    }
+    const paneElement = document.querySelector(`[data-pane="${state.focusedPaneId}"]`);
+    if (paneElement?.dataset.paneType === 'terminal') {
+      const now = Date.now();
+      if (now - state.paneFocusEscapeAt > PANE_FOCUS_ESCAPE_MS) {
+        state.paneFocusEscapeAt = now;
+        return;
+      }
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    exitPaneFocus();
   }
 
   function exitPaneFocus() {
@@ -4882,6 +4913,7 @@
     paneElement?.style.removeProperty('--pane-focus-height');
     state.focusedPaneId = '';
     app.querySelector('[data-pane-focus-backdrop]')?.remove();
+    document.removeEventListener('keydown', paneFocusKeydown, true);
   }
 
   function closePaneFocusFromOutside(event) {
