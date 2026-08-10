@@ -1421,6 +1421,10 @@
 
   // Tabs keep a minimum width, so enough workspaces push the row past its own
   // edge. Scroll by the overhang only, which leaves an already visible tab put.
+  // The pinned controls at each end sit above the row, so a tab tucked under one
+  // is unreadable even though its box is inside the row: the brand button holds
+  // the left on mobile, the board scrollbar holds the right on desktop, and
+  // whichever is hidden for this layout measures zero.
   function ensureActiveWorkspaceTabVisible() {
     const tabs = app.querySelector('.tabs');
     const active = tabs?.querySelector('.tab.active');
@@ -1428,11 +1432,13 @@
       return;
     }
     const row = tabs.getBoundingClientRect();
+    const left = row.left + (tabs.querySelector('.mobile-actions')?.offsetWidth || 0);
+    const right = row.right - (tabs.querySelector('.board-hscroll')?.offsetWidth || 0);
     const tab = active.getBoundingClientRect();
-    if (tab.left < row.left) {
-      tabs.scrollLeft -= row.left - tab.left;
-    } else if (tab.right > row.right) {
-      tabs.scrollLeft += tab.right - row.right;
+    if (tab.left < left) {
+      tabs.scrollLeft -= left - tab.left;
+    } else if (tab.right > right) {
+      tabs.scrollLeft += tab.right - right;
     }
   }
 

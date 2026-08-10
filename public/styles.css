@@ -234,7 +234,10 @@ textarea {
 }
 
 /* Mirrors the board's horizontal scroll position; stands in for the native
-   scrollbar the tab bar now covers. */
+   scrollbar the tab bar now covers. Pinned to the right edge with an opaque
+   background, since enough tabs make the row itself scroll and this control
+   must not scroll away with them. It supplies the row's right padding too,
+   which a sticky child cannot claim from its container's content box. */
 .board-hscroll {
   display: flex;
   align-items: center;
@@ -243,7 +246,11 @@ textarea {
   min-width: 60px;
   max-width: 520px;
   margin-left: auto;
-  padding: 0 4px;
+  padding: 0 8px 0 4px;
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: var(--panel);
 }
 
 .board-hscroll-arrow {
@@ -3095,14 +3102,20 @@ textarea:focus-visible {
   background: var(--terminal-bg) !important;
 }
 
+/* No right padding: the pinned board scrollbar below carries that edge, because
+   a sticky child cannot sit outside its container's content box. */
 .tabs {
-  padding: 0 8px 4px;
+  padding: 0 0 4px 8px;
 }
 
+/* The floor keeps a tab readable. Without it flex shrinks every tab toward
+   zero, handing out the shrinkage in proportion to each tab's own width, so the
+   shortest name is stripped to a bare close button while the longest keeps its
+   room. Overflowing into the row's own horizontal scroll is the better answer. */
 .tab {
   height: var(--pane-toolbar-height);
   width: max-content;
-  min-width: 0;
+  min-width: 128px;
   max-width: 220px;
   flex: 0 1 auto;
   justify-content: flex-start;

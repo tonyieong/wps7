@@ -73,8 +73,9 @@ test('the sidebar shortcuts feature has been removed', () => {
 
 test('workspace tabs and terminal grid use the compact edge-to-edge layout', () => {
   assert.match(styles, /\.workspace\s*\{\s*grid-template-rows:\s*auto minmax\(0, 1fr\) 36px/);
-  assert.match(styles, /\.tabs\s*\{\s*padding:\s*0 8px 4px/);
-  assert.match(styles, /\.tab\s*\{[^}]*width:\s*max-content[^}]*min-width:\s*0[^}]*flex:\s*0 1 auto/s);
+  // The right padding moved onto the pinned board scrollbar; see the floor test.
+  assert.match(styles, /\.tabs\s*\{\s*padding:\s*0 0 4px 8px/);
+  assert.match(styles, /\.tab\s*\{[^}]*width:\s*max-content[^}]*min-width:\s*128px[^}]*flex:\s*0 1 auto/s);
   assert.match(styles, /\.pane-grid\s*\{[^}]*border:\s*0/s);
 });
 
@@ -111,8 +112,25 @@ test('mobile tabs keep a width floor and scroll instead of shrinking to a bare c
   assert.match(appSource, /function ensureActiveWorkspaceTabVisible\(\)/);
   assert.match(appSource, /ensureActivePaneVisible\('auto'\);\s*ensureActiveWorkspaceTabVisible\(\);/);
   const scroller = appSource.slice(appSource.indexOf('function ensureActiveWorkspaceTabVisible'), appSource.indexOf('function narrowViewport'));
-  assert.match(scroller, /tabs\.scrollLeft -= row\.left - tab\.left/);
-  assert.match(scroller, /tabs\.scrollLeft \+= tab\.right - row\.right/);
+  assert.match(scroller, /tabs\.scrollLeft -= left - tab\.left/);
+  assert.match(scroller, /tabs\.scrollLeft \+= tab\.right - right/);
+});
+
+test('desktop tabs keep the same width floor and pin the board scrollbar', () => {
+  // `.tab` declared min-width twice in one rule (132px then 0), and the later
+  // blocks repeated the mistake, so all three floors were dead and every tab
+  // could shrink to its close button.
+  assert.match(styles, /\.tab \{[^}]*width:\s*max-content;\s*min-width:\s*128px/s);
+  assert.doesNotMatch(styles, /\.tab \{[^}]*width:\s*max-content;\s*min-width:\s*0/s);
+  // The row scrolls once tabs stop shrinking, so the board scrollbar is pinned
+  // and carries the right edge a sticky child cannot take from padding.
+  assert.match(styles, /\.board-hscroll \{[^}]*padding:\s*0 8px 0 4px;\s*position:\s*sticky;\s*right:\s*0;[^}]*background:\s*var\(--panel\)/s);
+  assert.match(styles, /\.tabs \{\s*padding:\s*0 0 4px 8px;\s*\}/);
+  // A tab tucked under a pinned control is unreadable even though its box is
+  // inside the row, so both ends are discounted before scrolling.
+  const scroller = appSource.slice(appSource.indexOf('function ensureActiveWorkspaceTabVisible'), appSource.indexOf('function narrowViewport'));
+  assert.match(scroller, /const left = row\.left \+ \(tabs\.querySelector\('\.mobile-actions'\)\?\.offsetWidth \|\| 0\)/);
+  assert.match(scroller, /const right = row\.right - \(tabs\.querySelector\('\.board-hscroll'\)\?\.offsetWidth \|\| 0\)/);
 });
 
 test('the board always keeps a few empty columns past the rightmost pane', () => {
