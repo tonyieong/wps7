@@ -86,6 +86,16 @@ test('workspace tabs sit below the board, WPS-sheet style, with a scrollbar mirr
   assert.match(appSource, /data-board-hscroll-track[\s\S]*?data-board-hscroll-thumb/);
 });
 
+test('mobile moves the workspace tabs to the top of the screen and drops the board scrollbar', () => {
+  assert.match(styles, /\.app\.mode-mobile \.workspace,\s*\.app\.mobile-device \.workspace\s*\{[^}]*grid-template-rows:\s*42px auto minmax\(0, 1fr\)/s);
+  assert.match(styles, /\.app\.mode-mobile \.tabs,\s*\.app\.mobile-device \.tabs\s*\{[^}]*grid-row:\s*1/s);
+  assert.match(styles, /\.app\.mode-mobile \.pane-grid,\s*\.app\.mobile-device \.pane-grid\s*\{\s*grid-row:\s*3/s);
+  assert.match(styles, /\.app\.mode-mobile \.board-hscroll,\s*\.app\.mobile-device \.board-hscroll\s*\{[^}]*display:\s*none/s);
+  // The row moved above the board, so its border and the tab corners flip with it.
+  assert.match(styles, /\.app\.mode-mobile \.tabs,\s*\.app\.mobile-device \.tabs\s*\{[^}]*border-top:\s*0[^}]*border-bottom:\s*1px solid var\(--line\)/s);
+  assert.match(styles, /\.app\.mode-mobile \.tab,\s*\.app\.mobile-device \.tab\s*\{[^}]*border-radius:\s*8px 8px 0 0/s);
+});
+
 test('the board always keeps a few empty columns past the rightmost pane', () => {
   assert.match(appSource, /function boardExtent\(panes\)/);
   assert.match(appSource, /class="board-reserve"[^>]*grid-column:\s*\$\{boardExtent\(tab\.panes\) \+ BOARD_RESERVE_COLUMNS\}/);
@@ -505,6 +515,12 @@ test('sidebar can be pinned or used as a dismissible floating panel', () => {
   assert.match(styles, /\.sidebar-brand-row\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) auto/s);
 });
 
+test('a long workspace/pane name truncates instead of pushing the pin control off screen', () => {
+  // An implicit auto column would size the sidebar grid to its longest row.
+  assert.match(styles, /\.sidebar\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);
+  assert.match(styles, /\.session-item span\s*\{[^}]*min-width:\s*0[^}]*overflow:\s*hidden[^}]*text-overflow:\s*ellipsis[^}]*white-space:\s*nowrap/s);
+});
+
 test('sidebar creates a persistent usage pane with configurable providers', () => {
   assert.match(mainSource, /app\.get\('\/api\/usage', requireAuth\(config\)/);
   assert.match(mainSource, /app\.post\('\/api\/panes\/:paneId\/usage'/);
@@ -853,6 +869,20 @@ test('the pane kind icon drags the pane and still toggles focus mode on double c
   assert.match(source, /dragSurface\.addEventListener\('pointermove', onMove\)/);
   assert.match(source, /dragSurface\.addEventListener\('pointerup', onUp\)/);
   assert.match(appSource, /function wirePaneKindIcon\(root\)[\s\S]*?togglePaneFocus\(icon\.closest\('\[data-pane\]'\)\?\.dataset\.pane\)/);
+});
+
+test('Escape leaves focus mode from every pane type, but a terminal keeps its Escape key', () => {
+  // Capture phase, or xterm and the whiteboard canvas eat the key first.
+  assert.match(appSource, /function enterPaneFocus\(paneId\)[\s\S]*?document\.addEventListener\('keydown', paneFocusKeydown, true\)/);
+  assert.match(appSource, /function exitPaneFocus\(\)[\s\S]*?document\.removeEventListener\('keydown', paneFocusKeydown, true\)/);
+  const handler = appSource.slice(appSource.indexOf('function paneFocusKeydown'), appSource.indexOf('function exitPaneFocus'));
+  assert.match(handler, /event\.target\.closest\?\.\('\.inline-rename, input'\)/);
+  // vim, less and PSReadLine all need Escape, so a terminal takes two in a row.
+  assert.match(appSource, /const PANE_FOCUS_ESCAPE_MS = 500;/);
+  assert.match(handler, /paneElement\?\.dataset\.paneType === 'terminal'[\s\S]*?now - state\.paneFocusEscapeAt > PANE_FOCUS_ESCAPE_MS[\s\S]*?state\.paneFocusEscapeAt = now;\s*return;/);
+  // Any other key in between restarts the pair.
+  assert.match(handler, /event\.key !== 'Escape'\) \{\s*state\.paneFocusEscapeAt = 0;\s*return;/);
+  assert.match(handler, /event\.stopPropagation\(\);\s*exitPaneFocus\(\)/);
 });
 
 test('the whiteboard pane lazy-loads a fully offline Excalidraw', () => {
