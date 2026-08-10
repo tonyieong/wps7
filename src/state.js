@@ -17,6 +17,7 @@ const LEGACY_CELL_HEIGHT = 480;
 const PANE_TYPES = new Set(['terminal', 'files', 'browser', 'notepad', 'usage', 'whiteboard']);
 const MAX_WHITEBOARD_LENGTH = 5 * 1024 * 1024;
 const NOTEPAD_ENCODINGS = new Set(['utf8', 'utf8-bom', 'utf16le', 'utf16be', 'latin1']);
+const NOTEPAD_EOLS = new Set(['crlf', 'lf', 'cr']);
 const MAX_NOTEPAD_CONTENT_LENGTH = 10 * 1024 * 1024;
 
 function paneType(value) {
@@ -102,6 +103,9 @@ function notepadTab(value = {}) {
     path: pathValue,
     content: pathValue ? '' : String(value.content || '').slice(0, MAX_NOTEPAD_CONTENT_LENGTH),
     encoding: NOTEPAD_ENCODINGS.has(value.encoding) ? value.encoding : 'utf8',
+    eol: NOTEPAD_EOLS.has(value.eol) ? value.eol : 'crlf',
+    language: String(value.language || '').slice(0, 40),
+    readOnly: Boolean(value.readOnly),
     wrap: Boolean(value.wrap),
     indentGuides: Boolean(value.indentGuides),
     autosave: Boolean(value.autosave),
@@ -795,6 +799,13 @@ class StateStore {
     if (Object.prototype.hasOwnProperty.call(updates, 'encoding') && NOTEPAD_ENCODINGS.has(updates.encoding)) {
       tab.encoding = updates.encoding;
     }
+    if (Object.prototype.hasOwnProperty.call(updates, 'eol') && NOTEPAD_EOLS.has(updates.eol)) {
+      tab.eol = updates.eol;
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, 'language')) {
+      tab.language = String(updates.language || '').slice(0, 40);
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, 'readOnly')) tab.readOnly = Boolean(updates.readOnly);
     if (Object.prototype.hasOwnProperty.call(updates, 'wrap')) tab.wrap = Boolean(updates.wrap);
     if (Object.prototype.hasOwnProperty.call(updates, 'indentGuides')) tab.indentGuides = Boolean(updates.indentGuides);
     if (Object.prototype.hasOwnProperty.call(updates, 'autosave')) tab.autosave = Boolean(updates.autosave);

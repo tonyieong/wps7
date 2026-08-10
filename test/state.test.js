@@ -692,6 +692,32 @@ test('notepad autosave drafts and editor preferences persist without a file path
   assert.equal(clearedTab.autosave, false);
 });
 
+test('notepad tabs persist their line ending, language override, and read-only lock', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100, 4, 4);
+  store.load();
+  const firstPane = store.state.sessions[0].tabs[0].panes[0];
+  const notepad = store.createNotepadPane(firstPane.id, 'C:\\notes.md');
+  const tabId = notepad.activeNotepadTabId;
+
+  assert.equal(notepad.notepadTabs[0].eol, 'crlf');
+  assert.equal(notepad.notepadTabs[0].language, '');
+  assert.equal(notepad.notepadTabs[0].readOnly, false);
+
+  assert.equal(store.updateNotepadTab(notepad.id, tabId, {
+    eol: 'lf', language: 'markdown', readOnly: true
+  }), true);
+  // An unsupported line ending is ignored rather than corrupting the saved file.
+  assert.equal(store.updateNotepadTab(notepad.id, tabId, { eol: 'nel' }), true);
+
+  const restored = new StateStore(root, 100, 4, 4);
+  restored.load();
+  const restoredTab = restored.findPane(notepad.id).pane.notepadTabs[0];
+  assert.equal(restoredTab.eol, 'lf');
+  assert.equal(restoredTab.language, 'markdown');
+  assert.equal(restoredTab.readOnly, true);
+});
+
 test('legacy terminal pane mode is discarded', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
   const dataDir = path.join(root, 'data');

@@ -1579,6 +1579,12 @@ textarea {
   --shadow: rgba(0, 0, 0, 0.34);
   --terminal-bg: #06111b;
   --terminal-fg: #eef5f4;
+  --code-comment: #5c7385;
+  --code-string: #a8d98a;
+  --code-keyword: #7fb2ff;
+  --code-number: #f0a868;
+  --code-tag: #6ad6c0;
+  --code-attr: #d7a2f0;
   --ease-out: cubic-bezier(.23, 1, .32, 1);
   --dur-fast: 120ms;
   --dur-base: 180ms;
@@ -1604,6 +1610,12 @@ textarea {
   --shadow: rgba(31, 49, 61, 0.14);
   --terminal-bg: #ffffff;
   --terminal-fg: #17232d;
+  --code-comment: #6b7d8a;
+  --code-string: #2e7d32;
+  --code-keyword: #1a56c4;
+  --code-number: #a35200;
+  --code-tag: #0d806a;
+  --code-attr: #7b3fa0;
 }
 
 body {
@@ -4727,7 +4739,7 @@ a:focus-visible {
 
 .notepad-pane {
   position: relative;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   --notepad-divider: color-mix(in srgb, var(--text) 16%, var(--terminal-bg));
 }
 
@@ -4945,6 +4957,103 @@ a:focus-visible {
   white-space: nowrap;
 }
 
+.notepad-menu {
+  display: grid;
+  width: 214px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.notepad-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 22px;
+  text-align: left;
+}
+
+.notepad-menu kbd {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font: inherit;
+}
+
+.notepad-menu button[aria-checked="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.notepad-menu-separator {
+  height: 1px;
+  margin: 3px 4px;
+  background: var(--line);
+}
+
+.notepad-goto-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px;
+  gap: 3px;
+  padding: 2px;
+}
+
+.notepad-goto-row input {
+  width: 100%;
+  min-width: 0;
+  height: 22px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--surface-raised);
+  color: var(--text);
+  padding: 0 6px;
+  font: 10px "Cascadia Mono", Consolas, monospace;
+}
+
+.notepad-search-options {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.notepad-find-popover .notepad-search-option,
+.notepad-replace-popover .notepad-search-option {
+  width: auto;
+  min-width: 26px;
+  min-height: 22px;
+  padding: 0 5px;
+}
+
+.notepad-search-count {
+  margin-left: auto;
+  padding-right: 2px;
+  color: var(--muted);
+  font: 10px/1 "Cascadia Mono", Consolas, monospace;
+}
+
+.notepad-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 20px;
+  padding: 0 8px;
+  border-top: 1px solid var(--notepad-divider);
+  background: var(--surface-soft);
+  color: var(--muted);
+  font: 10px/1 "Cascadia Mono", Consolas, monospace;
+  overflow-x: auto;
+  scrollbar-width: none;
+  white-space: nowrap;
+}
+
+.notepad-status-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.notepad-status-bar span {
+  flex: 0 0 auto;
+}
+
 .notepad-find-popover,
 .notepad-replace-popover {
   top: 50%;
@@ -5124,6 +5233,7 @@ a:focus-visible {
 
 .notepad-gutter,
 .notepad-editor,
+.notepad-highlight,
 .notepad-indent-guides,
 .notepad-wrap-measure {
   height: 100%;
@@ -5140,19 +5250,73 @@ a:focus-visible {
   white-space: pre;
 }
 
+/* The textarea sits on top with transparent glyphs so the highlight layer below shows
+   through; the caret and the selection wash are the only marks it still paints. */
 .notepad-editor {
   position: relative;
   z-index: 2;
-  background: var(--terminal-bg);
+  background: transparent;
+  color: transparent;
+  caret-color: var(--text);
 }
 
-.notepad-editor-shell.wrap-on .notepad-editor {
+.notepad-editor-shell.highlight-off .notepad-editor {
+  color: var(--text);
+}
+
+.notepad-editor::selection {
+  background: color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
+.notepad-highlight {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  overflow: hidden;
+  background: transparent;
+  pointer-events: none;
+}
+
+.notepad-highlight code {
+  font: inherit;
+}
+
+.notepad-current-line {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 0;
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  pointer-events: none;
+}
+
+.code-comment { color: var(--code-comment); font-style: italic; }
+.code-string { color: var(--code-string); }
+.code-keyword { color: var(--code-keyword); }
+.code-number { color: var(--code-number); }
+.code-tag { color: var(--code-tag); }
+.code-attr { color: var(--code-attr); }
+
+.notepad-mark {
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--warn) 42%, transparent);
+}
+
+.notepad-mark.current {
+  background: color-mix(in srgb, var(--accent) 46%, transparent);
+}
+
+.notepad-bracket {
+  border-radius: 2px;
+  outline: 1px solid var(--accent);
+}
+
+.notepad-editor-shell.wrap-on .notepad-editor,
+.notepad-editor-shell.wrap-on .notepad-highlight {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-}
-
-.notepad-editor-shell.indent-guides-on .notepad-editor {
-  background: transparent;
 }
 
 .notepad-indent-guides,
@@ -5204,6 +5368,17 @@ a:focus-visible {
   color: var(--muted);
   text-align: right;
   user-select: none;
+}
+
+.notepad-gutter-line {
+  cursor: pointer;
+}
+
+.notepad-gutter-line.bookmarked {
+  border-radius: 2px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
 }
 
 .notepad-editor {

@@ -383,7 +383,7 @@ test('workspace exposes multi-tab notepad panes with line numbers and text-file 
   assert.match(appSource, /event\.target\.closest\('\.pane-close, button, input, \[data-browser-tab\], \[data-notepad-tab\], \[data-pane-tab\]'\)/);
   assert.match(appSource, /class="notepad-gutter"/);
   assert.match(appSource, /class="notepad-editor"/);
-  assert.match(appSource, /event\.ctrlKey && key === 's'/);
+  assert.match(appSource, /plainCtrl && !event\.shiftKey && key === 's'/);
   assert.match(appSource, /openNotepadForFile/);
   assert.match(appSource, /function addNotepadTab\(paneId, filePath = ''\)/);
   assert.match(appSource, /function closeNotepadTabClient\(paneId, tabId\)/);
@@ -1066,7 +1066,7 @@ test('Notepad uses compact popovers, four-space tabs, and synchronized wrapped r
   assert.match(appSource, /data-notepad-find-next[^>]*>\$\{fileActionIcon\('browser-forward'\)\}<\/button>/);
   assert.match(appSource, /data-notepad-replace-one[^>]*>\$\{fileActionIcon\('replace'\)\}<\/button>/);
   assert.match(appSource, /data-notepad-replace-all[^>]*>\$\{fileActionIcon\('replace-all'\)\}<\/button>/);
-  assert.match(appSource, /editor\.setRangeText\(' {4}', start, editor\.selectionEnd, 'end'\)/);
+  assert.match(appSource, /notepadEdit\(editor, editor\.selectionStart, editor\.selectionEnd, ' {4}'\)/);
   assert.match(appSource, /function syncNotepadRows\(paneElement, editor, gutter, guides\)/);
   assert.match(appSource, /function renderNotepadIndentGuides\(content/);
   assert.match(styles, /\.notepad-toolbar\s*\{[^}]*justify-content:\s*flex-start/s);
@@ -1170,8 +1170,133 @@ test('Notepad persists autosave drafts and editor toggles through the server sta
   assert.match(appSource, /if \(!tab\.path && silent\)/);
   assert.match(appSource, /content:\s*data\.content/);
   assert.match(mainSource, /req\.body\.content !== undefined/);
-  assert.match(mainSource, /\['wrap', 'indentGuides', 'autosave'\]/);
+  assert.match(mainSource, /\['readOnly', 'wrap', 'indentGuides', 'autosave'\]/);
   assert.match(mainSource, /req\.body\[key\] !== undefined/);
+});
+
+test('Notepad highlights syntax through an overlay under a transparent textarea', () => {
+  assert.match(appSource, /const notepadLanguages = \{/);
+  for (const language of ['clike', 'python', 'powershell', 'sql', 'css', 'markup', 'markdown', 'yaml']) {
+    assert.match(appSource, new RegExp(`\\n    ${language}: \\{`));
+  }
+  assert.match(appSource, /function notepadLanguageId\(tab, data\)/);
+  assert.match(appSource, /function notepadTokens\(text, spec\)/);
+  assert.match(appSource, /function notepadHighlightHtml\(text, spec, decorations = \[\]\)/);
+  assert.match(appSource, /const MAX_NOTEPAD_HIGHLIGHT_LENGTH = 400000/);
+  assert.match(appSource, /shell\.classList\.toggle\('highlight-off', disabled\)/);
+  assert.match(appSource, /<pre class="notepad-highlight"[^>]*><code data-notepad-highlight><\/code><\/pre>/);
+  // The overlay only shows through because the textarea paints no glyphs of its own.
+  assert.match(styles, /\.notepad-editor\s*\{[^}]*color:\s*transparent[^}]*caret-color:\s*var\(--text\)/s);
+  assert.match(styles, /\.notepad-editor-shell\.highlight-off \.notepad-editor\s*\{[^}]*color:\s*var\(--text\)/s);
+  assert.match(styles, /\.notepad-highlight\s*\{[^}]*position:\s*absolute[^}]*pointer-events:\s*none/s);
+  assert.match(styles, /\.notepad-editor-shell\.wrap-on \.notepad-editor,\s*\.notepad-editor-shell\.wrap-on \.notepad-highlight\s*\{[^}]*white-space:\s*pre-wrap/s);
+  for (const token of ['comment', 'string', 'keyword', 'number', 'tag', 'attr']) {
+    assert.match(styles, new RegExp(`:root\\s*\\{[^}]*--code-${token}:`, 's'));
+    assert.match(styles, new RegExp(`:root\\[data-theme="light"\\]\\s*\\{[^}]*--code-${token}:`, 's'));
+    assert.match(styles, new RegExp(`\\.code-${token} \\{ color: var\\(--code-${token}\\)`));
+  }
+});
+
+test('Notepad matches brackets and marks the caret line', () => {
+  assert.match(appSource, /function notepadBracketPartner\(text, index\)/);
+  assert.match(appSource, /function notepadBracketRanges\(text, caret\)/);
+  assert.match(appSource, /className: 'notepad-bracket'/);
+  assert.match(appSource, /function notepadAutoClose\(editor, event\)/);
+  assert.match(appSource, /function updateNotepadCurrentLine\(context\)/);
+  assert.match(appSource, /marker\.style\.top = `\$\{row\.offsetTop - gutter\.offsetTop - editor\.scrollTop\}px`/);
+  assert.match(styles, /\.notepad-bracket\s*\{[^}]*outline:\s*1px solid var\(--accent\)/s);
+  assert.match(styles, /\.notepad-current-line\s*\{[^}]*position:\s*absolute[^}]*pointer-events:\s*none/s);
+});
+
+test('Notepad search offers case, whole word, regex, wrap around, and mark all', () => {
+  assert.match(appSource, /function notepadSearchPattern\(options\)/);
+  assert.match(appSource, /if \(options\.wholeWord\) source = `\\\\b\(\?:\$\{source\}\)\\\\b`/);
+  assert.match(appSource, /options\.matchCase \? 'g' : 'gi'/);
+  assert.match(appSource, /if \(!options\.wrapAround\) return -1/);
+  assert.match(appSource, /function notepadMatches\(text, options\)/);
+  assert.match(appSource, /function updateNotepadSearchCount\(context\)/);
+  for (const option of ['matchCase', 'wholeWord', 'regex', 'wrapAround', 'markAll']) {
+    assert.match(appSource, new RegExp(`toggle\\('${option}',`));
+  }
+  assert.match(appSource, /data-notepad-search-option="\$\{key\}"/);
+  assert.match(appSource, /data-notepad-search-count/);
+  assert.match(appSource, /function notepadReplaceAll\(context\)/);
+  // Only regex mode may treat the replacement as a substitution template.
+  assert.match(appSource, /find\.regex \? find\.replace : find\.replace\.replaceAll\('\$', '\$\$\$\$'\)/);
+  assert.match(appSource, /const inSelection = editor\.selectionEnd > editor\.selectionStart/);
+  assert.match(styles, /\.notepad-mark\s*\{[^}]*background:\s*color-mix/s);
+  assert.match(styles, /\.notepad-mark\.current\s*\{/);
+});
+
+test('Notepad exposes Notepad++ line, case, sort, and undo commands', () => {
+  assert.match(appSource, /const notepadCommands = \{/);
+  for (const command of [
+    'duplicate-line', 'delete-line', 'move-line-up', 'move-line-down', 'upper-case', 'lower-case',
+    'toggle-comment', 'sort-ascending', 'sort-descending', 'remove-duplicates', 'trim-trailing',
+    'tabs-to-spaces', 'spaces-to-tabs'
+  ]) {
+    assert.match(appSource, new RegExp(`renderNotepadCommand\\('${command}',`));
+    assert.match(appSource, new RegExp(`'${command}': \\(`));
+  }
+  assert.match(appSource, /undo: \(\) => document\.execCommand\('undo'\)/);
+  assert.match(appSource, /redo: \(\) => document\.execCommand\('redo'\)/);
+  assert.match(appSource, /data-notepad-command="undo"/);
+  assert.match(appSource, /data-notepad-command="redo"/);
+  // Edits run through execCommand so the textarea's native undo stack survives them.
+  assert.match(appSource, /function notepadEdit\(editor, start, end, text, selectionStart, selectionEnd\)/);
+  assert.match(appSource, /text \? document\.execCommand\('insertText', false, text\) : document\.execCommand\('delete'\)/);
+  assert.doesNotMatch(appSource, /editor\.value = editor\.value\.split\(query\)/);
+  assert.match(appSource, /const NOTEPAD_SHORTCUTS = \{/);
+  assert.match(appSource, /function notepadIndentLines\(editor, outdent\)/);
+  assert.match(appSource, /function notepadToggleComment\(editor, spec\)/);
+  assert.match(styles, /\.notepad-menu\s*\{[^}]*overflow-y:\s*auto/s);
+  assert.match(styles, /\.notepad-menu button\[aria-checked="true"\]\s*\{/);
+});
+
+test('Notepad navigates by line number and bookmarks', () => {
+  assert.match(appSource, /function notepadGoToLine\(context, line\)/);
+  assert.match(appSource, /function notepadJumpBookmark\(context, backward\)/);
+  assert.match(appSource, /data-notepad-goto-input/);
+  for (const command of ['go-to-line', 'toggle-bookmark', 'next-bookmark', 'previous-bookmark', 'clear-bookmarks']) {
+    assert.match(appSource, new RegExp(`'${command}'`));
+  }
+  assert.match(appSource, /row\.className = bookmarks\.has\(index\) \? 'notepad-gutter-line bookmarked' : 'notepad-gutter-line'/);
+  assert.match(appSource, /if \(!data\.bookmarks\.delete\(line\)\) data\.bookmarks\.add\(line\)/);
+  assert.match(styles, /\.notepad-gutter-line\.bookmarked\s*\{[^}]*color:\s*var\(--accent\)/s);
+});
+
+test('Notepad reports and converts line endings, encoding, and language', () => {
+  assert.match(appSource, /function renderNotepadStatusBar\(data, languageId\)/);
+  for (const cell of ['language', 'length', 'caret', 'eol', 'encoding', 'mode']) {
+    assert.match(appSource, new RegExp(`data-notepad-status-${cell}`));
+  }
+  assert.match(appSource, /function updateNotepadStatusBar\(context\)/);
+  assert.match(appSource, /Ln \$\{rows\.length\}, Col \$\{rows\.at\(-1\)\.length \+ 1\}, Sel \$\{editor\.selectionEnd - editor\.selectionStart\}/);
+  assert.match(appSource, /const notepadEolLabels = \{ crlf: 'Windows \(CRLF\)', lf: 'Unix \(LF\)', cr: 'Macintosh \(CR\)' \}/);
+  assert.match(appSource, /function detectNotepadEol\(text\)/);
+  assert.match(appSource, /function applyNotepadEol\(text, eol\)/);
+  // A textarea normalizes newlines, so the file's own ending has to be restored on save.
+  assert.match(appSource, /content: result\.content\.replace\(\/\\r\\n\|\\r\|\\n\/g, '\\n'\)/);
+  assert.match(appSource, /eol: detectNotepadEol\(result\.content\)/);
+  assert.match(appSource, /content: applyNotepadEol\(data\.content, data\.eol\)/);
+  assert.match(appSource, /renderNotepadCommand\(`eol:\$\{value\}`/);
+  assert.match(appSource, /renderNotepadCommand\(`encoding:\$\{value\}`/);
+  assert.match(appSource, /renderNotepadCommand\(`language:\$\{id\}`/);
+  assert.match(mainSource, /\['crlf', 'lf', 'cr'\]\.includes\(req\.body\.eol\)/);
+  assert.match(mainSource, /Unsupported line ending\./);
+  assert.match(styles, /\.notepad-status-bar\s*\{[^}]*height:\s*20px/s);
+  assert.match(styles, /\.notepad-pane\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\) auto/s);
+});
+
+test('Notepad can reload, lock, and bulk close its file tabs', () => {
+  assert.match(appSource, /async function reloadNotepadTab\(paneId, tabId\)/);
+  assert.match(appSource, /if \(data\.dirty && !window\.confirm\('Discard unsaved changes and reload from disk\?'\)\) return/);
+  assert.match(appSource, /async function closeNotepadTabs\(paneId, keepTabId\)/);
+  assert.match(appSource, /'close-all': \(context\) => closeNotepadTabs\(context\.paneId, null\)/);
+  assert.match(appSource, /'close-others': \(context\) => closeNotepadTabs\(context\.paneId, context\.tabId\)/);
+  assert.match(appSource, /data\.readOnly \? 'readonly' : ''/);
+  assert.match(appSource, /renderNotepadCommand\('toggle-read-only', 'Read only', '', data\.readOnly\)/);
+  assert.match(appSource, /if \(data\.readOnly\) return;/);
 });
 
 test('all pane chrome shares a compact 28px toolbar language', () => {
