@@ -181,7 +181,6 @@ textarea {
 
 .tab {
   height: 36px;
-  min-width: 132px;
   max-width: 220px;
   border: 1px solid transparent;
   border-top: 0;
@@ -194,7 +193,6 @@ textarea {
   justify-content: space-between;
   gap: 8px;
   padding: 0 6px 0 12px;
-  min-width: 0;
   user-select: none;
 }
 
@@ -1803,7 +1801,6 @@ textarea:focus-visible {
 
 .tab {
   height: 38px;
-  min-width: 128px;
   padding: 0 8px 0 13px;
   border: 1px solid var(--line);
   border-top: 0;

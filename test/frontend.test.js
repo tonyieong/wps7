@@ -117,11 +117,13 @@ test('mobile tabs keep a width floor and scroll instead of shrinking to a bare c
 });
 
 test('desktop tabs keep the same width floor and pin the board scrollbar', () => {
-  // `.tab` declared min-width twice in one rule (132px then 0), and the later
-  // blocks repeated the mistake, so all three floors were dead and every tab
-  // could shrink to its close button.
+  // `.tab` used to declare min-width four times over: 132px and then 0 inside a
+  // single rule, 128px in the next block, 0 again in the last. Only the last one
+  // counted, so every tab could shrink to its close button. One floor survives.
   assert.match(styles, /\.tab \{[^}]*width:\s*max-content;\s*min-width:\s*128px/s);
   assert.doesNotMatch(styles, /\.tab \{[^}]*width:\s*max-content;\s*min-width:\s*0/s);
+  assert.doesNotMatch(styles, /\.tab \{[^}]*min-width:\s*132px/s);
+  assert.doesNotMatch(styles, /\.tab \{\s*height:\s*38px;\s*min-width/s);
   // The row scrolls once tabs stop shrinking, so the board scrollbar is pinned
   // and carries the right edge a sticky child cannot take from padding.
   assert.match(styles, /\.board-hscroll \{[^}]*padding:\s*0 8px 0 4px;\s*position:\s*sticky;\s*right:\s*0;[^}]*background:\s*var\(--panel\)/s);
