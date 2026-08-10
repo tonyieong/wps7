@@ -1124,10 +1124,6 @@ textarea {
     gap: 4px;
   }
 
-  .tab {
-    min-width: 96px;
-  }
-
   .toolbar {
     margin-left: 0;
   }
@@ -3146,12 +3142,14 @@ textarea:focus-visible {
   grid-template-rows: 42px auto minmax(0, 1fr);
 }
 
+/* No left padding: a sticky child cannot sit outside the content box, so the
+   pinned brand button below supplies that edge itself. */
 .app.mode-mobile .tabs,
 .app.mobile-device .tabs {
   grid-row: 1;
   border-top: 0;
   border-bottom: 1px solid var(--line);
-  padding: max(4px, env(safe-area-inset-top)) 8px 0;
+  padding: max(4px, env(safe-area-inset-top)) 8px 0 0;
 }
 
 .app.mode-mobile .desktop-mode-banner,
@@ -3174,6 +3172,28 @@ textarea:focus-visible {
   border-top: 1px solid var(--line);
   border-bottom: 0;
   border-radius: 8px 8px 0 0;
+}
+
+/* Without a floor every tab shrinks toward zero, and because flex hands out the
+   shrinkage in proportion to each tab's own width, the shortest name loses its
+   label first and is left as a bare close button. A floor makes the row overflow
+   instead, which is what its horizontal scroll was always there for. */
+.app.mode-mobile .tab:not(.tab-add),
+.app.mobile-device .tab:not(.tab-add) {
+  min-width: 96px;
+}
+
+/* Now that the row scrolls, the brand button has to be pinned: it is the only
+   way to open the sidebar on mobile, and it would otherwise scroll away. It
+   carries the row's left edge and an opaque background, so tabs pass behind it
+   rather than through the gap beside it. */
+.app.mode-mobile .mobile-actions,
+.app.mobile-device .mobile-actions {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  padding: 0 4px 0 8px;
+  background: var(--panel);
 }
 
 .app.mode-mobile .tab.active,

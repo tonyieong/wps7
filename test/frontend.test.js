@@ -96,6 +96,25 @@ test('mobile moves the workspace tabs to the top of the screen and drops the boa
   assert.match(styles, /\.app\.mode-mobile \.tab,\s*\.app\.mobile-device \.tab\s*\{[^}]*border-radius:\s*8px 8px 0 0/s);
 });
 
+test('mobile tabs keep a width floor and scroll instead of shrinking to a bare close button', () => {
+  // flex hands out shrinkage in proportion to width, so without a floor the
+  // shortest name — often the active one — loses its label first.
+  assert.match(styles, /\.app\.mode-mobile \.tab:not\(\.tab-add\),\s*\.app\.mobile-device \.tab:not\(\.tab-add\)\s*\{[^}]*min-width:\s*96px/s);
+  // The old floor lived in a media query that a later `.tab { min-width: 0 }`
+  // overrode, which is what made every tab shrinkable in the first place.
+  assert.doesNotMatch(styles, /@media \(max-width:\s*760px\)[\s\S]*?\n {2}\.tab \{\s*min-width:\s*96px;\s*\}/);
+  // The row scrolls now, so the only control that opens the sidebar is pinned,
+  // and it supplies the left edge a sticky child cannot claim from padding.
+  assert.match(styles, /\.app\.mode-mobile \.mobile-actions,\s*\.app\.mobile-device \.mobile-actions\s*\{[^}]*position:\s*sticky[^}]*left:\s*0[^}]*padding:\s*0 4px 0 8px[^}]*background:\s*var\(--panel\)/s);
+  assert.match(styles, /\.app\.mode-mobile \.tabs,\s*\.app\.mobile-device \.tabs\s*\{[^}]*padding:\s*max\(4px, env\(safe-area-inset-top\)\) 8px 0 0/s);
+  // A scrollable row can leave the active tab off screen after a re-render.
+  assert.match(appSource, /function ensureActiveWorkspaceTabVisible\(\)/);
+  assert.match(appSource, /ensureActivePaneVisible\('auto'\);\s*ensureActiveWorkspaceTabVisible\(\);/);
+  const scroller = appSource.slice(appSource.indexOf('function ensureActiveWorkspaceTabVisible'), appSource.indexOf('function narrowViewport'));
+  assert.match(scroller, /tabs\.scrollLeft -= row\.left - tab\.left/);
+  assert.match(scroller, /tabs\.scrollLeft \+= tab\.right - row\.right/);
+});
+
 test('the board always keeps a few empty columns past the rightmost pane', () => {
   assert.match(appSource, /function boardExtent\(panes\)/);
   assert.match(appSource, /class="board-reserve"[^>]*grid-column:\s*\$\{boardExtent\(tab\.panes\) \+ BOARD_RESERVE_COLUMNS\}/);
