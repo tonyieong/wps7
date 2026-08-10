@@ -1,3 +1,5 @@
+const path = require('path');
+const { fork } = require('child_process');
 const pty = require('@homebridge/node-pty-prebuilt-multiarch');
 const { Terminal: HeadlessTerminal } = require('@xterm/headless');
 const { SerializeAddon } = require('@xterm/addon-serialize');
@@ -6,6 +8,48 @@ const { normalizeCwd, shellEnv } = require('./shell');
 const OUTPUT_FLUSH_MS = 16;
 const DEFAULT_COLS = 100;
 const DEFAULT_ROWS = 30;
+const CONSOLE_LIST_AGENT = path.join(__dirname, 'console-process-list.js');
+const CONSOLE_LIST_TIMEOUT_MS = 3000;
+
+// A shell sitting at its prompt owns its console alone. Anything else attached
+// to that console is the command the user is still waiting on. The helper
+// attaches to the console itself, so it shows up in its own answer.
+function foregroundProcessIds(shellPid) {
+  return new Promise((resolve) => {
+    if (process.platform !== 'win32' || !shellPid) {
+      resolve([]);
+      return;
+    }
+    let agent = null;
+    let settled = false;
+    const finish = (pids) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      try {
+        agent?.kill();
+      } catch {
+        // The helper usually exited on its own already.
+      }
+      resolve(pids);
+    };
+    const timer = setTimeout(() => finish([]), CONSOLE_LIST_TIMEOUT_MS);
+    try {
+      agent = fork(CONSOLE_LIST_AGENT, [String(shellPid)], { stdio: 'ignore', windowsHide: true });
+    } catch {
+      finish([]);
+      return;
+    }
+    agent.on('message', (message) => {
+      const pids = Array.isArray(message?.pids) ? message.pids : [];
+      finish(pids.filter((pid) => pid !== shellPid && pid !== agent.pid));
+    });
+    agent.on('error', () => finish([]));
+    agent.on('exit', () => finish([]));
+  });
+}
 
 function buildPtySpawnOptions({ cols, rows, cwd, env }) {
   return {
@@ -292,6 +336,24 @@ class TerminalManager {
     });
   }
 
+  // Closing a pane kills every shell in it, so the pane asks first which of its
+  // tabs still has a command running.
+  async busyTerminalTabs(paneId) {
+    const found = this.store.findPane(paneId);
+    if (!found || found.pane.type !== 'terminal') {
+      return [];
+    }
+    const checked = await Promise.all((found.pane.terminalTabs || []).map(async (tab) => {
+      const runtime = this.processes.get(tab.id);
+      if (!runtime || runtime.status !== 'running') {
+        return null;
+      }
+      const running = await foregroundProcessIds(runtime.proc?.pid);
+      return running.length ? { id: tab.id, title: tab.title } : null;
+    }));
+    return checked.filter(Boolean);
+  }
+
   getPaneStatus(paneId) {
     const found = this.store.findPane(paneId);
     if (!found || found.pane.type !== 'terminal') {
@@ -343,6 +405,7 @@ class TerminalManager {
 module.exports = {
   buildPtySpawnOptions,
   createOutputSender,
+  foregroundProcessIds,
   writeHeadless,
   TerminalManager
 };

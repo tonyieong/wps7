@@ -2,6 +2,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
+const vm = require('node:vm');
+const { Terminal: HeadlessTerminal } = require('@xterm/headless');
 
 const appSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
 const styles = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
@@ -638,8 +640,13 @@ test('mobile keybar can be configured, reordered and extended from server-synced
   assert.match(appSource, /PowerShell shortcut buttons/);
 });
 
-test('terminal hides the overlay scrollbar so it never covers the rightmost column', () => {
-  assert.match(styles, /\.terminal \.xterm-scrollable-element > \.scrollbar\s*\{[^}]*display:\s*none !important/s);
+test('terminal keeps its vertical scrollbar and themes the slider', () => {
+  // The fit addon reserves the gutter, so only the unused horizontal bar is hidden.
+  assert.match(styles, /\.terminal \.xterm-scrollable-element > \.scrollbar\.horizontal\s*\{[^}]*display:\s*none !important/s);
+  assert.doesNotMatch(styles, /\.terminal \.xterm-scrollable-element > \.scrollbar\s*\{/);
+  assert.match(appSource, /scrollbarSliderBackground: hexToRgba\(palette\.accent/);
+  assert.match(appSource, /scrollbarSliderHoverBackground: hexToRgba\(palette\.accent/);
+  assert.match(appSource, /scrollbarSliderActiveBackground: hexToRgba\(palette\.accent/);
 });
 
 test('keybar editor shows a live preview and validates each row without silently dropping buttons', () => {
@@ -1342,12 +1349,80 @@ test('terminal pane exposes copy, paste, select all and clear without copy-on-se
   assert.match(appSource, /function openTerminalContextMenu\(terminalTabId, clientX, clientY\)/);
   assert.match(appSource, /element\.addEventListener\('contextmenu'[\s\S]*?openTerminalContextMenu\(terminalTabId, event\.clientX, event\.clientY\)/);
   // Copy reads the xterm buffer, so wrapped lines and row padding never reach the clipboard.
-  assert.match(appSource, /function copyTerminalSelection\(terminalTabId\)[\s\S]*?term\?\.getSelection\(\)/);
+  assert.match(appSource, /function copyTerminalSelection\(terminalTabId\)[\s\S]*?terminalSelectionText\(term\)/);
   assert.match(appSource, /function pasteTerminalText\(terminalTabId\)[\s\S]*?navigator\.clipboard\.readText\(\)/);
   assert.match(appSource, /function selectAllTerminal\(terminalTabId\)[\s\S]*?term\.selectAll\(\)/);
   assert.match(appSource, /function clearTerminal\(terminalTabId\)[\s\S]*?term\.clear\(\)/);
   assert.match(styles, /\.terminal-context-menu\s*\{[^}]*position:\s*fixed/s);
   assert.doesNotMatch(appSource, /copyOnSelect|onSelectionChange/);
+});
+
+// The copy helpers only read an xterm buffer, so they can run against a headless
+// terminal instead of a browser.
+function loadTerminalSelectionText() {
+  const start = appSource.indexOf('  function terminalRowIsFull(term, line) {');
+  const end = appSource.indexOf('  function copyTerminalSelection(terminalTabId) {');
+  assert.ok(start >= 0 && end > start, 'copy helpers not found in app.js');
+  const context = vm.createContext({});
+  vm.runInContext(appSource.slice(start, end), context);
+  return context.terminalSelectionText;
+}
+
+function writeHeadless(term, data) {
+  return new Promise((resolve) => term.write(data, resolve));
+}
+
+function selectionView(term, range) {
+  return { cols: term.cols, buffer: term.buffer, getSelectionPosition: () => range };
+}
+
+test('copying a wrapped terminal line keeps it on one line', async () => {
+  const terminalSelectionText = loadTerminalSelectionText();
+  const term = new HeadlessTerminal({ allowProposedApi: true, cols: 20, rows: 10 });
+  const long = 'abcdefghij'.repeat(5);
+
+  await writeHeadless(term, `${long}\r\nshort\r\n`);
+
+  const text = terminalSelectionText(selectionView(term, { start: { x: 0, y: 0 }, end: { x: 5, y: 3 } }));
+  assert.deepEqual(text.split('\r\n'), [long, 'short']);
+});
+
+test('copying joins a full row ConPTY repainted without the wrap flag', async () => {
+  const terminalSelectionText = loadTerminalSelectionText();
+  const term = new HeadlessTerminal({ allowProposedApi: true, cols: 20, rows: 10 });
+
+  // ConPTY fills the row and then issues its own CRLF, so the second row never
+  // gets the wrap flag even though the text belongs to the line above it.
+  await writeHeadless(term, `${'x'.repeat(20)}\r\ntail\r\n`);
+  assert.equal(term.buffer.active.getLine(1).isWrapped, false);
+
+  const text = terminalSelectionText(selectionView(term, { start: { x: 0, y: 0 }, end: { x: 4, y: 1 } }));
+  assert.equal(text, `${'x'.repeat(20)}tail`);
+});
+
+test('copying keeps separate lines apart when the row above has room left', async () => {
+  const terminalSelectionText = loadTerminalSelectionText();
+  const term = new HeadlessTerminal({ allowProposedApi: true, cols: 20, rows: 10 });
+
+  await writeHeadless(term, 'first\r\nsecond\r\n');
+
+  const text = terminalSelectionText(selectionView(term, { start: { x: 0, y: 0 }, end: { x: 6, y: 1 } }));
+  assert.deepEqual(text.split('\r\n'), ['first', 'second']);
+});
+
+test('a renamed terminal tab is pinned and stops following the shell title', () => {
+  assert.match(appSource, /JSON\.stringify\(\{ processTitle: nextTitle \}\)/);
+  assert.match(appSource, /if \(!nextTitle \|\| !tab \|\| tab\.titlePinned \|\| tab\.title === nextTitle\)/);
+  assert.match(appSource, /tab\.titlePinned = true;/);
+  assert.match(mainSource, /store\.setTerminalTabProcessTitle\(req\.params\.paneId, req\.params\.tabId, req\.body\.processTitle\)/);
+});
+
+test('closing a pane warns about terminals that are still running a command', () => {
+  assert.match(appSource, /async function confirmBusyTerminals\(pane\)/);
+  assert.match(appSource, /\/api\/panes\/\$\{pane\.id\}\/terminal\/busy/);
+  assert.match(appSource, /if \(!await confirmBusyTerminals\(found\.pane\)\)/);
+  assert.match(appSource, /is still running a command/);
+  assert.match(mainSource, /app\.get\('\/api\/panes\/:paneId\/terminal\/busy'/);
 });
 
 test('terminal shortcuts use Ctrl+Shift so Ctrl+C still interrupts the shell', () => {

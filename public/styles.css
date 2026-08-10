@@ -656,8 +656,10 @@ textarea {
   height: 0;
 }
 
-/* Hide the xterm overlay scrollbar so it never covers the rightmost column. */
-.terminal .xterm-scrollable-element > .scrollbar {
+/* The fit addon already keeps a gutter for the vertical bar, so showing it
+   costs no terminal column. Only the horizontal bar, which xterm never
+   scrolls, stays hidden. */
+.terminal .xterm-scrollable-element > .scrollbar.horizontal {
   display: none !important;
 }
 

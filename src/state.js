@@ -61,6 +61,8 @@ function terminalTab(value = {}, fallback = {}) {
   return {
     id: value.id || crypto.randomUUID(),
     title: String(value.title || fallback.title || 'PowerShell').slice(0, 160),
+    // A name the user typed outranks the title the shell keeps announcing.
+    titlePinned: Boolean(value.titlePinned),
     cwd: String(value.cwd || fallback.cwd || '')
   };
 }
@@ -604,6 +606,22 @@ class StateStore {
       : null;
     if (!tab || !nextTitle) return false;
     tab.title = nextTitle.slice(0, 160);
+    tab.titlePinned = true;
+    this.save();
+    return true;
+  }
+
+  // PowerShell and the tools running inside it announce a title on almost every
+  // prompt, usually the cwd. That stream is the tab's name only until the user
+  // renames the tab; after that the pinned name wins.
+  setTerminalTabProcessTitle(paneId, tabId, title) {
+    const nextTitle = String(title || '').trim();
+    const found = this.findPane(paneId);
+    const tab = found?.pane.type === 'terminal'
+      ? found.pane.terminalTabs.find((candidate) => candidate.id === tabId)
+      : null;
+    if (!tab || !nextTitle || tab.titlePinned) return false;
+    tab.title = nextTitle.slice(0, 160);
     this.save();
     return true;
   }
@@ -617,7 +635,11 @@ class StateStore {
     let replacement = null;
     if (found.pane.terminalTabs.length === 1) {
       replacement = {
-        ...terminalTab({ title: found.pane.terminalTabs[0].title, cwd: found.pane.cwd }),
+        ...terminalTab({
+          title: found.pane.terminalTabs[0].title,
+          titlePinned: found.pane.terminalTabs[0].titlePinned,
+          cwd: found.pane.cwd
+        }),
         scrollback: []
       };
       found.pane.terminalTabs[0] = replacement;
