@@ -1039,12 +1039,34 @@ function main() {
     res.json({ ok: true });
   });
 
+  // Two different senders reach this route: the user renaming a tab, and the
+  // shell announcing its own title. Only the first one pins the name.
   app.patch('/api/panes/:paneId/terminal/tabs/:tabId', requireAuth(config), (req, res) => {
-    if (!store.renameTerminalTab(req.params.paneId, req.params.tabId, req.body.title)) {
+    const found = store.findTerminalTab(req.params.tabId);
+    if (!found || found.pane.id !== req.params.paneId) {
       res.status(404).json({ error: 'Terminal tab not found.' });
       return;
     }
-    res.json({ ok: true });
+    const applied = typeof req.body.processTitle === 'string'
+      ? store.setTerminalTabProcessTitle(req.params.paneId, req.params.tabId, req.body.processTitle)
+      : store.renameTerminalTab(req.params.paneId, req.params.tabId, req.body.title);
+    res.json({ ok: true, applied, title: found.terminalTab.title, titlePinned: Boolean(found.terminalTab.titlePinned) });
+  });
+
+  app.get('/api/panes/:paneId/terminal/busy', requireAuth(config), async (req, res) => {
+    const found = store.findPane(req.params.paneId);
+    if (!found || found.pane.type !== 'terminal') {
+      res.status(404).json({ error: 'Terminal pane not found.' });
+      return;
+    }
+    let busy = [];
+    try {
+      busy = await terminalManager.busyTerminalTabs(req.params.paneId);
+    } catch (error) {
+      // A probe that fails must not stop the pane from closing.
+      appendRuntimeLog(root, `terminal busy check failed for ${req.params.paneId}: ${error.message}`);
+    }
+    res.json({ busy });
   });
 
   app.delete('/api/panes/:paneId/terminal/tabs/:tabId', requireAuth(config), (req, res) => {

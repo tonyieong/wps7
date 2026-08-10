@@ -6,7 +6,13 @@ const path = require('node:path');
 const { Terminal: HeadlessTerminal } = require('@xterm/headless');
 const { SerializeAddon } = require('@xterm/addon-serialize');
 const { StateStore } = require('../src/state');
-const { buildPtySpawnOptions, createOutputSender, TerminalManager } = require('../src/terminal');
+const { buildPtySpawnOptions, createOutputSender, foregroundProcessIds, TerminalManager } = require('../src/terminal');
+
+const windowsOnly = { skip: process.platform !== 'win32' ? 'ConPTY is Windows only' : false };
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function createHeadlessRuntime() {
   const headless = new HeadlessTerminal({ allowProposedApi: true, cols: 100, rows: 30, scrollback: 2000 });
@@ -165,6 +171,78 @@ test('output sender coalesces terminal chunks', async () => {
 
   assert.equal(sent.length, 1);
   assert.deepEqual(sent[0], { type: 'output', data: 'abc' });
+});
+
+test('a pane with no live shell reports nothing running', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'));
+  const store = new StateStore(root, 10);
+  store.load();
+  const pane = store.state.sessions[0].tabs[0].panes[0];
+  const filesPane = store.createFilesPane(pane.id, 'C:\\');
+  const manager = new TerminalManager({
+    config: {},
+    root,
+    store,
+    shell: { command: 'powershell.exe', args: [] }
+  });
+
+  // No runtime has been created for the tab yet, so nothing can be running.
+  assert.deepEqual(await manager.busyTerminalTabs(pane.id), []);
+  assert.deepEqual(await manager.busyTerminalTabs(filesPane.id), []);
+  assert.deepEqual(await manager.busyTerminalTabs('missing-pane'), []);
+});
+
+test('an exited runtime is never reported as running', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'));
+  const store = new StateStore(root, 10);
+  store.load();
+  const pane = store.state.sessions[0].tabs[0].panes[0];
+  const manager = new TerminalManager({
+    config: {},
+    root,
+    store,
+    shell: { command: 'powershell.exe', args: [] }
+  });
+
+  const runtime = createHeadlessRuntime();
+  runtime.status = 'exited';
+  runtime.proc.pid = 1;
+  manager.processes.set(pane.activeTerminalTabId, runtime);
+
+  assert.deepEqual(await manager.busyTerminalTabs(pane.id), []);
+});
+
+test('a console with no such shell reports no foreground process', async () => {
+  assert.deepEqual(await foregroundProcessIds(0), []);
+  // 0xffff is above the Windows pid range used in practice, so nothing attaches.
+  assert.deepEqual(await foregroundProcessIds(0xffffff), []);
+});
+
+test('a shell tells an idle prompt from a running command', windowsOnly, async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'));
+  const store = new StateStore(root, 10);
+  store.load();
+  const pane = store.state.sessions[0].tabs[0].panes[0];
+  const manager = new TerminalManager({
+    config: {},
+    root,
+    store,
+    shell: { command: 'powershell.exe', args: ['-NoLogo', '-NoExit'] }
+  });
+
+  const runtime = manager.getOrCreate(pane.activeTerminalTabId);
+  runtime.proc.onData(() => {});
+  await wait(2500);
+  assert.deepEqual(await manager.busyTerminalTabs(pane.id), []);
+
+  runtime.proc.write('ping -n 8 127.0.0.1\r');
+  await wait(2000);
+  const busy = await manager.busyTerminalTabs(pane.id);
+  assert.equal(busy.length, 1);
+  assert.equal(busy[0].id, pane.activeTerminalTabId);
+  assert.equal(busy[0].title, pane.terminalTabs[0].title);
+
+  manager.shutdown();
 });
 
 test('terminal status does not expose a separate history API', () => {

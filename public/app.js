@@ -315,24 +315,32 @@
     return true;
   }
 
+  // The shell announces a title on nearly every prompt, usually its cwd. That is
+  // the tab's name only while the user has not chosen one; a manual rename pins
+  // the tab and this stream stops touching it.
   function updatePaneTitleFromTerminal(paneId, terminalTabId, title) {
     const nextTitle = String(title || '').replace(/[\x00-\x1f\x7f]/g, '').trim().slice(0, 80);
     const found = findPaneState(paneId);
     const tab = found?.pane.terminalTabs?.find((candidate) => candidate.id === terminalTabId);
-    if (!nextTitle || !tab || tab.title === nextTitle) {
+    if (!nextTitle || !tab || tab.titlePinned || tab.title === nextTitle) {
       return;
     }
     window.clearTimeout(state.terminalTitleTimers.get(terminalTabId));
     state.terminalTitleTimers.set(terminalTabId, window.setTimeout(async () => {
       state.terminalTitleTimers.delete(terminalTabId);
       try {
-        await api(`/api/panes/${paneId}/terminal/tabs/${terminalTabId}`, {
+        const result = await api(`/api/panes/${paneId}/terminal/tabs/${terminalTabId}`, {
           method: 'PATCH',
-          body: JSON.stringify({ title: nextTitle })
+          body: JSON.stringify({ processTitle: nextTitle })
         });
         const current = findPaneState(paneId);
         const currentTab = current?.pane.terminalTabs?.find((candidate) => candidate.id === terminalTabId);
         if (!currentTab) {
+          return;
+        }
+        if (!result.applied) {
+          // The tab was pinned elsewhere; keep the name the server still holds.
+          currentTab.titlePinned = true;
           return;
         }
         currentTab.title = nextTitle;
@@ -586,6 +594,9 @@
       foreground: palette.terminalFg,
       cursor: palette.accent,
       selectionBackground: hexToRgba(palette.accent, .28),
+      scrollbarSliderBackground: hexToRgba(palette.accent, .3),
+      scrollbarSliderHoverBackground: hexToRgba(palette.accent, .45),
+      scrollbarSliderActiveBackground: hexToRgba(palette.accent, .62),
       black: palette.mode === 'light' ? palette.text : '#111111',
       brightBlack: palette.muted,
       red: palette.danger,
@@ -2955,6 +2966,10 @@
             method: 'PATCH', body: JSON.stringify({ title })
           });
           tab.title = title;
+          // A typed name outranks whatever the shell announces from now on.
+          tab.titlePinned = true;
+          window.clearTimeout(state.terminalTitleTimers.get(tabId));
+          state.terminalTitleTimers.delete(tabId);
         } catch (error) {
           showToast(error.message);
         }
@@ -5020,12 +5035,40 @@
     }
   }
 
+  // Closing a pane kills every shell in it, so a tab that is still running a
+  // command gets to object first. A probe that fails never blocks the close.
+  async function confirmBusyTerminals(pane) {
+    if (pane.type !== 'terminal') {
+      return true;
+    }
+    let busy;
+    try {
+      busy = (await api(`/api/panes/${pane.id}/terminal/busy`)).busy || [];
+    } catch (error) {
+      return true;
+    }
+    if (!busy.length) {
+      return true;
+    }
+    const names = busy.map((tab) => tab.title).join(', ');
+    return confirmDialog(
+      'Close pane',
+      busy.length === 1
+        ? `${names} is still running a command. Closing the pane stops it.`
+        : `${names} are still running commands. Closing the pane stops them.`,
+      { danger: true, confirmLabel: 'Close pane' }
+    );
+  }
+
   async function closePane(paneId) {
     if (!paneId) {
       return;
     }
     const found = findPaneState(paneId);
     if (!found) {
+      return;
+    }
+    if (!await confirmBusyTerminals(found.pane)) {
       return;
     }
 
@@ -6016,11 +6059,53 @@
     }
   }
 
+  // A row that runs all the way to the last column was broken by the terminal,
+  // not by the program that wrote it. ConPTY repaints such rows without the
+  // wrap flag xterm sets for its own wrapping, so the flag alone is not enough
+  // to tell a real newline from a display break.
+  function terminalRowIsFull(term, line) {
+    if (!line) {
+      return false;
+    }
+    const last = line.getCell(term.cols - 1);
+    // The tail half of a double width character carries no text of its own.
+    const cell = last && last.getWidth() === 0 ? line.getCell(term.cols - 2) : last;
+    const chars = cell?.getChars() || '';
+    return chars !== '' && chars !== ' ';
+  }
+
   // Reading the xterm buffer instead of the DOM keeps wrapped lines joined and
   // drops the padding spaces the renderer adds to fill each row.
+  function terminalSelectionText(term) {
+    const range = term.getSelectionPosition();
+    if (!range) {
+      return '';
+    }
+    const buffer = term.buffer.active;
+    const lines = [];
+    for (let y = range.start.y; y <= range.end.y; y += 1) {
+      const line = buffer.getLine(y);
+      if (!line) {
+        continue;
+      }
+      const startX = y === range.start.y ? range.start.x : 0;
+      const endX = y === range.end.y ? range.end.x : term.cols;
+      const text = line.translateToString(true, startX, endX);
+      const continuesPreviousRow = lines.length > 0
+        && startX === 0
+        && (line.isWrapped || terminalRowIsFull(term, buffer.getLine(y - 1)));
+      if (continuesPreviousRow) {
+        lines[lines.length - 1] += text;
+      } else {
+        lines.push(text);
+      }
+    }
+    return lines.join('\r\n');
+  }
+
   function copyTerminalSelection(terminalTabId) {
     const term = state.terminals.get(terminalTabId)?.term;
-    const text = term?.getSelection() || '';
+    const text = term ? terminalSelectionText(term) : '';
     if (!text) {
       showToast('No text selected.');
       return;

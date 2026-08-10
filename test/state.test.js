@@ -493,7 +493,9 @@ test('terminal panes persist multiple tabs and their active tab', () => {
   assert.equal(pane.activeTerminalTabId, secondTab.id);
   assert.equal(secondTab.title, 'PowerShell 2');
   assert.equal(secondTab.cwd, pane.cwd);
+  assert.equal(secondTab.titlePinned, false);
   assert.equal(store.renameTerminalTab(pane.id, secondTab.id, 'Build'), true);
+  assert.equal(secondTab.titlePinned, true);
   assert.equal(store.activateTerminalTab(pane.id, pane.terminalTabs[0].id), true);
   store.save();
 
@@ -515,6 +517,41 @@ test('terminal panes persist multiple tabs and their active tab', () => {
   assert.notEqual(replacement.id, lastId);
   assert.equal(restoredPane.activeTerminalTabId, replacement.id);
   assert.equal(restored.closeTerminalTab(pane.id, 'missing-tab'), null);
+});
+
+test('a renamed terminal tab keeps its name while the shell keeps announcing titles', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100);
+  store.load();
+  const pane = store.state.sessions[0].tabs[0].panes[0];
+  const tab = pane.terminalTabs[0];
+
+  // Until the user picks a name, the shell's own title is the tab's name.
+  assert.equal(store.setTerminalTabProcessTitle(pane.id, tab.id, 'C:\\Users\\Admin'), true);
+  assert.equal(tab.title, 'C:\\Users\\Admin');
+  assert.equal(tab.titlePinned, false);
+
+  assert.equal(store.renameTerminalTab(pane.id, tab.id, 'Build'), true);
+  assert.equal(tab.titlePinned, true);
+
+  assert.equal(store.setTerminalTabProcessTitle(pane.id, tab.id, 'C:\\Windows'), false);
+  assert.equal(tab.title, 'Build');
+
+  // Restarting the shell by closing the last tab keeps the pinned name.
+  const { replacement } = store.closeTerminalTab(pane.id, tab.id);
+  assert.equal(replacement.title, 'Build');
+  assert.equal(replacement.titlePinned, true);
+
+  store.save();
+  const restored = new StateStore(root, 100);
+  restored.load();
+  const restoredTab = restored.findPane(pane.id).pane.terminalTabs[0];
+  assert.equal(restoredTab.title, 'Build');
+  assert.equal(restoredTab.titlePinned, true);
+  assert.equal(restored.setTerminalTabProcessTitle(pane.id, restoredTab.id, 'C:\\Temp'), false);
+
+  assert.equal(store.setTerminalTabProcessTitle(pane.id, 'missing-tab', 'Ignored'), false);
+  assert.equal(store.setTerminalTabProcessTitle(pane.id, replacement.id, '   '), false);
 });
 
 test('files panes persist multiple tabs and follow the active tab path', () => {
