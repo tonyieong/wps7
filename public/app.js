@@ -1412,9 +1412,27 @@
 
     wireControls();
     ensureActivePaneVisible('auto');
+    ensureActiveWorkspaceTabVisible();
     updateDesktopModeBanner();
     for (const pane of tab.panes) {
       mountPaneContent(pane);
+    }
+  }
+
+  // Tabs keep a minimum width, so enough workspaces push the row past its own
+  // edge. Scroll by the overhang only, which leaves an already visible tab put.
+  function ensureActiveWorkspaceTabVisible() {
+    const tabs = app.querySelector('.tabs');
+    const active = tabs?.querySelector('.tab.active');
+    if (!active) {
+      return;
+    }
+    const row = tabs.getBoundingClientRect();
+    const tab = active.getBoundingClientRect();
+    if (tab.left < row.left) {
+      tabs.scrollLeft -= row.left - tab.left;
+    } else if (tab.right > row.right) {
+      tabs.scrollLeft += tab.right - row.right;
     }
   }
 
