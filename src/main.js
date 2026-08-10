@@ -1199,7 +1199,17 @@ function main() {
       }
       updates.encoding = req.body.encoding;
     }
-    for (const key of ['wrap', 'indentGuides', 'autosave']) {
+    if (req.body.eol !== undefined) {
+      if (!['crlf', 'lf', 'cr'].includes(req.body.eol)) {
+        res.status(400).json({ error: 'Unsupported line ending.' });
+        return;
+      }
+      updates.eol = req.body.eol;
+    }
+    if (req.body.language !== undefined) {
+      updates.language = String(req.body.language || '').slice(0, 40);
+    }
+    for (const key of ['readOnly', 'wrap', 'indentGuides', 'autosave']) {
       if (req.body[key] !== undefined) {
         if (typeof req.body[key] !== 'boolean') {
           res.status(400).json({ error: `${key} must be a boolean.` });

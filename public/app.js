@@ -521,13 +521,13 @@
     if (notepadFontSizeValue) notepadFontSizeValue.textContent = nextSize;
     const notepadFontSizeOutput = paneElement.querySelector('[data-notepad-font-size-output]');
     if (notepadFontSizeOutput) notepadFontSizeOutput.textContent = nextSize;
-    const notepadEditor = paneElement.querySelector('.notepad-editor');
-    if (notepadEditor) {
+    const notepadPane = paneElement.querySelector('.notepad-pane');
+    if (notepadPane) {
       syncNotepadRows(
-        paneElement,
-        notepadEditor,
-        paneElement.querySelector('.notepad-gutter'),
-        paneElement.querySelector('.notepad-indent-guides')
+        notepadPane,
+        notepadPane.querySelector('.notepad-editor'),
+        notepadPane.querySelector('.notepad-gutter'),
+        notepadPane.querySelector('.notepad-indent-guides')
       );
     }
     window.clearTimeout(state.paneFontSizeTimers.get(paneId));
@@ -795,6 +795,10 @@
     indent: '<path d="M4 4v16M9 4v16M4 8h5M4 16h5"/>',
     autosave: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/>',
     font: '<path d="M6 20 11 4h2l5 16M8 14h8"/>',
+    undo: '<path d="M4 9h11a5 5 0 0 1 0 10h-6"/><path d="m8 5-4 4 4 4"/>',
+    redo: '<path d="M20 9H9a5 5 0 0 0 0 10h6"/><path d="m16 5 4 4-4 4"/>',
+    bookmark: '<path d="M7 3h10v18l-5-4-5 4z"/>',
+    lock: '<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
     line: '<path d="M4 20 20 4"/>',
     text: '<path d="M5 7V4h14v3M12 4v16M9 20h6"/>'
   };
@@ -1060,6 +1064,282 @@
     { label: 'Lucida Console', value: '"Lucida Console", monospace' }
   ];
 
+  // Highlight rules are scanned as a single alternation, so every pattern must use
+  // non-capturing groups: the matched group index maps back to the rule's class.
+  const notepadLanguages = {
+    plain: { label: 'Plain text', extensions: ['txt', 'log'] },
+    clike: {
+      label: 'C-like',
+      extensions: ['js', 'mjs', 'cjs', 'jsx', 'ts', 'tsx', 'json', 'c', 'h', 'cpp', 'hpp', 'cc', 'cs', 'java', 'go', 'rs', 'php', 'swift', 'kt', 'dart', 'scala'],
+      line: '//',
+      rules: [
+        ['comment', '//[^\\n]*'],
+        ['comment', '/\\*[\\s\\S]*?(?:\\*/|$)'],
+        ['string', '"(?:\\\\.|[^"\\\\\\n])*"'],
+        ['string', "'(?:\\\\.|[^'\\\\\\n])*'"],
+        ['string', '`(?:\\\\.|[^`\\\\])*`'],
+        ['keyword', '\\b(?:abstract|as|async|await|bool|break|byte|case|catch|char|class|const|continue|debugger|default|defer|delete|do|double|else|enum|export|extends|extern|false|final|finally|float|fn|for|foreach|from|func|function|get|goto|if|impl|implements|import|in|instanceof|int|interface|internal|is|let|lock|long|match|mod|module|mut|namespace|new|null|nullptr|of|operator|override|package|private|protected|public|pub|readonly|ref|return|sealed|set|short|sizeof|static|string|struct|super|switch|this|throw|throws|trait|true|try|type|typedef|typeof|union|unsafe|use|using|var|virtual|void|volatile|when|where|while|with|yield)\\b'],
+        ['number', '\\b(?:0[xXbBoO][\\da-fA-F_]+|\\d[\\d_]*(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)\\b']
+      ]
+    },
+    python: {
+      label: 'Python',
+      extensions: ['py', 'pyw', 'rb'],
+      line: '#',
+      rules: [
+        ['comment', '#[^\\n]*'],
+        ['string', '(?:"""[\\s\\S]*?(?:"""|$)|\'\'\'[\\s\\S]*?(?:\'\'\'|$))'],
+        ['string', '"(?:\\\\.|[^"\\\\\\n])*"'],
+        ['string', "'(?:\\\\.|[^'\\\\\\n])*'"],
+        ['keyword', '\\b(?:and|as|assert|async|await|begin|break|class|continue|def|del|elif|else|end|except|False|finally|for|from|global|if|import|in|is|lambda|module|next|None|nonlocal|not|or|pass|raise|require|return|self|True|try|unless|until|while|with|yield)\\b'],
+        ['number', '\\b(?:0[xXbBoO][\\da-fA-F_]+|\\d[\\d_]*(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)\\b']
+      ]
+    },
+    shell: {
+      label: 'Shell',
+      extensions: ['sh', 'bash', 'zsh', 'bashrc', 'profile'],
+      line: '#',
+      rules: [
+        ['comment', '#[^\\n]*'],
+        ['string', '"(?:\\\\.|[^"\\\\])*"'],
+        ['string', "'[^']*'"],
+        ['keyword', '\\b(?:case|do|done|elif|else|esac|export|fi|for|function|if|in|local|readonly|return|select|then|until|while)\\b'],
+        ['attr', '\\$(?:\\{[^}]*\\}|[A-Za-z_]\\w*)'],
+        ['number', '\\b\\d+\\b']
+      ]
+    },
+    powershell: {
+      label: 'PowerShell',
+      extensions: ['ps1', 'psm1', 'psd1'],
+      line: '#',
+      rules: [
+        ['comment', '<#[\\s\\S]*?(?:#>|$)'],
+        ['comment', '#[^\\n]*'],
+        ['string', '"(?:`.|[^"`])*"'],
+        ['string', "'[^']*'"],
+        ['keyword', '\\b(?:begin|break|catch|continue|do|dynamicparam|else|elseif|end|exit|filter|finally|for|foreach|function|if|in|param|process|return|switch|throw|trap|try|until|while)\\b'],
+        ['attr', '\\$(?:\\{[^}]*\\}|[A-Za-z_][\\w:]*)'],
+        ['number', '\\b\\d+(?:\\.\\d+)?\\b']
+      ]
+    },
+    sql: {
+      label: 'SQL',
+      extensions: ['sql'],
+      line: '--',
+      flags: 'gi',
+      rules: [
+        ['comment', '--[^\\n]*'],
+        ['comment', '/\\*[\\s\\S]*?(?:\\*/|$)'],
+        ['string', "'(?:''|[^'])*'"],
+        ['keyword', '\\b(?:add|all|alter|and|as|asc|begin|between|by|case|cast|column|commit|constraint|create|cross|delete|desc|distinct|drop|else|end|exists|foreign|from|full|group|having|in|index|inner|insert|into|is|join|key|left|like|limit|not|null|on|or|order|outer|primary|references|right|rollback|select|set|table|then|top|union|unique|update|values|view|when|where|with)\\b'],
+        ['number', '\\b\\d+(?:\\.\\d+)?\\b']
+      ]
+    },
+    css: {
+      label: 'CSS',
+      extensions: ['css', 'scss', 'sass', 'less'],
+      line: '//',
+      rules: [
+        ['comment', '/\\*[\\s\\S]*?(?:\\*/|$)'],
+        ['string', '"(?:\\\\.|[^"\\\\\\n])*"'],
+        ['string', "'(?:\\\\.|[^'\\\\\\n])*'"],
+        ['keyword', '@[\\w-]+'],
+        ['attr', '[.#][A-Za-z_][\\w-]*'],
+        ['number', '(?:#[\\da-fA-F]{3,8}\\b|\\b\\d+(?:\\.\\d+)?(?:px|em|rem|%|vh|vw|s|ms|deg|fr|ch)?\\b)']
+      ]
+    },
+    markup: {
+      label: 'HTML / XML',
+      extensions: ['html', 'htm', 'xhtml', 'xml', 'svg', 'vue', 'xaml', 'csproj'],
+      block: ['<!--', '-->'],
+      rules: [
+        ['comment', '<!--[\\s\\S]*?(?:-->|$)'],
+        ['tag', '</?[A-Za-z][\\w:.-]*'],
+        ['tag', '/?>'],
+        ['string', '"[^"]*"'],
+        ['string', "'[^']*'"],
+        ['attr', '[A-Za-z_:][\\w:.-]*(?=\\s*=)']
+      ]
+    },
+    markdown: {
+      label: 'Markdown',
+      extensions: ['md', 'markdown'],
+      flags: 'gm',
+      rules: [
+        ['comment', '^(?:>[^\\n]*)'],
+        ['string', '(?:```[\\s\\S]*?(?:```|$)|`[^`\\n]+`)'],
+        ['keyword', '^#{1,6} [^\\n]*'],
+        ['tag', '(?:\\*\\*[^*\\n]+\\*\\*|__[^_\\n]+__)'],
+        ['attr', '\\[[^\\]\\n]*\\]\\([^)\\n]*\\)'],
+        ['number', '^\\s*(?:[-*+]|\\d+\\.)(?= )']
+      ]
+    },
+    ini: {
+      label: 'INI / TOML',
+      extensions: ['ini', 'toml', 'cfg', 'conf', 'properties', 'env', 'gitconfig', 'editorconfig'],
+      line: '#',
+      flags: 'gm',
+      rules: [
+        ['comment', '(?:#|;)[^\\n]*'],
+        ['string', '"[^"\\n]*"'],
+        ['string', "'[^'\\n]*'"],
+        ['keyword', '^\\s*\\[[^\\]\\n]*\\]'],
+        ['attr', '^\\s*[\\w.-]+(?=\\s*=)'],
+        ['number', '\\b(?:true|false|\\d+(?:\\.\\d+)?)\\b']
+      ]
+    },
+    yaml: {
+      label: 'YAML',
+      extensions: ['yml', 'yaml'],
+      line: '#',
+      flags: 'gm',
+      rules: [
+        ['comment', '#[^\\n]*'],
+        ['string', '(?:"[^"\\n]*"|\'[^\'\\n]*\')'],
+        ['attr', '^\\s*(?:- )?[\\w.$-]+(?=\\s*:)'],
+        ['keyword', '\\b(?:true|false|null|yes|no|on|off)\\b'],
+        ['number', '\\b\\d+(?:\\.\\d+)?\\b']
+      ]
+    }
+  };
+
+  const notepadLanguageByExtension = new Map();
+  for (const [id, spec] of Object.entries(notepadLanguages)) {
+    for (const extension of spec.extensions || []) notepadLanguageByExtension.set(extension, id);
+  }
+
+  // Very large buffers are left unhighlighted so typing never stalls on a repaint.
+  const MAX_NOTEPAD_HIGHLIGHT_LENGTH = 400000;
+  const MAX_NOTEPAD_MATCHES = 5000;
+
+  function notepadLanguageId(tab, data) {
+    if (data?.language) return data.language;
+    const name = String(tab?.path || '').split(/[\\/]/).pop() || '';
+    const extension = name.includes('.') ? name.split('.').pop().toLowerCase() : name.toLowerCase();
+    return notepadLanguageByExtension.get(extension) || 'plain';
+  }
+
+  function notepadTokens(text, spec) {
+    if (!spec?.rules) return [];
+    if (!spec.pattern) {
+      spec.pattern = new RegExp(spec.rules.map(([, source]) => `(${source})`).join('|'), spec.flags || 'g');
+    }
+    const pattern = spec.pattern;
+    pattern.lastIndex = 0;
+    const tokens = [];
+    let match = pattern.exec(text);
+    while (match) {
+      const index = match.slice(1).findIndex((value) => value !== undefined);
+      if (index !== -1 && match[0]) {
+        tokens.push({ start: match.index, end: match.index + match[0].length, className: `code-${spec.rules[index][0]}` });
+      }
+      if (pattern.lastIndex === match.index) pattern.lastIndex += 1;
+      match = pattern.exec(text);
+    }
+    return tokens;
+  }
+
+  // Tokens and decorations are both sorted, so the segments between their boundaries
+  // can be emitted in one pass instead of re-scanning per character.
+  function notepadHighlightHtml(text, spec, decorations = []) {
+    const tokens = notepadTokens(text, spec);
+    const marks = decorations.slice().sort((a, b) => a.start - b.start);
+    const points = new Set([0, text.length]);
+    for (const token of tokens) points.add(token.start).add(token.end);
+    for (const mark of marks) points.add(mark.start).add(mark.end);
+    const cuts = Array.from(points).filter((point) => point >= 0 && point <= text.length).sort((a, b) => a - b);
+    let html = '';
+    let tokenIndex = 0;
+    let markIndex = 0;
+    for (let i = 0; i < cuts.length - 1; i += 1) {
+      const start = cuts[i];
+      while (tokenIndex < tokens.length && tokens[tokenIndex].end <= start) tokenIndex += 1;
+      while (markIndex < marks.length && marks[markIndex].end <= start) markIndex += 1;
+      const token = tokens[tokenIndex]?.start <= start ? tokens[tokenIndex] : null;
+      const mark = marks[markIndex]?.start <= start ? marks[markIndex] : null;
+      const className = [token?.className, mark?.className].filter(Boolean).join(' ');
+      const body = escapeHtml(text.slice(start, cuts[i + 1]));
+      html += className ? `<span class="${className}">${body}</span>` : body;
+    }
+    // A trailing newline is dropped when a <pre> is rendered, so re-add the row the textarea keeps.
+    return `${html}\n`;
+  }
+
+  function notepadSearchPattern(options) {
+    if (!options.query) return null;
+    let source = options.regex ? options.query : options.query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (options.wholeWord) source = `\\b(?:${source})\\b`;
+    try {
+      return new RegExp(source, options.matchCase ? 'g' : 'gi');
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function notepadMatches(text, options) {
+    const pattern = notepadSearchPattern(options);
+    if (!pattern) return [];
+    const matches = [];
+    let match = pattern.exec(text);
+    while (match && matches.length < MAX_NOTEPAD_MATCHES) {
+      if (match[0]) matches.push({ start: match.index, end: match.index + match[0].length });
+      if (pattern.lastIndex === match.index) pattern.lastIndex += 1;
+      match = pattern.exec(text);
+    }
+    return matches;
+  }
+
+  const NOTEPAD_BRACKETS = { '(': ')', '[': ']', '{': '}' };
+
+  // Counts nesting outward from the bracket under the caret; `partner` is the character
+  // that closes it, searched forwards for an opener and backwards for a closer.
+  function notepadBracketPartner(text, index) {
+    const char = text[index];
+    const forward = Boolean(NOTEPAD_BRACKETS[char]);
+    const partner = forward
+      ? NOTEPAD_BRACKETS[char]
+      : Object.keys(NOTEPAD_BRACKETS).find((key) => NOTEPAD_BRACKETS[key] === char);
+    if (!partner) return null;
+    const step = forward ? 1 : -1;
+    let depth = 0;
+    for (let i = index; i >= 0 && i < text.length; i += step) {
+      if (text[i] === char) depth += 1;
+      else if (text[i] === partner && (depth -= 1) === 0) return i;
+    }
+    return null;
+  }
+
+  function notepadBracketRanges(text, caret) {
+    for (const index of [caret, caret - 1]) {
+      if (index < 0 || index >= text.length) continue;
+      const partner = notepadBracketPartner(text, index);
+      if (partner === null) continue;
+      return [
+        { start: index, end: index + 1, className: 'notepad-bracket' },
+        { start: partner, end: partner + 1, className: 'notepad-bracket' }
+      ];
+    }
+    return [];
+  }
+
+  const notepadEolLabels = { crlf: 'Windows (CRLF)', lf: 'Unix (LF)', cr: 'Macintosh (CR)' };
+  const notepadEncodingLabels = {
+    utf8: 'UTF-8', 'utf8-bom': 'UTF-8-BOM', utf16le: 'UTF-16 LE', utf16be: 'UTF-16 BE', latin1: 'ANSI'
+  };
+
+  function detectNotepadEol(text) {
+    if (/\r\n/.test(text)) return 'crlf';
+    if (/\n/.test(text)) return 'lf';
+    if (/\r/.test(text)) return 'cr';
+    return 'crlf';
+  }
+
+  function applyNotepadEol(text, eol) {
+    const body = String(text).replace(/\r\n|\r|\n/g, '\n');
+    if (eol === 'lf') return body;
+    return body.replaceAll('\n', eol === 'cr' ? '\r' : '\r\n');
+  }
+
   function findNotepadTab(tabId) {
     for (const session of state.sessions) {
       for (const tab of session.tabs || []) {
@@ -1078,7 +1358,10 @@
       state.notepadTabData[tabId] = {
         content: tab?.content || '', encoding: tab?.encoding || 'utf8', dirty: false, loadedPath: '', error: '',
         wrap: Boolean(tab?.wrap), indentGuides: Boolean(tab?.indentGuides),
-        autosave: Boolean(tab?.autosave), fontFamily: tab?.fontFamily || ''
+        autosave: Boolean(tab?.autosave), fontFamily: tab?.fontFamily || '',
+        eol: tab?.eol || 'crlf', language: tab?.language || '', readOnly: Boolean(tab?.readOnly),
+        bookmarks: new Set(),
+        find: { query: '', replace: '', matchCase: false, wholeWord: false, regex: false, wrapAround: true, markAll: true }
       };
     }
     return state.notepadTabData[tabId];
@@ -1128,16 +1411,108 @@
       <button class="notepad-new-tab" type="button" data-notepad-new-tab aria-label="New file" title="New file (Ctrl+N)">${fileActionIcon('add')}</button>`;
   }
 
+  function renderNotepadCommand(command, label, hint = '', checked = null) {
+    const role = checked === null ? '' : ` role="menuitemradio" aria-checked="${checked}"`;
+    return `<button type="button" data-notepad-command="${command}"${role}><span>${escapeHtml(label)}</span>${hint ? `<kbd>${escapeHtml(hint)}</kbd>` : ''}</button>`;
+  }
+
+  const NOTEPAD_MENU_SEPARATOR = '<div class="notepad-menu-separator" role="separator"></div>';
+
+  function renderNotepadEditMenu() {
+    return [
+      renderNotepadCommand('duplicate-line', 'Duplicate line', 'Ctrl+D'),
+      renderNotepadCommand('delete-line', 'Delete line', 'Ctrl+L'),
+      renderNotepadCommand('move-line-up', 'Move line up', 'Ctrl+Shift+Up'),
+      renderNotepadCommand('move-line-down', 'Move line down', 'Ctrl+Shift+Down'),
+      NOTEPAD_MENU_SEPARATOR,
+      renderNotepadCommand('upper-case', 'UPPERCASE', 'Ctrl+Shift+U'),
+      renderNotepadCommand('lower-case', 'lowercase', 'Ctrl+U'),
+      renderNotepadCommand('toggle-comment', 'Toggle comment', 'Ctrl+Q'),
+      NOTEPAD_MENU_SEPARATOR,
+      renderNotepadCommand('sort-ascending', 'Sort lines ascending'),
+      renderNotepadCommand('sort-descending', 'Sort lines descending'),
+      renderNotepadCommand('remove-duplicates', 'Remove duplicate lines'),
+      NOTEPAD_MENU_SEPARATOR,
+      renderNotepadCommand('trim-trailing', 'Trim trailing space'),
+      renderNotepadCommand('tabs-to-spaces', 'Tabs to spaces'),
+      renderNotepadCommand('spaces-to-tabs', 'Spaces to tabs')
+    ].join('');
+  }
+
+  function renderNotepadSearchMenu() {
+    return `
+      <div class="notepad-goto-row">
+        <input type="number" min="1" step="1" data-notepad-goto-input placeholder="Line" aria-label="Go to line">
+        <button type="button" data-notepad-command="go-to-line">Go</button>
+      </div>
+      ${NOTEPAD_MENU_SEPARATOR}
+      ${renderNotepadCommand('toggle-bookmark', 'Toggle bookmark', 'Ctrl+F2')}
+      ${renderNotepadCommand('next-bookmark', 'Next bookmark', 'F2')}
+      ${renderNotepadCommand('previous-bookmark', 'Previous bookmark', 'Shift+F2')}
+      ${renderNotepadCommand('clear-bookmarks', 'Clear bookmarks')}`;
+  }
+
+  function renderNotepadDocumentMenu(data, languageId) {
+    return [
+      Object.entries(notepadEolLabels)
+        .map(([value, label]) => renderNotepadCommand(`eol:${value}`, label, '', data.eol === value))
+        .join(''),
+      NOTEPAD_MENU_SEPARATOR,
+      Object.entries(notepadEncodingLabels)
+        .map(([value, label]) => renderNotepadCommand(`encoding:${value}`, label, '', data.encoding === value))
+        .join(''),
+      NOTEPAD_MENU_SEPARATOR,
+      renderNotepadCommand('language:', 'Language: auto', '', !data.language),
+      Object.entries(notepadLanguages)
+        .map(([id, spec]) => renderNotepadCommand(`language:${id}`, spec.label, '', data.language === id || (!data.language && languageId === id)))
+        .join(''),
+      NOTEPAD_MENU_SEPARATOR,
+      renderNotepadCommand('reload', 'Reload from disk'),
+      renderNotepadCommand('toggle-read-only', 'Read only', '', data.readOnly),
+      NOTEPAD_MENU_SEPARATOR,
+      renderNotepadCommand('close-others', 'Close other tabs'),
+      renderNotepadCommand('close-all', 'Close all tabs')
+    ].join('');
+  }
+
+  function renderNotepadSearchOptions(find) {
+    const toggle = (key, label, title) => `<button type="button" class="notepad-search-option" data-notepad-search-option="${key}" aria-pressed="${Boolean(find[key])}" aria-label="${escapeAttr(title)}" title="${escapeAttr(title)}">${label}</button>`;
+    return `
+      <div class="notepad-search-options" data-notepad-search-options>
+        ${toggle('matchCase', 'Aa', 'Match case')}
+        ${toggle('wholeWord', 'W', 'Whole word only')}
+        ${toggle('regex', '.*', 'Regular expression')}
+        ${toggle('wrapAround', '↻', 'Wrap around')}
+        ${toggle('markAll', '≡', 'Highlight all matches')}
+        <output class="notepad-search-count" data-notepad-search-count>0 of 0</output>
+      </div>`;
+  }
+
+  function renderNotepadStatusBar(data, languageId) {
+    return `
+      <div class="notepad-status-bar" data-notepad-status-bar>
+        <span data-notepad-status-language>${escapeHtml(notepadLanguages[languageId]?.label || 'Plain text')}</span>
+        <span data-notepad-status-length>length: ${data.content.length}  lines: ${lineCount(data.content)}</span>
+        <span data-notepad-status-caret>Ln 1, Col 1, Sel 0</span>
+        <span data-notepad-status-eol>${escapeHtml(notepadEolLabels[data.eol] || notepadEolLabels.crlf)}</span>
+        <span data-notepad-status-encoding>${escapeHtml(notepadEncodingLabels[data.encoding] || 'UTF-8')}</span>
+        <span data-notepad-status-mode>${data.readOnly ? 'Read only' : 'INS'}</span>
+      </div>`;
+  }
+
   function renderNotepadPane(pane) {
     const tab = notepadActiveTab(pane);
     const data = notepadTabData(tab.id);
     const fontFamily = data.fontFamily || notepadFontOptions[0].value;
+    const languageId = notepadLanguageId(tab, data);
     return `
       <div class="notepad-pane" data-notepad-pane="${pane.id}" data-notepad-active-tab="${tab.id}">
         <div class="notepad-toolbar" data-paged-toolbar>
           ${renderToolbarPageButton('previous')}
           <button class="file-command-button" type="button" data-toolbar-item data-notepad-new aria-label="New file" title="New file (Ctrl+N)">${fileActionIcon('add')}</button>
           <button class="file-command-button" type="button" data-toolbar-item data-notepad-save aria-label="Save" title="Save (Ctrl+S)">${fileActionIcon('save')}</button>
+          <button class="file-command-button" type="button" data-toolbar-item data-notepad-command="undo" aria-label="Undo" title="Undo (Ctrl+Z)">${fileActionIcon('undo')}</button>
+          <button class="file-command-button" type="button" data-toolbar-item data-notepad-command="redo" aria-label="Redo" title="Redo (Ctrl+Y)">${fileActionIcon('redo')}</button>
           <div class="notepad-popover-control" data-toolbar-item>
             <button class="file-command-button" type="button" data-notepad-font-toggle aria-label="Font" aria-expanded="false" title="Font">${fileActionIcon('font')}</button>
             <div class="notepad-popover notepad-font-popover" data-notepad-font-popover role="dialog" aria-label="Choose font" hidden>
@@ -1163,9 +1538,10 @@
                 <span class="notepad-popover-title">Find</span>
                 <button type="button" class="notepad-popover-close" data-notepad-popover-close aria-label="Close find">×</button>
               </div>
-              <input type="text" data-notepad-find-input placeholder="Find" aria-label="Find">
+              <input type="text" data-notepad-find-input placeholder="Find" aria-label="Find" value="${escapeAttr(data.find.query)}">
               <button type="button" data-notepad-find-prev aria-label="Previous match" title="Previous match">${fileActionIcon('browser-back')}</button>
               <button type="button" data-notepad-find-next aria-label="Next match" title="Next match">${fileActionIcon('browser-forward')}</button>
+              ${renderNotepadSearchOptions(data.find)}
             </div>
           </div>
           <div class="notepad-popover-control notepad-replace-control" data-toolbar-item>
@@ -1175,28 +1551,44 @@
                 <span class="notepad-popover-title">Replace</span>
                 <button type="button" class="notepad-popover-close" data-notepad-popover-close aria-label="Close replace">×</button>
               </div>
-              <input type="text" data-notepad-replace-find-input placeholder="Find" aria-label="Find">
+              <input type="text" data-notepad-replace-find-input placeholder="Find" aria-label="Find" value="${escapeAttr(data.find.query)}">
               <button type="button" data-notepad-replace-prev aria-label="Previous match" title="Previous match">${fileActionIcon('browser-back')}</button>
               <button type="button" data-notepad-replace-next aria-label="Next match" title="Next match">${fileActionIcon('browser-forward')}</button>
-              <input type="text" data-notepad-replace-input placeholder="Replace" aria-label="Replace">
+              <input type="text" data-notepad-replace-input placeholder="Replace" aria-label="Replace" value="${escapeAttr(data.find.replace)}">
               <button type="button" data-notepad-replace-one aria-label="Replace" title="Replace">${fileActionIcon('replace')}</button>
-              <button type="button" data-notepad-replace-all aria-label="Replace all" title="Replace all">${fileActionIcon('replace-all')}</button>
+              <button type="button" data-notepad-replace-all aria-label="Replace all" title="Replace all (Ctrl+Alt+Enter)">${fileActionIcon('replace-all')}</button>
+              ${renderNotepadSearchOptions(data.find)}
             </div>
+          </div>
+          <div class="notepad-popover-control" data-toolbar-item>
+            <button class="file-command-button" type="button" data-notepad-edit-menu-toggle aria-label="Edit commands" aria-expanded="false" title="Edit commands">${fileActionIcon('rename')}</button>
+            <div class="notepad-popover notepad-menu" data-notepad-edit-menu role="menu" aria-label="Edit commands" hidden>${renderNotepadEditMenu()}</div>
+          </div>
+          <div class="notepad-popover-control" data-toolbar-item>
+            <button class="file-command-button" type="button" data-notepad-search-menu-toggle aria-label="Go to line and bookmarks" aria-expanded="false" title="Go to line and bookmarks (Ctrl+G)">${fileActionIcon('bookmark')}</button>
+            <div class="notepad-popover notepad-menu" data-notepad-search-menu role="menu" aria-label="Go to line and bookmarks" hidden>${renderNotepadSearchMenu()}</div>
+          </div>
+          <div class="notepad-popover-control" data-toolbar-item>
+            <button class="file-command-button" type="button" data-notepad-document-menu-toggle aria-label="Document" aria-expanded="false" title="Line endings, encoding, and language">${fileActionIcon('file')}</button>
+            <div class="notepad-popover notepad-menu" data-notepad-document-menu role="menu" aria-label="Document" hidden>${renderNotepadDocumentMenu(data, languageId)}</div>
           </div>
           <button class="file-command-button ${data.wrap ? 'active' : ''}" type="button" data-toolbar-item data-notepad-wrap aria-label="Word wrap" aria-pressed="${data.wrap}" title="Word wrap">${fileActionIcon('wrap')}</button>
           <button class="file-command-button ${data.indentGuides ? 'active' : ''}" type="button" data-toolbar-item data-notepad-indent aria-label="Indent guides" aria-pressed="${data.indentGuides}" title="Indent guides">${fileActionIcon('indent')}</button>
           <button class="file-command-button ${data.autosave ? 'active' : ''}" type="button" data-toolbar-item data-notepad-autosave aria-label="Auto save" aria-pressed="${data.autosave}" title="Auto save">${fileActionIcon('autosave')}</button>
-          <span class="notepad-status" data-notepad-status>${escapeHtml(data.error || data.encoding.toUpperCase())}</span>
+          <span class="notepad-status" data-notepad-status>${escapeHtml(data.error)}</span>
           ${renderToolbarPageButton('next')}
         </div>
         <div class="notepad-editor-shell ${data.wrap ? 'wrap-on' : ''} ${data.indentGuides ? 'indent-guides-on' : ''}">
           <pre class="notepad-gutter" aria-hidden="true" style="font-family: ${escapeAttr(fontFamily)};">${lineNumbers(data.content)}</pre>
           <div class="notepad-editor-stage">
+            <div class="notepad-current-line" data-notepad-current-line aria-hidden="true"></div>
             <div class="notepad-indent-guides" aria-hidden="true" style="font-family: ${escapeAttr(fontFamily)};">${renderNotepadIndentGuides(data.content)}</div>
+            <pre class="notepad-highlight" aria-hidden="true" style="font-family: ${escapeAttr(fontFamily)};"><code data-notepad-highlight></code></pre>
             <div class="notepad-wrap-measure" aria-hidden="true"></div>
-            <textarea class="notepad-editor" aria-label="Text editor" spellcheck="false" wrap="${data.wrap ? 'soft' : 'off'}" style="font-family: ${escapeAttr(fontFamily)};">${escapeHtml(data.content)}</textarea>
+            <textarea class="notepad-editor" aria-label="Text editor" spellcheck="false" wrap="${data.wrap ? 'soft' : 'off'}" ${data.readOnly ? 'readonly' : ''} style="font-family: ${escapeAttr(fontFamily)};">${escapeHtml(data.content)}</textarea>
           </div>
         </div>
+        ${renderNotepadStatusBar(data, languageId)}
       </div>`;
   }
 
@@ -2665,7 +3057,16 @@
     }
     try {
       const result = await api(`/api/files/text?path=${encodeURIComponent(filePath)}`);
-      Object.assign(data, { content: result.content, encoding: result.encoding, loadedPath: result.path, dirty: false, error: '' });
+      // A textarea normalizes every line ending to LF, so the file's own ending is
+      // remembered here and restored on save instead of silently rewriting the file.
+      Object.assign(data, {
+        content: result.content.replace(/\r\n|\r|\n/g, '\n'),
+        encoding: result.encoding,
+        eol: detectNotepadEol(result.content),
+        loadedPath: result.path,
+        dirty: false,
+        error: ''
+      });
       const found = findPaneState(paneId);
       const tab = found?.pane.notepadTabs?.find((candidate) => candidate.id === tabId);
       if (tab) tab.path = result.path;
@@ -3220,7 +3621,7 @@
     try {
       const result = await api('/api/files/text', {
         method: 'PUT',
-        body: JSON.stringify({ path: savePath, content: data.content, encoding: data.encoding })
+        body: JSON.stringify({ path: savePath, content: applyNotepadEol(data.content, data.eol), encoding: data.encoding })
       });
       data.loadedPath = result.path;
       data.encoding = result.encoding;
@@ -3246,6 +3647,9 @@
       indentGuides: data.indentGuides,
       autosave: data.autosave,
       fontFamily: data.fontFamily,
+      eol: data.eol,
+      language: data.language,
+      readOnly: data.readOnly,
       ...updates
     };
     await api(`/api/panes/${paneId}/notepad/tabs/${tabId}`, {
@@ -3278,37 +3682,229 @@
   async function notepadCut(editor) {
     const text = await notepadCopySelection(editor);
     if (!text) return;
-    editor.setRangeText('', editor.selectionStart, editor.selectionEnd, 'end');
-    editor.dispatchEvent(new Event('input'));
-    editor.focus();
+    notepadEdit(editor, editor.selectionStart, editor.selectionEnd, '');
   }
 
   async function notepadPaste(editor) {
     try {
       const text = await navigator.clipboard.readText();
-      editor.setRangeText(text, editor.selectionStart, editor.selectionEnd, 'end');
-      editor.dispatchEvent(new Event('input'));
-      editor.focus();
+      notepadEdit(editor, editor.selectionStart, editor.selectionEnd, text);
     } catch (error) {
       showToast('Clipboard access is unavailable.');
     }
   }
 
-  function notepadFindNext(editor, query, backward) {
-    if (!query) return false;
-    const text = editor.value;
-    let index;
-    if (backward) {
-      index = text.lastIndexOf(query, Math.max(0, editor.selectionStart - 1));
-      if (index === -1) index = text.lastIndexOf(query);
-    } else {
-      index = text.indexOf(query, editor.selectionEnd);
-      if (index === -1) index = text.indexOf(query);
+  function notepadFindNext(editor, options, backward) {
+    const matches = notepadMatches(editor.value, options);
+    if (!matches.length) return -1;
+    let target = backward
+      ? matches.reduce((found, match, index) => (match.start < editor.selectionStart ? index : found), -1)
+      : matches.findIndex((match) => match.start >= editor.selectionEnd);
+    if (target === -1) {
+      if (!options.wrapAround) return -1;
+      target = backward ? matches.length - 1 : 0;
     }
-    if (index === -1) return false;
     editor.focus();
-    editor.setSelectionRange(index, index + query.length);
-    return true;
+    editor.setSelectionRange(matches[target].start, matches[target].end);
+    return target;
+  }
+
+  // Programmatic edits go through execCommand so the textarea keeps its native undo stack;
+  // assigning to `value` would clear it and break Ctrl+Z.
+  function notepadEdit(editor, start, end, text, selectionStart, selectionEnd) {
+    if (start === end && !text) return;
+    editor.focus();
+    editor.setSelectionRange(start, end);
+    let applied;
+    try {
+      applied = text ? document.execCommand('insertText', false, text) : document.execCommand('delete');
+    } catch (error) {
+      applied = false;
+    }
+    if (!applied) {
+      editor.setRangeText(text, start, end, 'end');
+      editor.dispatchEvent(new Event('input'));
+    }
+    if (selectionStart !== undefined) editor.setSelectionRange(selectionStart, selectionEnd ?? selectionStart);
+  }
+
+  function notepadCaretLine(editor) {
+    return editor.value.slice(0, editor.selectionStart).split('\n').length - 1;
+  }
+
+  function notepadLineBlock(editor) {
+    const text = editor.value;
+    const end = text.indexOf('\n', editor.selectionEnd);
+    return {
+      start: text.lastIndexOf('\n', editor.selectionStart - 1) + 1,
+      end: end === -1 ? text.length : end
+    };
+  }
+
+  function notepadReplaceLines(editor, transform) {
+    const block = notepadLineBlock(editor);
+    const body = editor.value.slice(block.start, block.end);
+    const next = transform(body.split('\n')).join('\n');
+    if (next === body) return;
+    notepadEdit(editor, block.start, block.end, next, block.start, block.start + next.length);
+  }
+
+  // Case conversion works on the selection when there is one, otherwise the caret line.
+  function notepadReplaceSelection(editor, transform) {
+    const range = editor.selectionEnd > editor.selectionStart
+      ? { start: editor.selectionStart, end: editor.selectionEnd }
+      : notepadLineBlock(editor);
+    const body = editor.value.slice(range.start, range.end);
+    const next = transform(body);
+    if (next === body) return;
+    notepadEdit(editor, range.start, range.end, next, range.start, range.start + next.length);
+  }
+
+  function notepadMoveLines(editor, delta) {
+    const text = editor.value;
+    const block = notepadLineBlock(editor);
+    const length = block.end - block.start;
+    const body = text.slice(block.start, block.end);
+    if (delta < 0) {
+      if (block.start === 0) return;
+      const previousStart = text.lastIndexOf('\n', block.start - 2) + 1;
+      notepadEdit(
+        editor, previousStart, block.end,
+        `${body}\n${text.slice(previousStart, block.start - 1)}`,
+        previousStart, previousStart + length
+      );
+      return;
+    }
+    if (block.end >= text.length) return;
+    const nextEnd = text.indexOf('\n', block.end + 1);
+    const end = nextEnd === -1 ? text.length : nextEnd;
+    const offset = end - block.end;
+    notepadEdit(
+      editor, block.start, end,
+      `${text.slice(block.end + 1, end)}\n${body}`,
+      block.start + offset, block.start + offset + length
+    );
+  }
+
+  function notepadIndentLines(editor, outdent) {
+    notepadReplaceLines(editor, (lines) => lines.map((line) => (outdent
+      ? line.replace(/^(?: {1,4}|\t)/, '')
+      : `    ${line}`)));
+  }
+
+  function notepadToggleComment(editor, spec) {
+    const token = spec?.line;
+    if (!token) return;
+    const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    notepadReplaceLines(editor, (lines) => {
+      const commented = lines.every((line) => !line.trim() || line.trimStart().startsWith(token));
+      return lines.map((line) => {
+        if (!line.trim()) return line;
+        if (commented) return line.replace(new RegExp(`^(\\s*)${escaped} ?`), '$1');
+        const indent = line.match(/^\s*/)[0];
+        return `${indent}${token} ${line.slice(indent.length)}`;
+      });
+    });
+  }
+
+  function notepadGoToLine(context, line) {
+    const { editor, gutter } = context;
+    const lines = editor.value.split('\n');
+    const target = Math.max(0, Math.min(lines.length - 1, line));
+    const start = lines.slice(0, target).reduce((total, text) => total + text.length + 1, 0);
+    editor.focus();
+    editor.setSelectionRange(start, start + lines[target].length);
+    const row = gutter?.children[target];
+    if (row) editor.scrollTop = Math.max(0, row.offsetTop - gutter.offsetTop - editor.clientHeight / 2);
+  }
+
+  function notepadJumpBookmark(context, backward) {
+    const lines = [...context.data.bookmarks].sort((a, b) => a - b);
+    if (!lines.length) return;
+    const current = notepadCaretLine(context.editor);
+    const next = backward
+      ? [...lines].reverse().find((line) => line < current) ?? lines.at(-1)
+      : lines.find((line) => line > current) ?? lines[0];
+    notepadGoToLine(context, next);
+  }
+
+  const notepadCommands = {
+    undo: () => document.execCommand('undo'),
+    redo: () => document.execCommand('redo'),
+    'duplicate-line': ({ editor }) => {
+      const block = notepadLineBlock(editor);
+      const offset = editor.selectionStart - block.start;
+      notepadEdit(editor, block.end, block.end, `\n${editor.value.slice(block.start, block.end)}`, block.end + 1 + offset);
+    },
+    'delete-line': ({ editor }) => {
+      const block = notepadLineBlock(editor);
+      const atEnd = block.end >= editor.value.length;
+      const start = atEnd && block.start > 0 ? block.start - 1 : block.start;
+      notepadEdit(editor, start, atEnd ? block.end : block.end + 1, '', start);
+    },
+    'move-line-up': ({ editor }) => notepadMoveLines(editor, -1),
+    'move-line-down': ({ editor }) => notepadMoveLines(editor, 1),
+    'upper-case': ({ editor }) => notepadReplaceSelection(editor, (text) => text.toUpperCase()),
+    'lower-case': ({ editor }) => notepadReplaceSelection(editor, (text) => text.toLowerCase()),
+    'toggle-comment': ({ editor, spec }) => notepadToggleComment(editor, spec),
+    'sort-ascending': ({ editor }) => notepadReplaceLines(editor, (lines) => lines.sort((a, b) => a.localeCompare(b))),
+    'sort-descending': ({ editor }) => notepadReplaceLines(editor, (lines) => lines.sort((a, b) => b.localeCompare(a))),
+    'remove-duplicates': ({ editor }) => notepadReplaceLines(editor, (lines) => [...new Set(lines)]),
+    'trim-trailing': ({ editor }) => notepadReplaceLines(editor, (lines) => lines.map((line) => line.replace(/[ \t]+$/, ''))),
+    'tabs-to-spaces': ({ editor }) => notepadReplaceLines(editor, (lines) => lines.map((line) => line.replaceAll('\t', '    '))),
+    'spaces-to-tabs': ({ editor }) => notepadReplaceLines(editor, (lines) => lines.map((line) => line.replace(/^ +/, (run) => '\t'.repeat(Math.floor(run.length / 4)) + ' '.repeat(run.length % 4)))),
+    'go-to-line': (context) => {
+      const input = context.paneElement.querySelector('[data-notepad-goto-input]');
+      const line = Number.parseInt(input?.value ?? '', 10);
+      if (Number.isInteger(line)) notepadGoToLine(context, line - 1);
+    },
+    'toggle-bookmark': (context) => {
+      const line = notepadCaretLine(context.editor);
+      if (!context.data.bookmarks.delete(line)) context.data.bookmarks.add(line);
+      context.refresh();
+    },
+    'next-bookmark': (context) => notepadJumpBookmark(context, false),
+    'previous-bookmark': (context) => notepadJumpBookmark(context, true),
+    'clear-bookmarks': (context) => {
+      context.data.bookmarks.clear();
+      context.refresh();
+    },
+    'toggle-read-only': (context) => {
+      context.data.readOnly = !context.data.readOnly;
+      persistNotepadTabState(context.paneId, context.tabId).catch((error) => showToast(error.message));
+      updateNotepadPane(context.paneId);
+    },
+    reload: (context) => reloadNotepadTab(context.paneId, context.tabId),
+    'close-all': (context) => closeNotepadTabs(context.paneId, null),
+    'close-others': (context) => closeNotepadTabs(context.paneId, context.tabId)
+  };
+
+  function runNotepadCommand(context, command) {
+    const [group, value] = command.split(':');
+    if (group === 'eol' || group === 'encoding' || group === 'language') {
+      context.data[group] = value;
+      persistNotepadTabState(context.paneId, context.tabId).catch((error) => showToast(error.message));
+      updateNotepadPane(context.paneId);
+      return;
+    }
+    notepadCommands[command]?.(context);
+  }
+
+  async function reloadNotepadTab(paneId, tabId) {
+    const tab = findNotepadTab(tabId);
+    const data = notepadTabData(tabId);
+    if (!tab?.path) return;
+    if (data.dirty && !window.confirm('Discard unsaved changes and reload from disk?')) return;
+    data.loadedPath = '';
+    await loadNotepadTab(paneId, tabId, tab.path);
+  }
+
+  async function closeNotepadTabs(paneId, keepTabId) {
+    const found = findPaneState(paneId);
+    if (!found) return;
+    for (const tab of found.pane.notepadTabs.slice()) {
+      if (tab.id !== keepTabId) await closeNotepadTabClient(paneId, tab.id);
+    }
   }
 
   function setNotepadPopoverOpen(paneElement, popover, open) {
@@ -3404,47 +4000,91 @@
     if (focusEditor) paneElement.querySelector('.notepad-editor')?.focus();
   }
 
-  function wireNotepadFindPopovers(paneElement, editor) {
-    const findInput = paneElement.querySelector('[data-notepad-find-input]');
-    const replaceFindInput = paneElement.querySelector('[data-notepad-replace-find-input]');
+  function notepadReplacement(find) {
+    // Only regex mode treats $1 and $& as references; a literal search replaces verbatim.
+    return find.regex ? find.replace : find.replace.replaceAll('$', '$$$$');
+  }
+
+  function notepadReplaceAll(context) {
+    const { editor, data } = context;
+    const pattern = notepadSearchPattern(data.find);
+    if (!pattern) return;
+    const inSelection = editor.selectionEnd > editor.selectionStart;
+    const start = inSelection ? editor.selectionStart : 0;
+    const end = inSelection ? editor.selectionEnd : editor.value.length;
+    const body = editor.value.slice(start, end);
+    const next = body.replace(pattern, notepadReplacement(data.find));
+    if (next === body) return;
+    const count = notepadMatches(body, data.find).length;
+    notepadEdit(editor, start, end, next, start, start + next.length);
+    showToast(`Replaced ${count} match${count === 1 ? '' : 'es'}.`, 'success');
+  }
+
+  function wireNotepadFindPopovers(context) {
+    const { paneElement, editor, data } = context;
+    const find = data.find;
+    const queryInputs = Array.from(paneElement.querySelectorAll('[data-notepad-find-input], [data-notepad-replace-find-input]'));
     const replaceInput = paneElement.querySelector('[data-notepad-replace-input]');
-    const onFindKeydown = (input) => (event) => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        notepadFindNext(editor, input.value, event.shiftKey);
-      } else if (event.key === 'Escape') {
-        hideNotepadPopovers(paneElement, true);
-      }
+    const step = (backward) => {
+      notepadFindNext(editor, find, backward);
+      context.refreshCaret();
+      updateNotepadSearchCount(context);
     };
-    if (findInput) findInput.onkeydown = onFindKeydown(findInput);
-    if (replaceFindInput) replaceFindInput.onkeydown = onFindKeydown(replaceFindInput);
+    queryInputs.forEach((input) => {
+      input.oninput = () => {
+        find.query = input.value;
+        queryInputs.forEach((other) => {
+          if (other !== input) other.value = input.value;
+        });
+        context.refreshCaret();
+        updateNotepadSearchCount(context);
+      };
+      input.onkeydown = (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          step(event.shiftKey);
+        } else if (event.key === 'Escape') {
+          hideNotepadPopovers(paneElement, true);
+        }
+      };
+    });
     if (replaceInput) {
+      replaceInput.oninput = () => {
+        find.replace = replaceInput.value;
+      };
       replaceInput.onkeydown = (event) => {
         if (event.key === 'Escape') hideNotepadPopovers(paneElement, true);
       };
     }
+    paneElement.querySelectorAll('[data-notepad-search-option]').forEach((button) => {
+      button.onclick = () => {
+        const key = button.dataset.notepadSearchOption;
+        find[key] = !find[key];
+        paneElement.querySelectorAll(`[data-notepad-search-option="${key}"]`).forEach((option) => {
+          option.setAttribute('aria-pressed', String(find[key]));
+        });
+        context.refreshCaret();
+        updateNotepadSearchCount(context);
+      };
+    });
     const onClick = (selector, handler) => {
       const button = paneElement.querySelector(selector);
       if (button) button.onclick = handler;
     };
-    onClick('[data-notepad-find-prev]', () => notepadFindNext(editor, findInput.value, true));
-    onClick('[data-notepad-find-next]', () => notepadFindNext(editor, findInput.value, false));
-    onClick('[data-notepad-replace-prev]', () => notepadFindNext(editor, replaceFindInput.value, true));
-    onClick('[data-notepad-replace-next]', () => notepadFindNext(editor, replaceFindInput.value, false));
+    onClick('[data-notepad-find-prev]', () => step(true));
+    onClick('[data-notepad-find-next]', () => step(false));
+    onClick('[data-notepad-replace-prev]', () => step(true));
+    onClick('[data-notepad-replace-next]', () => step(false));
     onClick('[data-notepad-replace-one]', () => {
-      const query = replaceFindInput.value;
-      if (query && editor.value.slice(editor.selectionStart, editor.selectionEnd) === query) {
-        editor.setRangeText(replaceInput.value, editor.selectionStart, editor.selectionEnd, 'end');
-        editor.dispatchEvent(new Event('input'));
+      const current = notepadMatches(editor.value, find)
+        .find((match) => match.start === editor.selectionStart && match.end === editor.selectionEnd);
+      if (current) {
+        const body = editor.value.slice(current.start, current.end);
+        notepadEdit(editor, current.start, current.end, body.replace(notepadSearchPattern(find), notepadReplacement(find)));
       }
-      notepadFindNext(editor, query, false);
+      step(false);
     });
-    onClick('[data-notepad-replace-all]', () => {
-      const query = replaceFindInput.value;
-      if (!query) return;
-      editor.value = editor.value.split(query).join(replaceInput.value);
-      editor.dispatchEvent(new Event('input'));
-    });
+    onClick('[data-notepad-replace-all]', () => notepadReplaceAll(context));
   }
 
   function syncNotepadRows(paneElement, editor, gutter, guides) {
@@ -3469,10 +4109,13 @@
         heights[index] = Math.max(lineHeight, row.getBoundingClientRect().height);
       });
     }
+    const activeTabId = paneElement.dataset.notepadActiveTab;
+    const bookmarks = activeTabId ? notepadTabData(activeTabId).bookmarks : new Set();
     gutter.replaceChildren(...lines.map((line, index) => {
       const row = document.createElement('span');
-      row.className = 'notepad-gutter-line';
+      row.className = bookmarks.has(index) ? 'notepad-gutter-line bookmarked' : 'notepad-gutter-line';
       row.style.height = `${heights[index]}px`;
+      row.dataset.line = String(index);
       row.textContent = String(index + 1);
       return row;
     }));
@@ -3488,6 +4131,78 @@
     guides.style.transform = `translate(${-editor.scrollLeft}px, ${-editor.scrollTop}px)`;
   }
 
+  function notepadDecorations(text, editor, data) {
+    const decorations = notepadBracketRanges(text, editor.selectionStart);
+    if (data.find.markAll && data.find.query) {
+      for (const match of notepadMatches(text, data.find)) {
+        const current = match.start === editor.selectionStart && match.end === editor.selectionEnd;
+        decorations.push({ ...match, className: current ? 'notepad-mark current' : 'notepad-mark' });
+      }
+    }
+    return decorations;
+  }
+
+  // Repainting the overlay costs a full re-tokenize, so a caret move only redraws when the
+  // bracket pair or the current match actually moved.
+  function refreshNotepadHighlight(context, force) {
+    const { paneElement, editor, data } = context;
+    const shell = paneElement.querySelector('.notepad-editor-shell');
+    const highlight = paneElement.querySelector('.notepad-highlight');
+    const target = paneElement.querySelector('[data-notepad-highlight]');
+    if (!shell || !highlight || !target) return;
+    const text = editor.value;
+    const disabled = text.length > MAX_NOTEPAD_HIGHLIGHT_LENGTH;
+    shell.classList.toggle('highlight-off', disabled);
+    if (disabled) {
+      target.textContent = '';
+      return;
+    }
+    const decorations = notepadDecorations(text, editor, data);
+    const key = decorations.map((item) => `${item.start}-${item.end}-${item.className}`).join(',');
+    if (force || paneElement._notepadHighlightKey !== key) {
+      paneElement._notepadHighlightKey = key;
+      target.innerHTML = notepadHighlightHtml(text, notepadLanguages[context.languageId], decorations);
+    }
+    highlight.scrollTop = editor.scrollTop;
+    highlight.scrollLeft = editor.scrollLeft;
+  }
+
+  function updateNotepadCurrentLine(context) {
+    const { paneElement, editor, gutter } = context;
+    const marker = paneElement.querySelector('[data-notepad-current-line]');
+    const row = gutter?.children[notepadCaretLine(editor)];
+    if (!marker || !row) return;
+    marker.style.top = `${row.offsetTop - gutter.offsetTop - editor.scrollTop}px`;
+    marker.style.height = `${row.offsetHeight}px`;
+  }
+
+  function updateNotepadStatusBar(context) {
+    const { paneElement, editor, data } = context;
+    const bar = paneElement.querySelector('[data-notepad-status-bar]');
+    if (!bar) return;
+    const rows = editor.value.slice(0, editor.selectionStart).split('\n');
+    const set = (name, value) => {
+      const cell = bar.querySelector(`[data-notepad-status-${name}]`);
+      if (cell) cell.textContent = value;
+    };
+    set('language', notepadLanguages[context.languageId]?.label || 'Plain text');
+    set('length', `length: ${editor.value.length}  lines: ${lineCount(editor.value)}`);
+    set('caret', `Ln ${rows.length}, Col ${rows.at(-1).length + 1}, Sel ${editor.selectionEnd - editor.selectionStart}`);
+    set('eol', notepadEolLabels[data.eol] || notepadEolLabels.crlf);
+    set('encoding', notepadEncodingLabels[data.encoding] || 'UTF-8');
+    set('mode', data.readOnly ? 'Read only' : 'INS');
+  }
+
+  function updateNotepadSearchCount(context) {
+    const { paneElement, editor, data } = context;
+    const matches = data.find.query ? notepadMatches(editor.value, data.find) : [];
+    const current = matches.findIndex((match) => match.start === editor.selectionStart && match.end === editor.selectionEnd);
+    const label = data.find.query ? `${current + 1} of ${matches.length}` : '0 of 0';
+    paneElement.querySelectorAll('[data-notepad-search-count]').forEach((output) => {
+      output.textContent = label;
+    });
+  }
+
   function wireNotepadPane(root) {
     wirePagedToolbars(root);
     const paneElement = root?.querySelector?.('.notepad-pane') || (root?.matches?.('.notepad-pane') ? root : null);
@@ -3497,8 +4212,23 @@
     const editor = paneElement.querySelector('.notepad-editor');
     const gutter = paneElement.querySelector('.notepad-gutter');
     const guides = paneElement.querySelector('.notepad-indent-guides');
-    const status = paneElement.querySelector('[data-notepad-status]');
     const data = notepadTabData(tabId);
+    const tab = findNotepadTab(tabId);
+    const languageId = notepadLanguageId(tab, data);
+    const context = {
+      paneId, tabId, paneElement, editor, gutter, data, tab, languageId, spec: notepadLanguages[languageId],
+      refreshCaret: () => {
+        refreshNotepadHighlight(context, false);
+        updateNotepadCurrentLine(context);
+        updateNotepadStatusBar(context);
+      },
+      refresh: (force = true) => {
+        syncNotepadRows(paneElement, editor, gutter, guides);
+        refreshNotepadHighlight(context, force);
+        updateNotepadCurrentLine(context);
+        updateNotepadStatusBar(context);
+      }
+    };
 
     const newButton = paneElement.querySelector('[data-notepad-new]');
     const saveButton = paneElement.querySelector('[data-notepad-save]');
@@ -3548,6 +4278,34 @@
     wirePopover('[data-notepad-font-size-toggle]', '[data-notepad-font-size-popover]');
     wirePopover('[data-notepad-find]', '[data-notepad-find-popover]', true);
     wirePopover('[data-notepad-replace]', '[data-notepad-replace-popover]', true);
+    wirePopover('[data-notepad-edit-menu-toggle]', '[data-notepad-edit-menu]');
+    wirePopover('[data-notepad-search-menu-toggle]', '[data-notepad-search-menu]');
+    wirePopover('[data-notepad-document-menu-toggle]', '[data-notepad-document-menu]');
+    paneElement.querySelectorAll('[data-notepad-command]').forEach((button) => {
+      button.onclick = () => {
+        const menu = button.closest('.notepad-menu');
+        if (menu) setNotepadPopoverOpen(paneElement, menu, false);
+        runNotepadCommand(context, button.dataset.notepadCommand);
+      };
+    });
+    const gotoInput = paneElement.querySelector('[data-notepad-goto-input]');
+    if (gotoInput) {
+      gotoInput.onkeydown = (event) => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        setNotepadPopoverOpen(paneElement, paneElement.querySelector('[data-notepad-search-menu]'), false);
+        runNotepadCommand(context, 'go-to-line');
+      };
+    }
+    if (gutter) {
+      gutter.onclick = (event) => {
+        const row = event.target.closest('.notepad-gutter-line');
+        if (!row) return;
+        const line = Number(row.dataset.line);
+        if (!data.bookmarks.delete(line)) data.bookmarks.add(line);
+        context.refresh();
+      };
+    }
     paneElement.querySelectorAll('[data-notepad-font]').forEach((button) => {
       button.onclick = () => {
         data.fontFamily = button.dataset.notepadFont;
@@ -3557,7 +4315,8 @@
         paneElement.querySelectorAll('[data-notepad-font]').forEach((option) => {
           option.setAttribute('aria-pressed', String(option === button));
         });
-        syncNotepadRows(paneElement, editor, gutter, guides);
+        paneElement.querySelector('.notepad-highlight').style.fontFamily = data.fontFamily;
+        context.refresh();
         persistNotepadTabState(paneId, tabId).catch((error) => showToast(error.message));
         setNotepadPopoverOpen(paneElement, paneElement.querySelector('[data-notepad-font-popover]'), false);
       };
@@ -3595,7 +4354,6 @@
     if (autosaveButton) {
       autosaveButton.onclick = () => {
         data.autosave = !data.autosave;
-        const tab = findNotepadTab(tabId);
         const draft = data.autosave && !tab?.path ? { content: data.content, encoding: data.encoding } : {};
         persistNotepadTabState(paneId, tabId, draft).catch((error) => showToast(error.message));
         updateNotepadPane(paneId);
@@ -3606,8 +4364,8 @@
       editor.oninput = () => {
         data.content = editor.value;
         data.dirty = true;
-        syncNotepadRows(paneElement, editor, gutter, guides);
-        status.textContent = data.encoding.toUpperCase();
+        context.refresh();
+        updateNotepadSearchCount(context);
         const label = document.querySelector(`[data-notepad-tab="${tabId}"] .notepad-tab-label`);
         if (label && !label.querySelector('.notepad-tab-modified')) {
           label.insertAdjacentHTML('afterbegin', '<span class="notepad-tab-modified">*</span>');
@@ -3617,54 +4375,130 @@
       editor.onscroll = () => {
         gutter.scrollTop = editor.scrollTop;
         guides.style.transform = `translate(${-editor.scrollLeft}px, ${-editor.scrollTop}px)`;
+        const highlight = paneElement.querySelector('.notepad-highlight');
+        highlight.scrollTop = editor.scrollTop;
+        highlight.scrollLeft = editor.scrollLeft;
+        updateNotepadCurrentLine(context);
       };
-      editor.onkeydown = (event) => {
-        const key = event.key.toLowerCase();
-        if (event.ctrlKey && !event.altKey && !event.metaKey && (key === '+' || key === '=' || key === '-')) {
-          event.preventDefault();
-          event.stopPropagation();
-          changePaneFontSize(paneId, key === '-' ? -1 : 1);
-          setNotepadPopoverOpen(paneElement, paneElement.querySelector('[data-notepad-font-size-popover]'), true);
-        } else if (event.ctrlKey && !event.altKey && !event.metaKey && key === '0') {
-          event.preventDefault();
-          event.stopPropagation();
-          changePaneFontSize(
-            paneId,
-            Math.round(terminalFontSize()) - Math.round(paneFontSize(findPaneState(paneId)?.pane))
-          );
-          setNotepadPopoverOpen(paneElement, paneElement.querySelector('[data-notepad-font-size-popover]'), true);
-        } else if (event.ctrlKey && key === 's') {
-          event.preventDefault();
-          saveNotepadTab(paneId, tabId);
-        } else if (event.ctrlKey && key === 'n') {
-          event.preventDefault();
-          addNotepadTab(paneId, '');
-        } else if (event.ctrlKey && key === 'f') {
-          event.preventDefault();
-          showNotepadFindPopover(paneElement, false);
-        } else if (event.ctrlKey && key === 'h') {
-          event.preventDefault();
-          showNotepadFindPopover(paneElement, true);
-        } else if (event.key === 'Tab') {
-          event.preventDefault();
-          const start = editor.selectionStart;
-          editor.setRangeText('    ', start, editor.selectionEnd, 'end');
-          editor.dispatchEvent(new Event('input'));
-        }
-      };
+      // `selectionchange` on the textarea is the only event that covers caret moves from
+      // the keyboard, the mouse, and programmatic edits alike.
+      editor.onselectionchange = () => context.refreshCaret();
+      editor.onkeydown = (event) => notepadEditorKeydown(context, event);
     }
 
-    wireNotepadFindPopovers(paneElement, editor);
-    syncNotepadRows(paneElement, editor, gutter, guides);
+    wireNotepadFindPopovers(context);
+    context.refresh();
+    updateNotepadSearchCount(context);
     paneElement._notepadResizeObserver?.disconnect();
     paneElement._notepadResizeObserver = new ResizeObserver(() => {
-      syncNotepadRows(paneElement, editor, gutter, guides);
+      context.refresh();
       paneElement.querySelectorAll('.notepad-popover:not([hidden])').forEach((popover) => {
         if (popover.querySelector('[data-notepad-popover-drag]')) placeNotepadPopover(popover);
       });
     });
     paneElement._notepadResizeObserver.observe(editor);
     wireNotepadTabs(paneElement.closest('.pane') || paneElement, paneId);
+  }
+
+  const NOTEPAD_SHORTCUTS = {
+    d: 'duplicate-line',
+    l: 'delete-line',
+    u: 'lower-case',
+    q: 'toggle-comment',
+    y: 'redo'
+  };
+
+  // Only brackets auto-close: pairing quotes would fight every apostrophe in prose.
+  // Typing the closing character over an auto-inserted one just steps past it.
+  function notepadAutoClose(editor, event) {
+    const pairs = NOTEPAD_BRACKETS;
+    const { selectionStart, selectionEnd, value } = editor;
+    if (Object.values(pairs).includes(event.key) && value[selectionStart] === event.key && selectionStart === selectionEnd) {
+      event.preventDefault();
+      editor.setSelectionRange(selectionStart + 1, selectionStart + 1);
+      return true;
+    }
+    if (!pairs[event.key]) return false;
+    event.preventDefault();
+    const body = value.slice(selectionStart, selectionEnd);
+    notepadEdit(editor, selectionStart, selectionEnd, `${event.key}${body}${pairs[event.key]}`, selectionStart + 1, selectionStart + 1 + body.length);
+    return true;
+  }
+
+  function notepadEditorKeydown(context, event) {
+    const { paneId, tabId, paneElement, editor, data } = context;
+    const key = event.key.toLowerCase();
+    const plainCtrl = event.ctrlKey && !event.altKey && !event.metaKey;
+    if (plainCtrl && !event.shiftKey && (key === '+' || key === '=' || key === '-' || key === '0')) {
+      event.preventDefault();
+      event.stopPropagation();
+      changePaneFontSize(paneId, key === '0'
+        ? Math.round(terminalFontSize()) - Math.round(paneFontSize(findPaneState(paneId)?.pane))
+        : (key === '-' ? -1 : 1));
+      setNotepadPopoverOpen(paneElement, paneElement.querySelector('[data-notepad-font-size-popover]'), true);
+      return;
+    }
+    if (plainCtrl && !event.shiftKey && key === 's') {
+      event.preventDefault();
+      saveNotepadTab(paneId, tabId);
+      return;
+    }
+    if (plainCtrl && !event.shiftKey && key === 'n') {
+      event.preventDefault();
+      addNotepadTab(paneId, '');
+      return;
+    }
+    if (plainCtrl && !event.shiftKey && (key === 'f' || key === 'h')) {
+      event.preventDefault();
+      showNotepadFindPopover(paneElement, key === 'h');
+      return;
+    }
+    if (plainCtrl && !event.shiftKey && key === 'g') {
+      event.preventDefault();
+      setNotepadPopoverOpen(paneElement, paneElement.querySelector('[data-notepad-search-menu]'), true);
+      paneElement.querySelector('[data-notepad-goto-input]')?.focus();
+      return;
+    }
+    if (plainCtrl && event.shiftKey && (key === 'arrowup' || key === 'arrowdown')) {
+      event.preventDefault();
+      runNotepadCommand(context, key === 'arrowup' ? 'move-line-up' : 'move-line-down');
+      return;
+    }
+    if (plainCtrl && event.shiftKey && key === 'u') {
+      event.preventDefault();
+      runNotepadCommand(context, 'upper-case');
+      return;
+    }
+    if (plainCtrl && !event.shiftKey && NOTEPAD_SHORTCUTS[key]) {
+      event.preventDefault();
+      runNotepadCommand(context, NOTEPAD_SHORTCUTS[key]);
+      return;
+    }
+    if (event.key === 'F2') {
+      event.preventDefault();
+      if (event.ctrlKey) runNotepadCommand(context, 'toggle-bookmark');
+      else runNotepadCommand(context, event.shiftKey ? 'previous-bookmark' : 'next-bookmark');
+      return;
+    }
+    if (data.readOnly) return;
+    if (event.key === 'Tab') {
+      event.preventDefault();
+      if (event.shiftKey || editor.value.slice(editor.selectionStart, editor.selectionEnd).includes('\n')) {
+        notepadIndentLines(editor, event.shiftKey);
+      } else {
+        notepadEdit(editor, editor.selectionStart, editor.selectionEnd, '    ');
+      }
+      return;
+    }
+    if (event.key === 'Enter' && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+      const block = notepadLineBlock(editor);
+      const indent = editor.value.slice(block.start, editor.selectionStart).match(/^[ \t]*/)[0];
+      if (!indent) return;
+      event.preventDefault();
+      notepadEdit(editor, editor.selectionStart, editor.selectionEnd, `\n${indent}`);
+      return;
+    }
+    if (!event.ctrlKey && !event.altKey && !event.metaKey) notepadAutoClose(editor, event);
   }
 
   function samePath(left, right) {
