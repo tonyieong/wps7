@@ -73,9 +73,9 @@ test('the sidebar shortcuts feature has been removed', () => {
 
 test('workspace tabs and terminal grid use the compact edge-to-edge layout', () => {
   assert.match(styles, /\.workspace\s*\{\s*grid-template-rows:\s*auto minmax\(0, 1fr\) 36px/);
-  // The right padding moved onto the pinned board scrollbar; see the floor test.
-  assert.match(styles, /\.tabs\s*\{\s*padding:\s*0 0 4px 8px/);
-  assert.match(styles, /\.tab\s*\{[^}]*width:\s*max-content[^}]*min-width:\s*128px[^}]*flex:\s*0 1 auto/s);
+  // A tab is as wide as its own title plus the close button, never stretched to
+  // a floor and never shrunk below its content; the strip scrolls instead.
+  assert.match(styles, /\.tab\s*\{[^}]*width:\s*max-content;\s*min-width:\s*0;\s*max-width:\s*220px;\s*flex:\s*0 0 auto/s);
   assert.match(styles, /\.pane-grid\s*\{[^}]*border:\s*0/s);
 });
 
@@ -97,42 +97,41 @@ test('mobile moves the workspace tabs to the top of the screen and drops the boa
   assert.match(styles, /\.app\.mode-mobile \.tab,\s*\.app\.mobile-device \.tab\s*\{[^}]*border-radius:\s*8px 8px 0 0/s);
 });
 
-test('mobile tabs keep a width floor and scroll instead of shrinking to a bare close button', () => {
-  // flex hands out shrinkage in proportion to width, so without a floor the
-  // shortest name — often the active one — loses its label first.
-  assert.match(styles, /\.app\.mode-mobile \.tab:not\(\.tab-add\),\s*\.app\.mobile-device \.tab:not\(\.tab-add\)\s*\{[^}]*min-width:\s*96px/s);
-  // The old floor lived in a media query that a later `.tab { min-width: 0 }`
-  // overrode, which is what made every tab shrinkable in the first place.
-  assert.doesNotMatch(styles, /@media \(max-width:\s*760px\)[\s\S]*?\n {2}\.tab \{\s*min-width:\s*96px;\s*\}/);
-  // The row scrolls now, so the only control that opens the sidebar is pinned,
-  // and it supplies the left edge a sticky child cannot claim from padding.
-  assert.match(styles, /\.app\.mode-mobile \.mobile-actions,\s*\.app\.mobile-device \.mobile-actions\s*\{[^}]*position:\s*sticky[^}]*left:\s*0[^}]*padding:\s*0 4px 0 8px[^}]*background:\s*var\(--panel\)/s);
-  assert.match(styles, /\.app\.mode-mobile \.tabs,\s*\.app\.mobile-device \.tabs\s*\{[^}]*padding:\s*max\(4px, env\(safe-area-inset-top\)\) 8px 0 0/s);
-  // A scrollable row can leave the active tab off screen after a re-render.
-  assert.match(appSource, /function ensureActiveWorkspaceTabVisible\(\)/);
-  assert.match(appSource, /ensureActivePaneVisible\('auto'\);\s*ensureActiveWorkspaceTabVisible\(\);/);
-  const scroller = appSource.slice(appSource.indexOf('function ensureActiveWorkspaceTabVisible'), appSource.indexOf('function narrowViewport'));
-  assert.match(scroller, /tabs\.scrollLeft -= left - tab\.left/);
-  assert.match(scroller, /tabs\.scrollLeft \+= tab\.right - right/);
+test('the workspace title row splits into equal thirds', () => {
+  // Tabs own the first third, the board scrollbar the last, and the middle is
+  // left empty, so neither end can eat the other's space.
+  assert.match(styles, /\.tabs \{[^}]*display:\s*grid;\s*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/s);
+  assert.match(appSource, /<div class="workspace-bar">[\s\S]*?<div class="tabs-gap">[\s\S]*?<div class="board-hscroll"/);
+  // The scrollbar fills its own third now rather than being squeezed to a stub,
+  // so it no longer needs the sticky pinning that a scrolling row demanded.
+  assert.doesNotMatch(styles, /\.board-hscroll \{[^}]*position:\s*sticky/s);
+  assert.doesNotMatch(styles, /\.board-hscroll \{[^}]*max-width:\s*520px/s);
+  // Mobile hides the scrollbar, so there is no third to balance against.
+  assert.match(styles, /\.app\.mode-mobile \.tabs,\s*\.app\.mobile-device \.tabs\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);
+  assert.match(styles, /\.app\.mode-mobile \.tabs-gap,\s*\.app\.mobile-device \.tabs-gap\s*\{\s*display:\s*none/s);
 });
 
-test('desktop tabs keep the same width floor and pin the board scrollbar', () => {
-  // `.tab` used to declare min-width four times over: 132px and then 0 inside a
-  // single rule, 128px in the next block, 0 again in the last. Only the last one
-  // counted, so every tab could shrink to its close button. One floor survives.
-  assert.match(styles, /\.tab \{[^}]*width:\s*max-content;\s*min-width:\s*128px/s);
-  assert.doesNotMatch(styles, /\.tab \{[^}]*width:\s*max-content;\s*min-width:\s*0/s);
-  assert.doesNotMatch(styles, /\.tab \{[^}]*min-width:\s*132px/s);
-  assert.doesNotMatch(styles, /\.tab \{\s*height:\s*38px;\s*min-width/s);
-  // The row scrolls once tabs stop shrinking, so the board scrollbar is pinned
-  // and carries the right edge a sticky child cannot take from padding.
-  assert.match(styles, /\.board-hscroll \{[^}]*padding:\s*0 8px 0 4px;\s*position:\s*sticky;\s*right:\s*0;[^}]*background:\s*var\(--panel\)/s);
-  assert.match(styles, /\.tabs \{\s*padding:\s*0 0 4px 8px;\s*\}/);
-  // A tab tucked under a pinned control is unreadable even though its box is
-  // inside the row, so both ends are discounted before scrolling.
-  const scroller = appSource.slice(appSource.indexOf('function ensureActiveWorkspaceTabVisible'), appSource.indexOf('function narrowViewport'));
-  assert.match(scroller, /const left = row\.left \+ \(tabs\.querySelector\('\.mobile-actions'\)\?\.offsetWidth \|\| 0\)/);
-  assert.match(scroller, /const right = row\.right - \(tabs\.querySelector\('\.board-hscroll'\)\?\.offsetWidth \|\| 0\)/);
+test('the active workspace stays centred, with arrows to switch and ellipses for the rest', () => {
+  // Half-strip padding at each end is what lets the first and last tab reach the
+  // centre; it also makes centring them land exactly on 0 and on the max scroll,
+  // which is what keeps the overflow hints honest.
+  const centring = appSource.slice(appSource.indexOf('function centerActiveWorkspaceTab'), appSource.indexOf('function updateWorkspaceStripOverflow'));
+  assert.match(centring, /const half = \(tab\) => Math\.max\(0, \(strip\.clientWidth - tab\.offsetWidth\) \/ 2\)/);
+  assert.match(centring, /strip\.style\.paddingLeft = `\$\{half\(tabs\[0\]\)\}px`/);
+  assert.match(centring, /strip\.style\.paddingRight = `\$\{half\(tabs\[tabs\.length - 1\]\)\}px`/);
+  assert.match(centring, /strip\.scrollLeft = active\.offsetLeft \+ active\.offsetWidth \/ 2 - strip\.clientWidth \/ 2/);
+  assert.match(appSource, /ensureActivePaneVisible\('auto'\);\s*centerActiveWorkspaceTab\(\);/);
+  // Arrows switch workspace, and stop at each end.
+  assert.match(appSource, /data-workspace-nav="-1"[^>]*\$\{state\.sessions\[0\]\?\.id === session\.id \? 'disabled' : ''\}/);
+  assert.match(appSource, /data-workspace-nav="1"[^>]*\$\{state\.sessions\[state\.sessions\.length - 1\]\?\.id === session\.id \? 'disabled' : ''\}/);
+  assert.match(appSource, /function switchWorkspaceByOffset\(offset\)/);
+  assert.match(appSource, /const next = state\.sessions\[index \+ offset\]/);
+  // The hints live on the wrapper: on the scroller itself they would scroll off.
+  assert.match(styles, /\.workspace-strip-wrap::before,\s*\.workspace-strip-wrap::after\s*\{\s*content:\s*"…"/s);
+  assert.match(styles, /\.workspace-strip-wrap\.overflow-left::before,\s*\.workspace-strip-wrap\.overflow-right::after\s*\{\s*display:\s*flex/s);
+  const overflow = appSource.slice(appSource.indexOf('function updateWorkspaceStripOverflow'), appSource.indexOf('async function switchWorkspaceByOffset'));
+  assert.match(overflow, /classList\.toggle\('overflow-left', strip\.scrollLeft > 1\)/);
+  assert.match(overflow, /classList\.toggle\('overflow-right', remaining > 1\)/);
 });
 
 test('the board always keeps a few empty columns past the rightmost pane', () => {
@@ -612,6 +611,50 @@ test('file pane shows modified timestamps in 24-hour time', () => {
 
 test('usage pane shows quota reset times in 24-hour time', () => {
   assert.match(appSource, /function usageWindowMarkup\(window\)[\s\S]*?hour12: false/);
+});
+
+test('usage windows count down to the reset instead of printing a timestamp', () => {
+  const countdown = appSource.slice(appSource.indexOf('function usageCountdown'), appSource.indexOf('function usageLevel'));
+  assert.match(countdown, /return 'Reset time unavailable'/);
+  assert.match(countdown, /minutes < 0[\s\S]*?return 'Resetting now'/);
+  assert.match(countdown, /minutes < 1[\s\S]*?return 'Resets in under a minute'/);
+  assert.match(countdown, /const days = Math\.floor\(minutes \/ 1440\)/);
+  // The timestamp stays reachable as the title rather than being thrown away.
+  assert.match(appSource, /data-usage-countdown="\$\{escapeAttr\(window\.resetsAt \|\| ''\)\}" title="\$\{escapeAttr\(absolute\)\}"/);
+  // Readings only change on refresh; the time left changes on its own.
+  assert.match(appSource, /function startUsageCountdownTicker\(\)/);
+  assert.match(appSource, /label\.textContent = usageCountdown\(label\.dataset\.usageCountdown\)/);
+  assert.match(appSource, /if \(!labels\.length\)[\s\S]*?clearInterval\(usageCountdownTimer\)/);
+});
+
+test('a quota window turns amber then red at the configured thresholds', () => {
+  const level = appSource.slice(appSource.indexOf('function usageLevel'), appSource.indexOf('function usageWindowMarkup'));
+  assert.match(level, /usedPercent >= alert[\s\S]*?return 'danger'/);
+  assert.match(level, /usedPercent >= warn[\s\S]*?return 'warn'/);
+  assert.match(appSource, /<div class="usage-window \$\{level\}">/);
+  assert.match(styles, /\.usage-window\.warn \.usage-meter i\s*\{\s*background:\s*var\(--warn\)/s);
+  assert.match(styles, /\.usage-window\.danger \.usage-meter i\s*\{\s*background:\s*var\(--danger\)/s);
+  // Amber above red would read as a lower level than red, so it is pinned below.
+  assert.match(mainSource, /function usageThresholds\(config\)[\s\S]*?warn_percent: Math\.min\(usagePercent\(config\.usage\.warn_percent, 75\), alert\)/);
+  assert.match(appSource, /name="usage\.warn_percent"/);
+  assert.match(appSource, /name="usage\.alert_percent"/);
+});
+
+test('crossing the red threshold notifies once per crossing, not once per refresh', () => {
+  const notify = appSource.slice(appSource.indexOf('function notifyUsageThresholds'), appSource.indexOf('function clearUsageRefresh'));
+  assert.match(notify, /!state\.config\?\.usage\?\.notify_quota/);
+  assert.match(notify, /Notification\.permission !== 'granted'/);
+  // Keyed on provider and window only: the providers return a reset timestamp
+  // that drifts by a second between calls, so it cannot identify a period.
+  assert.match(notify, /const key = `\$\{provider\.provider\}:\$\{window\.label\}`/);
+  assert.match(notify, /const previous = usageWindowLevels\.get\(key\)/);
+  assert.match(notify, /used < alert \|\| \(previous !== undefined && previous >= alert\)/);
+  assert.match(appSource, /notifyUsageThresholds\(providers\);\s*startUsageCountdownTicker\(\);/);
+  assert.match(appSource, /name="usage\.notify_quota"/);
+  // A disabled checkbox is absent from the form data and would clear the setting.
+  assert.match(appSource, /notify_quota: quotaNotifyInput\?\.disabled\s*\? Boolean\(state\.config\.usage\?\.notify_quota\)/);
+  assert.match(appSource, /for \(const name of \['terminal\.browser_notifications', 'usage\.notify_quota'\]\)/);
+  assert.match(mainSource, /typeof updates\.usage\.notify_quota === 'boolean'/);
 });
 
 test('usage pane puts the refresh button beside the pane close button instead of a toolbar row', () => {

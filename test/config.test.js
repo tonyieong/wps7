@@ -56,6 +56,10 @@ test('creates default config with localhost port 5000', () => {
   assert.equal(config.usage.show_weekly, true);
   assert.equal(config.usage.show_model_weekly, true);
   assert.equal(config.usage.show_credits, true);
+  // Quota thresholds: amber, then red, which doubles as the notify threshold.
+  assert.equal(config.usage.warn_percent, 75);
+  assert.equal(config.usage.alert_percent, 90);
+  assert.equal(config.usage.notify_quota, false);
   assert.equal(config.usage.codex_home, '');
   assert.equal(config.usage.claude_home, '');
 });

@@ -232,23 +232,14 @@ textarea {
 }
 
 /* Mirrors the board's horizontal scroll position; stands in for the native
-   scrollbar the tab bar now covers. Pinned to the right edge with an opaque
-   background, since enough tabs make the row itself scroll and this control
-   must not scroll away with them. It supplies the row's right padding too,
-   which a sticky child cannot claim from its container's content box. */
+   scrollbar the tab bar now covers. It owns the row's last third outright, so
+   nothing can squeeze it and it no longer needs pinning to survive. */
 .board-hscroll {
   display: flex;
   align-items: center;
   gap: 4px;
-  flex: 1 1 auto;
-  min-width: 60px;
-  max-width: 520px;
-  margin-left: auto;
-  padding: 0 8px 0 4px;
-  position: sticky;
-  right: 0;
-  z-index: 1;
-  background: var(--panel);
+  min-width: 0;
+  padding: 0 0 0 4px;
 }
 
 .board-hscroll-arrow {
@@ -3111,22 +3102,125 @@ textarea:focus-visible {
   background: var(--terminal-bg) !important;
 }
 
-/* No right padding: the pinned board scrollbar below carries that edge, because
-   a sticky child cannot sit outside its container's content box. */
+/* Three equal columns: workspace tabs, a deliberate gap, the board scrollbar.
+   Each column is capped at a third, so neither end can eat the other's space
+   the way a single flex row let them. */
 .tabs {
-  padding: 0 0 4px 8px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: center;
+  gap: 0;
+  padding: 0 8px 4px;
+  overflow: visible;
 }
 
-/* The floor keeps a tab readable. Without it flex shrinks every tab toward
-   zero, handing out the shrinkage in proportion to each tab's own width, so the
-   shortest name is stripped to a bare close button while the longest keeps its
-   room. Overflowing into the row's own horizontal scroll is the better answer. */
+.workspace-bar {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tabs-gap {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  overflow: hidden;
+}
+
+.workspace-nav {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.workspace-nav:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.workspace-nav:disabled {
+  opacity: .35;
+  cursor: default;
+}
+
+.workspace-nav .file-action-icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* The wrapper, not the strip, carries the overflow hints: a pseudo-element on
+   the scroll container itself would scroll away with the tabs. */
+.workspace-strip-wrap {
+  position: relative;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.workspace-strip {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-behavior: smooth;
+}
+
+.workspace-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.workspace-strip-wrap::before,
+.workspace-strip-wrap::after {
+  content: "…";
+  position: absolute;
+  top: 0;
+  z-index: 2;
+  display: none;
+  align-items: center;
+  width: 26px;
+  height: 100%;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+/* The gradient fades the clipped tab out under the ellipsis, so a name is never
+   sliced mid-letter against a hard edge. */
+.workspace-strip-wrap::before {
+  left: 0;
+  justify-content: flex-start;
+  padding-left: 2px;
+  background: linear-gradient(to right, var(--panel) 55%, transparent);
+}
+
+.workspace-strip-wrap::after {
+  right: 0;
+  justify-content: flex-end;
+  padding-right: 2px;
+  background: linear-gradient(to left, var(--panel) 55%, transparent);
+}
+
+.workspace-strip-wrap.overflow-left::before,
+.workspace-strip-wrap.overflow-right::after {
+  display: flex;
+}
+
+/* Width follows the title text, plus room for the close button. */
 .tab {
   height: var(--pane-toolbar-height);
   width: max-content;
-  min-width: 128px;
+  min-width: 0;
   max-width: 220px;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   justify-content: flex-start;
   gap: 4px;
   padding: 0 4px 0 9px;
@@ -3164,14 +3258,20 @@ textarea:focus-visible {
   grid-template-rows: 42px auto minmax(0, 1fr);
 }
 
-/* No left padding: a sticky child cannot sit outside the content box, so the
-   pinned brand button below supplies that edge itself. */
+/* Mobile hides the board scrollbar, so there is no second column to balance
+   against: the workspace bar takes the whole row instead of a third. */
 .app.mode-mobile .tabs,
 .app.mobile-device .tabs {
   grid-row: 1;
+  grid-template-columns: minmax(0, 1fr);
   border-top: 0;
   border-bottom: 1px solid var(--line);
-  padding: max(4px, env(safe-area-inset-top)) 8px 0 0;
+  padding: max(4px, env(safe-area-inset-top)) 8px 0;
+}
+
+.app.mode-mobile .tabs-gap,
+.app.mobile-device .tabs-gap {
+  display: none;
 }
 
 .app.mode-mobile .desktop-mode-banner,
@@ -3194,28 +3294,6 @@ textarea:focus-visible {
   border-top: 1px solid var(--line);
   border-bottom: 0;
   border-radius: 8px 8px 0 0;
-}
-
-/* Without a floor every tab shrinks toward zero, and because flex hands out the
-   shrinkage in proportion to each tab's own width, the shortest name loses its
-   label first and is left as a bare close button. A floor makes the row overflow
-   instead, which is what its horizontal scroll was always there for. */
-.app.mode-mobile .tab:not(.tab-add),
-.app.mobile-device .tab:not(.tab-add) {
-  min-width: 96px;
-}
-
-/* Now that the row scrolls, the brand button has to be pinned: it is the only
-   way to open the sidebar on mobile, and it would otherwise scroll away. It
-   carries the row's left edge and an opaque background, so tabs pass behind it
-   rather than through the gap beside it. */
-.app.mode-mobile .mobile-actions,
-.app.mobile-device .mobile-actions {
-  position: sticky;
-  left: 0;
-  z-index: 1;
-  padding: 0 4px 0 8px;
-  background: var(--panel);
 }
 
 .app.mode-mobile .tab.active,
@@ -4226,6 +4304,25 @@ textarea:focus-visible {
   height: 100%;
   border-radius: inherit;
   background: var(--accent);
+}
+
+/* A window past its threshold carries the colour on the bar, the percentage and
+   the countdown together, so the state reads without comparing numbers. */
+.usage-window.warn .usage-meter i {
+  background: var(--warn);
+}
+
+.usage-window.danger .usage-meter i {
+  background: var(--danger);
+}
+
+.usage-window.warn .usage-window-heading strong {
+  color: var(--warn);
+}
+
+.usage-window.danger .usage-window-heading strong,
+.usage-window.danger small {
+  color: var(--danger);
 }
 
 .usage-credits {

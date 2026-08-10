@@ -154,6 +154,8 @@ function publicConfig(config, shell, restartRequired, reloadError) {
     browser: config.browser,
     usage: {
       ...usageVisibility(config),
+      ...usageThresholds(config),
+      notify_quota: config.usage.notify_quota === true,
       refresh_minutes: usageRefreshMinutes(config),
       minimax_configured: Boolean(process.env.MINIMAX_CODING_API_KEY || process.env.MINIMAX_API_KEY || config.usage.minimax_api_key),
       minimax_region: config.usage.minimax_region
@@ -213,6 +215,8 @@ function settingsConfig(config, runtimeConfig) {
     },
     usage: {
       ...usageVisibility(config),
+      ...usageThresholds(config),
+      notify_quota: config.usage.notify_quota === true,
       refresh_minutes: usageRefreshMinutes(config),
       minimax_configured: Boolean(process.env.MINIMAX_CODING_API_KEY || process.env.MINIMAX_API_KEY || config.usage.minimax_api_key),
       minimax_region: config.usage.minimax_region === 'china' ? 'china' : 'global',
@@ -233,6 +237,17 @@ function usageVisibility(config) {
 function usageRefreshMinutes(config) {
   const minutes = Number(config.usage.refresh_minutes);
   return Number.isInteger(minutes) && minutes >= 0 && minutes <= 999 ? minutes : 10;
+}
+
+function usagePercent(value, fallback) {
+  const percent = Number(value);
+  return Number.isInteger(percent) && percent >= 0 && percent <= 100 ? percent : fallback;
+}
+
+// Amber never sits above red, so a swapped pair still reads sensibly.
+function usageThresholds(config) {
+  const alert = usagePercent(config.usage.alert_percent, 90);
+  return { warn_percent: Math.min(usagePercent(config.usage.warn_percent, 75), alert), alert_percent: alert };
 }
 
 function validPort(value) {
@@ -422,6 +437,15 @@ function sanitizeSettingsUpdates(updates) {
     const refreshMinutes = Number(updates.usage.refresh_minutes);
     if (Number.isInteger(refreshMinutes) && refreshMinutes >= 0 && refreshMinutes <= 999) {
       next.usage.refresh_minutes = refreshMinutes;
+    }
+    for (const key of ['warn_percent', 'alert_percent']) {
+      const percent = Number(updates.usage[key]);
+      if (Number.isInteger(percent) && percent >= 0 && percent <= 100) {
+        next.usage[key] = percent;
+      }
+    }
+    if (typeof updates.usage.notify_quota === 'boolean') {
+      next.usage.notify_quota = updates.usage.notify_quota;
     }
     for (const key of usageVisibilityKeys) {
       if (typeof updates.usage[key] === 'boolean') {

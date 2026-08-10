@@ -1779,17 +1779,25 @@
             <div class="board-reserve" aria-hidden="true" style="grid-column: ${boardExtent(tab.panes) + BOARD_RESERVE_COLUMNS} / span 1; grid-row: 1 / span 1;"></div>
           </div>
           <header class="tabs">
-            <div class="mobile-actions">
-              <button class="mobile-brand" data-action="toggle" aria-label="Toggle sidebar" aria-expanded="${state.sidebarOpen}" title="${state.sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}"><span class="rail-brand-mark" aria-hidden="true">W7</span></button>
+            <div class="workspace-bar">
+              <div class="mobile-actions">
+                <button class="mobile-brand" data-action="toggle" aria-label="Toggle sidebar" aria-expanded="${state.sidebarOpen}" title="${state.sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}"><span class="rail-brand-mark" aria-hidden="true">W7</span></button>
+              </div>
+              <button type="button" class="workspace-nav" data-workspace-nav="-1" aria-label="Previous workspace" title="Previous workspace" ${state.sessions[0]?.id === session.id ? 'disabled' : ''}>${fileActionIcon('browser-back')}</button>
+              <button type="button" class="workspace-nav" data-workspace-nav="1" aria-label="Next workspace" title="Next workspace" ${state.sessions[state.sessions.length - 1]?.id === session.id ? 'disabled' : ''}>${fileActionIcon('browser-forward')}</button>
+              <div class="workspace-strip-wrap">
+                <div class="workspace-strip" data-workspace-strip>
+                  ${state.sessions.map((item) => `
+                    <button class="tab ${item.id === session.id ? 'active' : ''}" data-tab-session="${item.id}">
+                      <span data-rename-session="${item.id}">${escapeHtml(item.name)}</span>
+                      <span class="tab-close" data-close-session="${item.id}" title="Close workspace">×</span>
+                    </button>
+                  `).join('')}
+                </div>
+              </div>
+              <button class="tab tab-add" data-action="new-session" title="New workspace" aria-label="New workspace">${fileActionIcon('add')}</button>
             </div>
-            ${state.sessions.map((item) => `
-              <button class="tab ${item.id === session.id ? 'active' : ''}" data-tab-session="${item.id}">
-                <span data-rename-session="${item.id}">${escapeHtml(item.name)}</span>
-                <span class="tab-close" data-close-session="${item.id}" title="Close workspace">×</span>
-              </button>
-            `).join('')}
-            <button class="tab tab-add" data-action="new-session" title="New workspace" aria-label="New workspace">${fileActionIcon('add')}</button>
-            ${state.config.shell.usingFallback ? '<span class="shell-warning">PowerShell 7 not found</span>' : ''}
+            <div class="tabs-gap">${state.config.shell.usingFallback ? '<span class="shell-warning">PowerShell 7 not found</span>' : ''}</div>
             <div class="board-hscroll" data-board-hscroll>
               <button type="button" class="board-hscroll-arrow" data-board-scroll-dir="-1" aria-label="Scroll board left" title="Scroll board left">${fileActionIcon('browser-back')}</button>
               <div class="board-hscroll-track" data-board-hscroll-track>
@@ -1804,34 +1812,52 @@
 
     wireControls();
     ensureActivePaneVisible('auto');
-    ensureActiveWorkspaceTabVisible();
+    centerActiveWorkspaceTab();
     updateDesktopModeBanner();
     for (const pane of tab.panes) {
       mountPaneContent(pane);
     }
   }
 
-  // Tabs keep a minimum width, so enough workspaces push the row past its own
-  // edge. Scroll by the overhang only, which leaves an already visible tab put.
-  // The pinned controls at each end sit above the row, so a tab tucked under one
-  // is unreadable even though its box is inside the row: the brand button holds
-  // the left on mobile, the board scrollbar holds the right on desktop, and
-  // whichever is hidden for this layout measures zero.
-  function ensureActiveWorkspaceTabVisible() {
-    const tabs = app.querySelector('.tabs');
-    const active = tabs?.querySelector('.tab.active');
+  // The active workspace always sits in the middle of the strip. Half-strip
+  // padding at each end is what lets the first and last tab reach the centre
+  // too; it works out so that centring them lands exactly on scrollLeft 0 and
+  // on the maximum scroll, which keeps the overflow hints below honest.
+  function centerActiveWorkspaceTab() {
+    const strip = app.querySelector('[data-workspace-strip]');
+    const active = strip?.querySelector('.tab.active');
     if (!active) {
       return;
     }
-    const row = tabs.getBoundingClientRect();
-    const left = row.left + (tabs.querySelector('.mobile-actions')?.offsetWidth || 0);
-    const right = row.right - (tabs.querySelector('.board-hscroll')?.offsetWidth || 0);
-    const tab = active.getBoundingClientRect();
-    if (tab.left < left) {
-      tabs.scrollLeft -= left - tab.left;
-    } else if (tab.right > right) {
-      tabs.scrollLeft += tab.right - right;
+    const tabs = [...strip.querySelectorAll('.tab')];
+    const half = (tab) => Math.max(0, (strip.clientWidth - tab.offsetWidth) / 2);
+    strip.style.paddingLeft = `${half(tabs[0])}px`;
+    strip.style.paddingRight = `${half(tabs[tabs.length - 1])}px`;
+    strip.scrollLeft = active.offsetLeft + active.offsetWidth / 2 - strip.clientWidth / 2;
+    updateWorkspaceStripOverflow();
+  }
+
+  // Ellipses at either end say more workspaces are parked off that side.
+  function updateWorkspaceStripOverflow() {
+    const strip = app.querySelector('[data-workspace-strip]');
+    if (!strip) {
+      return;
     }
+    const remaining = strip.scrollWidth - strip.clientWidth - strip.scrollLeft;
+    strip.parentElement.classList.toggle('overflow-left', strip.scrollLeft > 1);
+    strip.parentElement.classList.toggle('overflow-right', remaining > 1);
+  }
+
+  async function switchWorkspaceByOffset(offset) {
+    const index = state.sessions.findIndex((item) => item.id === state.activeSessionId);
+    const next = state.sessions[index + offset];
+    if (!next) {
+      return;
+    }
+    state.activeSessionId = next.id;
+    state.activePaneId = '';
+    await api(`/api/sessions/${next.id}/activate`, { method: 'POST' });
+    await loadState();
   }
 
   function narrowViewport() {
@@ -1874,6 +1900,10 @@
   function wireControls() {
     app.querySelectorAll('[data-action="toggle"]').forEach((button) => button.onclick = () => setSidebarOpen(!state.sidebarOpen));
     app.querySelector('[data-sidebar-pin]').onclick = () => setSidebarPinned(!state.sidebarPinned);
+    app.querySelectorAll('[data-workspace-nav]').forEach((button) => {
+      button.onclick = () => switchWorkspaceByOffset(Number(button.dataset.workspaceNav));
+    });
+    app.querySelector('[data-workspace-strip]')?.addEventListener('scroll', updateWorkspaceStripOverflow);
     app.querySelectorAll('[data-action="new-session"]').forEach((button) => button.onclick = async () => {
       const session = await api('/api/sessions', { method: 'POST', body: JSON.stringify({}) });
       state.activeSessionId = session.id;
@@ -7400,14 +7430,48 @@
     }
   }
 
+  // "2h 14m" reads as time left at a glance, which a reset timestamp does not.
+  // Under a minute stays "under a minute" rather than counting seconds down,
+  // because the reading only refreshes once a minute.
+  function usageCountdown(resetsAt, now = Date.now()) {
+    const target = new Date(resetsAt).getTime();
+    if (!Number.isFinite(target)) {
+      return 'Reset time unavailable';
+    }
+    const minutes = Math.floor((target - now) / 60000);
+    if (minutes < 0) {
+      return 'Resetting now';
+    }
+    if (minutes < 1) {
+      return 'Resets in under a minute';
+    }
+    const days = Math.floor(minutes / 1440);
+    const hours = Math.floor((minutes % 1440) / 60);
+    const parts = [days ? `${days}d` : '', days || hours ? `${hours}h` : '', days ? '' : `${minutes % 60}m`].filter(Boolean);
+    return `Resets in ${parts.join(' ')}`;
+  }
+
+  function usageLevel(usedPercent) {
+    const warn = Number(state.config?.usage?.warn_percent);
+    const alert = Number(state.config?.usage?.alert_percent);
+    if (Number.isFinite(alert) && usedPercent >= alert) {
+      return 'danger';
+    }
+    if (Number.isFinite(warn) && usedPercent >= warn) {
+      return 'warn';
+    }
+    return '';
+  }
+
   function usageWindowMarkup(window) {
     const used = Math.max(0, Math.min(100, Number(window.usedPercent) || 0));
-    const reset = window.resetsAt ? new Date(window.resetsAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short', hour12: false }) : 'Reset time unavailable';
+    const level = usageLevel(used);
+    const absolute = window.resetsAt ? new Date(window.resetsAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short', hour12: false }) : '';
     return `
-      <div class="usage-window">
+      <div class="usage-window ${level}">
         <div class="usage-window-heading"><span>${escapeHtml(window.label)}</span><strong>${Math.round(used)}%</strong></div>
         <div class="usage-meter" role="progressbar" aria-label="${escapeAttr(window.label)} used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(used)}"><i style="width:${used}%"></i></div>
-        <small>${escapeHtml(reset)}</small>
+        <small data-usage-countdown="${escapeAttr(window.resetsAt || '')}" title="${escapeAttr(absolute)}">${escapeHtml(usageCountdown(window.resetsAt))}</small>
       </div>
     `;
   }
@@ -7447,6 +7511,58 @@
   }
 
   const usageRefreshTimers = new Map();
+  // Notify on the crossing, not on the state: a window that stays over the
+  // threshold is announced once. Keying on the reset timestamp cannot do this
+  // because the providers return one that drifts by a second between calls.
+  const usageWindowLevels = new Map();
+  let usageCountdownTimer = 0;
+
+  // The readings themselves only change on refresh, but the time left does not,
+  // so the countdown ticks on its own and stops once no pane is showing one.
+  function startUsageCountdownTicker() {
+    if (usageCountdownTimer) {
+      return;
+    }
+    usageCountdownTimer = setInterval(() => {
+      const labels = document.querySelectorAll('[data-usage-countdown]');
+      if (!labels.length) {
+        clearInterval(usageCountdownTimer);
+        usageCountdownTimer = 0;
+        return;
+      }
+      for (const label of labels) {
+        label.textContent = usageCountdown(label.dataset.usageCountdown);
+      }
+    }, 60000);
+  }
+
+  function notifyUsageThresholds(providers) {
+    const alert = Number(state.config?.usage?.alert_percent);
+    if (!state.config?.usage?.notify_quota || !Number.isFinite(alert)) {
+      return;
+    }
+    if (!('Notification' in window) || Notification.permission !== 'granted') {
+      return;
+    }
+    for (const provider of providers) {
+      const windows = provider.services
+        ? provider.services.flatMap((service) => (service.windows || []).map((window) => ({ ...window, label: `${service.label} ${window.label}` })))
+        : provider.windows || [];
+      for (const window of windows) {
+        const used = Math.round(Math.max(0, Math.min(100, Number(window.usedPercent) || 0)));
+        const key = `${provider.provider}:${window.label}`;
+        const previous = usageWindowLevels.get(key);
+        usageWindowLevels.set(key, used);
+        // Unknown counts as below, so a pane opened on an already-red window
+        // still says so once. A reset drops it back under and re-arms the alert.
+        if (used < alert || (previous !== undefined && previous >= alert)) {
+          continue;
+        }
+        const body = `${window.label} at ${used}%. ${usageCountdown(window.resetsAt)}.`;
+        new Notification(`${provider.label} quota`, { body, icon: '/icon.svg', tag: `wps7-usage-${key}` });
+      }
+    }
+  }
 
   function clearUsageRefresh(paneId) {
     clearTimeout(usageRefreshTimers.get(paneId));
@@ -7481,6 +7597,8 @@
         ? providers.map(usageProviderMarkup).join('')
         : '<div class="usage-loading">Choose at least one provider in Settings → Usage.</div>';
       content.querySelector('[data-usage-settings]')?.addEventListener('click', openSettings);
+      notifyUsageThresholds(providers);
+      startUsageCountdownTicker();
     } catch (error) {
       content.innerHTML = `<div class="usage-loading error">${escapeHtml(error.message)}</div>`;
     } finally {
@@ -8010,6 +8128,9 @@
                 <label class="settings-check"><input name="usage.show_weekly" type="checkbox" ${settings.usage?.show_weekly !== false ? 'checked' : ''}> Weekly window</label>
                 <label class="settings-check"><input name="usage.show_model_weekly" type="checkbox" ${settings.usage?.show_model_weekly !== false ? 'checked' : ''}> Per-model weekly windows</label>
                 <label class="settings-check"><input name="usage.show_credits" type="checkbox" ${settings.usage?.show_credits !== false ? 'checked' : ''}> Credit balance</label>
+                <label>Amber at<input name="usage.warn_percent" type="number" min="0" max="100" step="1" value="${escapeAttr(settings.usage?.warn_percent ?? 75)}" title="Percent used at which a quota window turns amber."></label>
+                <label>Red at<input name="usage.alert_percent" type="number" min="0" max="100" step="1" value="${escapeAttr(settings.usage?.alert_percent ?? 90)}" title="Percent used at which a quota window turns red. Also the notification threshold."></label>
+                <label class="settings-check"><input name="usage.notify_quota" type="checkbox" ${settings.usage?.notify_quota ? 'checked' : ''} ${notificationCapability.available ? '' : 'disabled'}> Notify when a quota window turns red</label>
                 <label class="settings-wide">MiniMax Coding Plan API key<input name="usage.minimax_api_key" type="password" autocomplete="off" placeholder="${settings.usage?.minimax_configured ? 'Saved — leave blank to keep' : 'sk-cp-…'}"></label>
                 <label>MiniMax region<select name="usage.minimax_region"><option value="global" ${settings.usage?.minimax_region !== 'china' ? 'selected' : ''}>Global</option><option value="china" ${settings.usage?.minimax_region === 'china' ? 'selected' : ''}>China mainland</option></select></label>
                 <label class="settings-check"><input name="usage.clear_minimax_api_key" type="checkbox"> Clear saved MiniMax key</label>
@@ -8186,12 +8307,14 @@
       const status = overlay.querySelector('[data-settings-status]');
       status.textContent = 'Saving...';
       try {
-        const notificationInput = event.currentTarget.elements['terminal.browser_notifications'];
-        if (notificationInput?.checked && !notificationInput?.disabled) {
-          const permission = await requestBrowserNotificationPermission();
-          if (permission !== 'granted') {
-            notificationInput.checked = false;
-            showToast('Browser notification permission was not granted.');
+        for (const name of ['terminal.browser_notifications', 'usage.notify_quota']) {
+          const notificationInput = event.currentTarget.elements[name];
+          if (notificationInput?.checked && !notificationInput?.disabled) {
+            const permission = await requestBrowserNotificationPermission();
+            if (permission !== 'granted') {
+              notificationInput.checked = false;
+              showToast('Browser notification permission was not granted.');
+            }
           }
         }
         const payload = settingsPayload(new FormData(event.currentTarget), event.currentTarget);
@@ -8269,6 +8392,9 @@
 
   function settingsPayload(form, formElement) {
     const notificationInput = formElement.elements['terminal.browser_notifications'];
+    // A disabled checkbox is absent from the form data, which would silently
+    // clear the stored setting rather than leave it alone.
+    const quotaNotifyInput = formElement.elements['usage.notify_quota'];
     const payload = {
       server: {
         host: form.get('server.host'),
@@ -8325,6 +8451,11 @@
         show_weekly: form.get('usage.show_weekly') === 'on',
         show_model_weekly: form.get('usage.show_model_weekly') === 'on',
         show_credits: form.get('usage.show_credits') === 'on',
+        warn_percent: numberOrUndefined(form.get('usage.warn_percent')),
+        alert_percent: numberOrUndefined(form.get('usage.alert_percent')),
+        notify_quota: quotaNotifyInput?.disabled
+          ? Boolean(state.config.usage?.notify_quota)
+          : form.get('usage.notify_quota') === 'on',
         codex_home: String(form.get('usage.codex_home') || '').trim(),
         claude_home: String(form.get('usage.claude_home') || '').trim()
       },
