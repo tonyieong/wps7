@@ -613,6 +613,50 @@ test('usage pane shows quota reset times in 24-hour time', () => {
   assert.match(appSource, /function usageWindowMarkup\(window\)[\s\S]*?hour12: false/);
 });
 
+test('usage windows count down to the reset instead of printing a timestamp', () => {
+  const countdown = appSource.slice(appSource.indexOf('function usageCountdown'), appSource.indexOf('function usageLevel'));
+  assert.match(countdown, /return 'Reset time unavailable'/);
+  assert.match(countdown, /minutes < 0[\s\S]*?return 'Resetting now'/);
+  assert.match(countdown, /minutes < 1[\s\S]*?return 'Resets in under a minute'/);
+  assert.match(countdown, /const days = Math\.floor\(minutes \/ 1440\)/);
+  // The timestamp stays reachable as the title rather than being thrown away.
+  assert.match(appSource, /data-usage-countdown="\$\{escapeAttr\(window\.resetsAt \|\| ''\)\}" title="\$\{escapeAttr\(absolute\)\}"/);
+  // Readings only change on refresh; the time left changes on its own.
+  assert.match(appSource, /function startUsageCountdownTicker\(\)/);
+  assert.match(appSource, /label\.textContent = usageCountdown\(label\.dataset\.usageCountdown\)/);
+  assert.match(appSource, /if \(!labels\.length\)[\s\S]*?clearInterval\(usageCountdownTimer\)/);
+});
+
+test('a quota window turns amber then red at the configured thresholds', () => {
+  const level = appSource.slice(appSource.indexOf('function usageLevel'), appSource.indexOf('function usageWindowMarkup'));
+  assert.match(level, /usedPercent >= alert[\s\S]*?return 'danger'/);
+  assert.match(level, /usedPercent >= warn[\s\S]*?return 'warn'/);
+  assert.match(appSource, /<div class="usage-window \$\{level\}">/);
+  assert.match(styles, /\.usage-window\.warn \.usage-meter i\s*\{\s*background:\s*var\(--warn\)/s);
+  assert.match(styles, /\.usage-window\.danger \.usage-meter i\s*\{\s*background:\s*var\(--danger\)/s);
+  // Amber above red would read as a lower level than red, so it is pinned below.
+  assert.match(mainSource, /function usageThresholds\(config\)[\s\S]*?warn_percent: Math\.min\(usagePercent\(config\.usage\.warn_percent, 75\), alert\)/);
+  assert.match(appSource, /name="usage\.warn_percent"/);
+  assert.match(appSource, /name="usage\.alert_percent"/);
+});
+
+test('crossing the red threshold notifies once per crossing, not once per refresh', () => {
+  const notify = appSource.slice(appSource.indexOf('function notifyUsageThresholds'), appSource.indexOf('function clearUsageRefresh'));
+  assert.match(notify, /!state\.config\?\.usage\?\.notify_quota/);
+  assert.match(notify, /Notification\.permission !== 'granted'/);
+  // Keyed on provider and window only: the providers return a reset timestamp
+  // that drifts by a second between calls, so it cannot identify a period.
+  assert.match(notify, /const key = `\$\{provider\.provider\}:\$\{window\.label\}`/);
+  assert.match(notify, /const previous = usageWindowLevels\.get\(key\)/);
+  assert.match(notify, /used < alert \|\| \(previous !== undefined && previous >= alert\)/);
+  assert.match(appSource, /notifyUsageThresholds\(providers\);\s*startUsageCountdownTicker\(\);/);
+  assert.match(appSource, /name="usage\.notify_quota"/);
+  // A disabled checkbox is absent from the form data and would clear the setting.
+  assert.match(appSource, /notify_quota: quotaNotifyInput\?\.disabled\s*\? Boolean\(state\.config\.usage\?\.notify_quota\)/);
+  assert.match(appSource, /for \(const name of \['terminal\.browser_notifications', 'usage\.notify_quota'\]\)/);
+  assert.match(mainSource, /typeof updates\.usage\.notify_quota === 'boolean'/);
+});
+
 test('usage pane puts the refresh button beside the pane close button instead of a toolbar row', () => {
   assert.match(appSource, /class="pane-usage-refresh"[^>]*data-usage-refresh/);
   assert.match(styles, /\.pane-usage-refresh\s*\{[^}]*right:\s*32px/s);

@@ -4294,6 +4294,25 @@ textarea:focus-visible {
   background: var(--accent);
 }
 
+/* A window past its threshold carries the colour on the bar, the percentage and
+   the countdown together, so the state reads without comparing numbers. */
+.usage-window.warn .usage-meter i {
+  background: var(--warn);
+}
+
+.usage-window.danger .usage-meter i {
+  background: var(--danger);
+}
+
+.usage-window.warn .usage-window-heading strong {
+  color: var(--warn);
+}
+
+.usage-window.danger .usage-window-heading strong,
+.usage-window.danger small {
+  color: var(--danger);
+}
+
 .usage-credits {
   margin-top: 12px;
   padding-top: 9px;

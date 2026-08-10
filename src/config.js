@@ -93,6 +93,9 @@ const defaultConfig = {
     show_weekly: true,
     show_model_weekly: true,
     show_credits: true,
+    warn_percent: 75,
+    alert_percent: 90,
+    notify_quota: false,
     codex_home: '',
     claude_home: ''
   },
@@ -223,6 +226,13 @@ show_five_hour = true
 show_weekly = true
 show_model_weekly = true
 show_credits = true
+# Percentages, 0-100, at which a quota window turns amber and then red.
+# alert_percent doubles as the notification threshold.
+warn_percent = 75
+alert_percent = 90
+# Raise a browser notification the first time a window crosses alert_percent in
+# a given reset period. The browser asks for permission when this is enabled.
+notify_quota = false
 # Override the Codex/Claude Code home folder used to find the signed-in CLI
 # credentials (auth.json / .credentials.json). Leave blank to search: this
 # account's home first, then the other profiles beside it, most recent login
