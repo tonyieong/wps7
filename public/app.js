@@ -1387,17 +1387,25 @@
             <div class="board-reserve" aria-hidden="true" style="grid-column: ${boardExtent(tab.panes) + BOARD_RESERVE_COLUMNS} / span 1; grid-row: 1 / span 1;"></div>
           </div>
           <header class="tabs">
-            <div class="mobile-actions">
-              <button class="mobile-brand" data-action="toggle" aria-label="Toggle sidebar" aria-expanded="${state.sidebarOpen}" title="${state.sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}"><span class="rail-brand-mark" aria-hidden="true">W7</span></button>
+            <div class="workspace-bar">
+              <div class="mobile-actions">
+                <button class="mobile-brand" data-action="toggle" aria-label="Toggle sidebar" aria-expanded="${state.sidebarOpen}" title="${state.sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}"><span class="rail-brand-mark" aria-hidden="true">W7</span></button>
+              </div>
+              <button type="button" class="workspace-nav" data-workspace-nav="-1" aria-label="Previous workspace" title="Previous workspace" ${state.sessions[0]?.id === session.id ? 'disabled' : ''}>${fileActionIcon('browser-back')}</button>
+              <button type="button" class="workspace-nav" data-workspace-nav="1" aria-label="Next workspace" title="Next workspace" ${state.sessions[state.sessions.length - 1]?.id === session.id ? 'disabled' : ''}>${fileActionIcon('browser-forward')}</button>
+              <div class="workspace-strip-wrap">
+                <div class="workspace-strip" data-workspace-strip>
+                  ${state.sessions.map((item) => `
+                    <button class="tab ${item.id === session.id ? 'active' : ''}" data-tab-session="${item.id}">
+                      <span data-rename-session="${item.id}">${escapeHtml(item.name)}</span>
+                      <span class="tab-close" data-close-session="${item.id}" title="Close workspace">×</span>
+                    </button>
+                  `).join('')}
+                </div>
+              </div>
+              <button class="tab tab-add" data-action="new-session" title="New workspace" aria-label="New workspace">${fileActionIcon('add')}</button>
             </div>
-            ${state.sessions.map((item) => `
-              <button class="tab ${item.id === session.id ? 'active' : ''}" data-tab-session="${item.id}">
-                <span data-rename-session="${item.id}">${escapeHtml(item.name)}</span>
-                <span class="tab-close" data-close-session="${item.id}" title="Close workspace">×</span>
-              </button>
-            `).join('')}
-            <button class="tab tab-add" data-action="new-session" title="New workspace" aria-label="New workspace">${fileActionIcon('add')}</button>
-            ${state.config.shell.usingFallback ? '<span class="shell-warning">PowerShell 7 not found</span>' : ''}
+            <div class="tabs-gap">${state.config.shell.usingFallback ? '<span class="shell-warning">PowerShell 7 not found</span>' : ''}</div>
             <div class="board-hscroll" data-board-hscroll>
               <button type="button" class="board-hscroll-arrow" data-board-scroll-dir="-1" aria-label="Scroll board left" title="Scroll board left">${fileActionIcon('browser-back')}</button>
               <div class="board-hscroll-track" data-board-hscroll-track>
@@ -1412,34 +1420,52 @@
 
     wireControls();
     ensureActivePaneVisible('auto');
-    ensureActiveWorkspaceTabVisible();
+    centerActiveWorkspaceTab();
     updateDesktopModeBanner();
     for (const pane of tab.panes) {
       mountPaneContent(pane);
     }
   }
 
-  // Tabs keep a minimum width, so enough workspaces push the row past its own
-  // edge. Scroll by the overhang only, which leaves an already visible tab put.
-  // The pinned controls at each end sit above the row, so a tab tucked under one
-  // is unreadable even though its box is inside the row: the brand button holds
-  // the left on mobile, the board scrollbar holds the right on desktop, and
-  // whichever is hidden for this layout measures zero.
-  function ensureActiveWorkspaceTabVisible() {
-    const tabs = app.querySelector('.tabs');
-    const active = tabs?.querySelector('.tab.active');
+  // The active workspace always sits in the middle of the strip. Half-strip
+  // padding at each end is what lets the first and last tab reach the centre
+  // too; it works out so that centring them lands exactly on scrollLeft 0 and
+  // on the maximum scroll, which keeps the overflow hints below honest.
+  function centerActiveWorkspaceTab() {
+    const strip = app.querySelector('[data-workspace-strip]');
+    const active = strip?.querySelector('.tab.active');
     if (!active) {
       return;
     }
-    const row = tabs.getBoundingClientRect();
-    const left = row.left + (tabs.querySelector('.mobile-actions')?.offsetWidth || 0);
-    const right = row.right - (tabs.querySelector('.board-hscroll')?.offsetWidth || 0);
-    const tab = active.getBoundingClientRect();
-    if (tab.left < left) {
-      tabs.scrollLeft -= left - tab.left;
-    } else if (tab.right > right) {
-      tabs.scrollLeft += tab.right - right;
+    const tabs = [...strip.querySelectorAll('.tab')];
+    const half = (tab) => Math.max(0, (strip.clientWidth - tab.offsetWidth) / 2);
+    strip.style.paddingLeft = `${half(tabs[0])}px`;
+    strip.style.paddingRight = `${half(tabs[tabs.length - 1])}px`;
+    strip.scrollLeft = active.offsetLeft + active.offsetWidth / 2 - strip.clientWidth / 2;
+    updateWorkspaceStripOverflow();
+  }
+
+  // Ellipses at either end say more workspaces are parked off that side.
+  function updateWorkspaceStripOverflow() {
+    const strip = app.querySelector('[data-workspace-strip]');
+    if (!strip) {
+      return;
     }
+    const remaining = strip.scrollWidth - strip.clientWidth - strip.scrollLeft;
+    strip.parentElement.classList.toggle('overflow-left', strip.scrollLeft > 1);
+    strip.parentElement.classList.toggle('overflow-right', remaining > 1);
+  }
+
+  async function switchWorkspaceByOffset(offset) {
+    const index = state.sessions.findIndex((item) => item.id === state.activeSessionId);
+    const next = state.sessions[index + offset];
+    if (!next) {
+      return;
+    }
+    state.activeSessionId = next.id;
+    state.activePaneId = '';
+    await api(`/api/sessions/${next.id}/activate`, { method: 'POST' });
+    await loadState();
   }
 
   function narrowViewport() {
@@ -1482,6 +1508,10 @@
   function wireControls() {
     app.querySelectorAll('[data-action="toggle"]').forEach((button) => button.onclick = () => setSidebarOpen(!state.sidebarOpen));
     app.querySelector('[data-sidebar-pin]').onclick = () => setSidebarPinned(!state.sidebarPinned);
+    app.querySelectorAll('[data-workspace-nav]').forEach((button) => {
+      button.onclick = () => switchWorkspaceByOffset(Number(button.dataset.workspaceNav));
+    });
+    app.querySelector('[data-workspace-strip]')?.addEventListener('scroll', updateWorkspaceStripOverflow);
     app.querySelectorAll('[data-action="new-session"]').forEach((button) => button.onclick = async () => {
       const session = await api('/api/sessions', { method: 'POST', body: JSON.stringify({}) });
       state.activeSessionId = session.id;
