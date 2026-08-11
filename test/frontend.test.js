@@ -1822,11 +1822,16 @@ test('the file error message carries the theme danger token, not a fixed red', (
 });
 
 test('light mode muted and accent text clears the 4.5:1 contrast floor', () => {
+  // applyTheme() writes the palette as inline custom properties, so the JS
+  // preset wins over the stylesheet. Asserting only the CSS block passes while
+  // the running app keeps the old colour.
+  assert.match(appSource, /'wps-light':[^}]*muted: '#5d6b78'[^}]*accent: '#0b7561'/);
+  assert.match(appSource, /light_muted: '#5d6b78', light_accent: '#0b7561'/);
+  // The stylesheet block is the no-JS fallback and has to stay in step.
   const lightStart = styles.indexOf(':root[data-theme="light"]');
   const light = styles.slice(lightStart, styles.indexOf('}', lightStart));
   assert.match(light, /--muted:\s*#5d6b78/);
   assert.match(light, /--accent:\s*#0b7561/);
-  // accent-soft is derived from accent, so it has to track the same hue.
   assert.match(light, /--accent-soft:\s*rgba\(11, 117, 97/);
 });
 
