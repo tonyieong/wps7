@@ -2301,8 +2301,7 @@
     }
     const tab = event.currentTarget;
     const strip = tab.parentElement;
-    const startX = event.clientX;
-    let origin = 0;
+    let startX = event.clientX;
     let anchor = 0;
     let dragging = false;
     let hold = 0;
@@ -2311,7 +2310,6 @@
       dragging = true;
       hold = 0;
       cancelClick();
-      origin = tab.offsetLeft;
       anchor = strip.scrollLeft;
       tab.classList.add('dragging');
       strip.classList.add('reordering');
@@ -2321,23 +2319,25 @@
     // simply vanish. Held inside the visible run it stays under the pointer for
     // as far as it can go, and reordering follows where it is actually drawn.
     const offset = (pointerX) => {
-      const min = anchor - origin;
-      const max = anchor + strip.clientWidth - tab.offsetWidth - origin;
+      const min = anchor - tab.offsetLeft;
+      const max = anchor + strip.clientWidth - tab.offsetWidth - tab.offsetLeft;
       return Math.max(min, Math.min(max, pointerX - startX));
     };
 
-    // Each swap moves the tab under the pointer, so the offset it is dragged by
-    // has to be rebased onto the slot it just landed in or it would jump.
     const reorder = (pointerX) => {
       const others = [...strip.querySelectorAll('.tab')].filter((item) => item !== tab);
-      const centre = origin + tab.offsetWidth / 2 + offset(pointerX);
+      const centre = tab.offsetLeft + tab.offsetWidth / 2 + offset(pointerX);
       const before = others.find((item) => centre < item.offsetLeft + item.offsetWidth / 2);
       const settled = tab.offsetLeft;
       if (before === tab.nextElementSibling || (!before && !tab.nextElementSibling)) {
         return;
       }
       strip.insertBefore(tab, before || null);
-      origin += tab.offsetLeft - settled;
+      // Taking the new slot moves the tab by the width of whatever it just
+      // passed. The pointer did not move, so its own origin has to travel the
+      // same distance, or the tab leaps that far ahead and lands on the next
+      // title, and the next, until it fetches up against the far edge.
+      startX += tab.offsetLeft - settled;
     };
 
     const onMove = (moveEvent) => {
@@ -2357,8 +2357,11 @@
       // from under the tab being dragged. Pinning it holds every slot still, so
       // the tab goes exactly where it is dragged and nowhere on its own.
       strip.scrollLeft = anchor;
-      tab.style.transform = `translateX(${offset(moveEvent.clientX)}px)`;
+      // Reordering first, because taking a new slot changes both the tab's own
+      // position and the offset it has to be drawn at. Drawn before that, the
+      // tab would spend a frame at the new slot with the old offset still on it.
       reorder(moveEvent.clientX);
+      tab.style.transform = `translateX(${offset(moveEvent.clientX)}px)`;
     };
 
     const finish = () => {

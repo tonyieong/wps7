@@ -155,13 +155,22 @@ test('a workspace title can be dragged to reorder it, and a touch must hold firs
   // A touch drags only after holding still; moving first scrolls the strip.
   assert.match(drag, /if \(event\.pointerType === 'touch'\) \{\s*hold = setTimeout\(begin, WORKSPACE_DRAG_HOLD_MS\);/);
   assert.match(drag, /if \(hold && travelled > 6\) \{\s*finish\(\);/);
-  // Swapping moves the tab under the pointer, so the drag offset is rebased.
+  // Taking a new slot moves the tab by the width of what it just passed, so the
+  // pointer's origin travels the same distance. Rebasing anything else left the
+  // tab that far ahead of the pointer, onto the next title, and the next, until
+  // it fetched up against the far edge.
   assert.match(drag, /strip\.insertBefore\(tab, before \|\| null\)/);
-  assert.match(drag, /origin \+= tab\.offsetLeft - settled/);
+  assert.match(drag, /startX \+= tab\.offsetLeft - settled/);
+  // Both the tab's slot and the offset it is drawn at come from the live
+  // positions, so nothing has to be kept in step with them by hand.
+  assert.match(drag, /const min = anchor - tab\.offsetLeft/);
+  assert.match(drag, /const centre = tab\.offsetLeft \+ tab\.offsetWidth \/ 2 \+ offset\(pointerX\)/);
   // The strip clips its overflow, so a dragged tab is held inside the visible
   // run rather than disappearing past an edge.
   assert.match(drag, /return Math\.max\(min, Math\.min\(max, pointerX - startX\)\)/);
-  assert.match(drag, /tab\.style\.transform = `translateX\(\$\{offset\(moveEvent\.clientX\)\}px\)`/);
+  // Reordering has to run before the tab is drawn: the other way round spends a
+  // frame with the new slot and the old offset, which reads as a jump.
+  assert.match(drag, /reorder\(moveEvent\.clientX\);\s*tab\.style\.transform = `translateX\(\$\{offset\(moveEvent\.clientX\)\}px\)`/);
   // The strip is pinned for the whole drag. Scrolling it from inside the move
   // handler ran once per pointer event, which raced the tab to the far end
   // instead of leaving it under the pointer.
