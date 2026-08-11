@@ -578,6 +578,17 @@ test('sidebar creates a persistent usage pane with configurable providers', () =
   assert.doesNotMatch(appSource, /className = 'usage-overlay'/);
 });
 
+// Providers rate limit per account, so only the button may spend a lookup: the
+// timer goes through the shared server cache, and a limited provider keeps
+// showing its last reading instead of blanking the card.
+test('usage auto-refresh reuses the server cache and surfaces a stale reading', () => {
+  assert.match(appSource, /async function loadUsagePane\(paneId, refresh = false, force = refresh\)/);
+  assert.match(appSource, /const result = force \? await api\('\/api\/usage\?refresh=1'\) : await api\('\/api\/usage'\)/);
+  assert.match(appSource, /const detail = provider\.stale \|\|/);
+  assert.match(appSource, /class="usage-state\$\{provider\.stale \? '' : ' ok'\}"/);
+  assert.match(mainSource, /usage\.keepLastGoodUsage\(overview\.providers \|\| \[\], lastGoodUsage\)/);
+});
+
 test('usage settings configure the MiniMax key and the visible quota windows', () => {
   assert.match(appSource, /name="usage\.minimax_api_key"/);
   assert.match(appSource, /name="usage\.clear_minimax_api_key"/);
@@ -670,7 +681,7 @@ test('usage panes auto-refresh on the configured interval and stop when set to z
   assert.match(appSource, /refresh_minutes: numberOrUndefined\(form\.get\('usage\.refresh_minutes'\)\)/);
   // 0 (and any non-positive value) must leave no timer scheduled.
   assert.match(appSource, /function scheduleUsageRefresh\(paneId\)[\s\S]*?if \(!Number\.isFinite\(minutes\) \|\| minutes <= 0\) return;/);
-  assert.match(appSource, /setTimeout\(\(\) => loadUsagePane\(paneId, true\), minutes \* 60000\)/);
+  assert.match(appSource, /setTimeout\(\(\) => loadUsagePane\(paneId, true, false\), minutes \* 60000\)/);
   // Closing a pane must not leave its timer running.
   assert.match(appSource, /clearUsageRefresh\(paneId\);\s*const index = found\.tab\.panes\.findIndex/);
   assert.match(mainSource, /function usageRefreshMinutes\(config\)[\s\S]*?minutes >= 0 && minutes <= 999 \? minutes : 10/);

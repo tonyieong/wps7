@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { PassThrough } = require('node:stream');
-const { fetchClaudeUsage, fetchCodexUsage, fetchMiniMaxUsage, fetchUsageOverview, resolveCliHome, systemNodeFetch } = require('../src/usage');
+const { fetchClaudeUsage, fetchCodexUsage, fetchMiniMaxUsage, fetchUsageOverview, keepLastGoodUsage, resolveCliHome, systemNodeFetch } = require('../src/usage');
 
 function fakeNodeSpawn(handler) {
   const calls = [];
@@ -231,6 +231,53 @@ test('refreshes an expired Claude subscription login through the CLI before retr
   assert.equal(requestCount, 2);
   assert.equal(result.source, 'oauth');
   assert.deepEqual(result.windows.map((window) => window.usedPercent), [9]);
+});
+
+// api.anthropic.com/api/oauth/usage rate limits per OAuth token, and every
+// Claude Code CLI signed in as the same account draws on that budget, so the
+// pane sees a 429 while the login is perfectly good.
+test('reports a Claude rate limit as such and does not re-login over it', async () => {
+  const claudeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-claude-'));
+  fs.writeFileSync(path.join(claudeHome, '.credentials.json'), JSON.stringify({
+    claudeAiOauth: { accessToken: 'claude-token' }
+  }));
+  let requestCount = 0;
+  const ptyImpl = {
+    spawn() {
+      throw new Error('the CLI must not be started for a rate limit');
+    }
+  };
+
+  await assert.rejects(fetchClaudeUsage({
+    claudeHome,
+    ptyImpl,
+    fetchImpl: async () => {
+      requestCount += 1;
+      return { ok: false, status: 429, text: async () => '{"error":{"type":"rate_limit_error"}}' };
+    }
+  }), (error) => error.message === 'Provider rate limit reached.' && error.code === 'PROVIDER_RATE_LIMIT');
+
+  assert.equal(requestCount, 1);
+});
+
+test('a failed lookup falls back to the last good reading until it goes out of date', () => {
+  const cache = new Map();
+  const good = [{ provider: 'claude', windows: [{ usedPercent: 42 }] }, { provider: 'codex', windows: [] }];
+  assert.deepEqual(keepLastGoodUsage(good, cache, 1000), good);
+
+  const limited = [{ provider: 'claude', error: 'Provider rate limit reached.' }, { provider: 'codex', windows: [] }];
+  const [claude] = keepLastGoodUsage(limited, cache, 61000);
+  assert.deepEqual(claude.windows, [{ usedPercent: 42 }]);
+  assert.equal(claude.stale, 'Provider rate limit reached.');
+  assert.equal('error' in claude, false);
+
+  // Past the window the reading no longer describes the quota, so the error stands.
+  assert.deepEqual(keepLastGoodUsage(limited, cache, 1000 + 31 * 60000)[0], limited[0]);
+
+  // Nothing was ever read for a provider that fails on its first lookup.
+  assert.deepEqual(keepLastGoodUsage([{ provider: 'minimax', error: 'MiniMax API key is not configured.' }], cache, 1000), [
+    { provider: 'minimax', error: 'MiniMax API key is not configured.' }
+  ]);
 });
 
 test('sends usage lookups through the system Node binary without putting the token on the command line', async () => {

@@ -7489,13 +7489,13 @@
     const windows = provider.provider === 'minimax'
       ? (provider.services || []).map((service) => `<div class="usage-service"><h4>${escapeHtml(service.label)}</h4>${(service.windows || []).map(usageWindowMarkup).join('')}</div>`).join('')
       : (provider.windows || []).map(usageWindowMarkup).join('');
-    const detail = provider.provider === 'codex' && provider.plan ? provider.plan : provider.source;
+    const detail = provider.stale || (provider.provider === 'codex' && provider.plan ? provider.plan : provider.source);
     const credits = provider.credits?.hasCredits || provider.credits?.unlimited
       ? `<div class="usage-credits"><span>Credits</span><strong>${provider.credits.unlimited ? 'Unlimited' : provider.credits.balance}</strong></div>`
       : '';
     return `
       <article class="usage-card">
-        <header><div><h3>${escapeHtml(provider.label)}</h3><small>${escapeHtml(detail || 'Connected')}</small></div><span class="usage-state ok">●</span></header>
+        <header><div><h3>${escapeHtml(provider.label)}</h3><small>${escapeHtml(detail || 'Connected')}</small></div><span class="usage-state${provider.stale ? '' : ' ok'}">●</span></header>
         ${windows || '<p>No quota windows returned.</p>'}
         ${credits}
       </article>
@@ -7574,10 +7574,14 @@
     clearUsageRefresh(paneId);
     const minutes = Number(state.config?.usage?.refresh_minutes);
     if (!Number.isFinite(minutes) || minutes <= 0) return;
-    usageRefreshTimers.set(paneId, setTimeout(() => loadUsagePane(paneId, true), minutes * 60000));
+    usageRefreshTimers.set(paneId, setTimeout(() => loadUsagePane(paneId, true, false), minutes * 60000));
   }
 
-  async function loadUsagePane(paneId, refresh = false) {
+  // `refresh` keeps the readings on screen instead of a spinner. `force` also
+  // bypasses the server's shared cache, which only the button does: providers
+  // rate limit per account, so several panes ticking together must not each cost
+  // a lookup.
+  async function loadUsagePane(paneId, refresh = false, force = refresh) {
     const pane = document.querySelector(`[data-pane="${paneId}"]`);
     const content = pane?.querySelector('[data-usage-content]');
     const refreshButton = pane?.querySelector('[data-usage-refresh]');
@@ -7591,7 +7595,7 @@
       content.innerHTML = '<div class="usage-loading">Reading provider usage…</div>';
     }
     try {
-      const result = refresh ? await api('/api/usage?refresh=1') : await api('/api/usage');
+      const result = force ? await api('/api/usage?refresh=1') : await api('/api/usage');
       const providers = result.providers || [];
       content.innerHTML = providers.length
         ? providers.map(usageProviderMarkup).join('')

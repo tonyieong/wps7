@@ -154,6 +154,14 @@ async function requestJson(url, options, fetchImpl) {
         }
         throw error;
       }
+      // A rate limit is transient and says nothing about the credentials, so it
+      // must not send Claude down the CLI re-login path the way a 401 does.
+      if (response.status === 429) {
+        const error = new Error('Provider rate limit reached.');
+        error.code = 'PROVIDER_RATE_LIMIT';
+        error.status = response.status;
+        throw error;
+      }
       throw new Error(`Provider request failed (${response.status}).`);
     }
     return await response.json();
@@ -637,7 +645,29 @@ async function providerResult(provider, label, fetcher, content) {
   }
 }
 
+// The Claude OAuth usage endpoint rate limits per token, and every Claude Code
+// CLI signed in as the same account spends from that same budget, so a lookup
+// can fail while nothing is actually wrong. Re-showing the previous reading
+// beats blanking a card that was right a minute ago, for as long as that reading
+// still describes the quota window it was taken from.
+const LAST_GOOD_USAGE_MS = 30 * 60 * 1000;
+
+function keepLastGoodUsage(providers, cache, now = Date.now()) {
+  return providers.map((provider) => {
+    if (!provider.error) {
+      cache.set(provider.provider, { readAt: now, value: provider });
+      return provider;
+    }
+    const previous = cache.get(provider.provider);
+    if (!previous || now - previous.readAt > LAST_GOOD_USAGE_MS) {
+      return provider;
+    }
+    return { ...previous.value, stale: provider.error };
+  });
+}
+
 module.exports = {
+  keepLastGoodUsage,
   systemNodeFetch,
   fetchClaudeUsage,
   fetchCodexUsage,
