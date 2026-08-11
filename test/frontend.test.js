@@ -1696,3 +1696,56 @@ test('reviewed compactness improvements use friendly font labels and stable cont
   assert.match(appSource, /class="tab tab-add"[^>]*>\$\{fileActionIcon\('add'\)\}<\/button>/);
   assert.match(styles, /\.file-command-bar\s*\{[^}]*flex-wrap:\s*nowrap[^}]*overflow:\s*hidden/s);
 });
+
+test('double-clicking a picture in the files pane opens an image pane instead of downloading it', () => {
+  assert.match(appSource, /if \(isImagePath\(path\)\) \{\s*await openImageForFile\(path\);/);
+  assert.match(appSource, /IMAGE_PATH_PATTERN = \/\\.\(avif\|bmp\|gif\|ico\|jpe\?g\|png\|svg\|webp\)\$\/i/);
+});
+
+test('image pane offers stepping, rotation, zoom, fit, download and delete', () => {
+  for (const attribute of [
+    'data-image-step="-1"',
+    'data-image-step="1"',
+    'data-image-rotate="-90"',
+    'data-image-rotate="90"',
+    'data-image-zoom="out"',
+    'data-image-zoom="in"',
+    'data-image-fit',
+    'data-image-actual',
+    'data-image-download',
+    'data-image-delete'
+  ]) {
+    assert.ok(appSource.includes(attribute), `image toolbar is missing ${attribute}`);
+  }
+});
+
+test('image zoom and rotation are applied as one transform on the picture', () => {
+  assert.match(appSource, /translate\(\$\{data\.offsetX\}px, \$\{data\.offsetY\}px\) scale\(\$\{data\.scale\}\) rotate\(\$\{data\.rotation\}deg\) translate\(-50%, -50%\)/);
+  // A quarter turn has to swap the edges the fit is measured against.
+  assert.match(appSource, /quarterTurned \? data\.naturalHeight : data\.naturalWidth/);
+});
+
+test('the picture is centred by its anchor, not by the layout box it overflows', () => {
+  // A picture laid out taller than the stage gets aligned to the top edge, so
+  // centring it through the grid put the transform off by half the overflow.
+  const rules = styles.slice(styles.indexOf('.image-canvas {'), styles.indexOf('.image-canvas[hidden]'));
+  assert.match(rules, /position:\s*absolute/);
+  assert.match(rules, /top:\s*50%/);
+  assert.match(rules, /left:\s*50%/);
+  // The trailing translate does the centring; an origin shift would double it.
+  assert.match(rules, /transform-origin:\s*0 0/);
+  assert.doesNotMatch(rules, /grid-area/);
+});
+
+test('image pane chrome follows the shared pane toolbar height and theme tokens', () => {
+  assert.match(styles, /\.image-toolbar\s*\{[^}]*height:\s*var\(--pane-toolbar-height\)/);
+  assert.match(styles, /\.image-stage\s*\{[^}]*background:\s*var\(--terminal-bg\)/);
+  assert.doesNotMatch(styles.slice(styles.indexOf('.image-pane {'), styles.indexOf('.pane-kind-icon {')), /#[0-9a-f]{3,6}\b/i);
+});
+
+test('images are streamed inline without letting an SVG run scripts', () => {
+  assert.match(mainSource, /app\.get\('\/api\/files\/image'/);
+  assert.match(mainSource, /'X-Content-Type-Options': 'nosniff'/);
+  assert.match(mainSource, /'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox"/);
+  assert.match(mainSource, /app\.get\('\/api\/files\/image-siblings'/);
+});

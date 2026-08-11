@@ -958,6 +958,43 @@ function main() {
     });
   });
 
+  app.post('/api/panes/:paneId/image', requireFileAuth(config), (req, res) => {
+    const found = store.findPane(req.params.paneId);
+    if (!found) {
+      res.status(404).json({ error: 'Pane not found.' });
+      return;
+    }
+    const targetPath = req.body.path ? files.normalizeLocalPath(req.body.path) : '';
+    if (req.body.path && !targetPath) {
+      res.status(400).json({ error: 'Invalid local path.' });
+      return;
+    }
+    const pane = store.createImagePane(req.params.paneId, targetPath);
+    if (!pane) {
+      res.status(400).json({ error: 'Unable to create pane.' });
+      return;
+    }
+    res.status(201).json({
+      ...pane,
+      paneLayouts: found.tab.panes.map((candidate) => ({ id: candidate.id, layout: candidate.layout })),
+      columns: found.tab.columns
+    });
+  });
+
+  app.patch('/api/panes/:paneId/image/path', requireFileAuth(config), (req, res) => {
+    const nextPath = req.body.path ? files.normalizeLocalPath(req.body.path) : '';
+    if (req.body.path && !nextPath) {
+      res.status(400).json({ error: 'Invalid local path.' });
+      return;
+    }
+    if (!store.setImagePanePath(req.params.paneId, nextPath)) {
+      res.status(404).json({ error: 'Image pane not found.' });
+      return;
+    }
+    const { pane } = store.findPane(req.params.paneId);
+    res.json({ id: pane.id, path: pane.path });
+  });
+
   app.post('/api/panes/:paneId/usage', requireAuth(config), (req, res) => {
     const found = store.findPane(req.params.paneId);
     if (!found) {
@@ -1396,6 +1433,39 @@ function main() {
   app.get('/api/files/text', requireFileAuth(config), (req, res) => {
     try {
       res.json(files.readTextFile(req.query.path));
+    } catch (error) {
+      handleRouteError(res, error);
+    }
+  });
+
+  app.get('/api/files/image', requireFileAuth(config), (req, res) => {
+    let image;
+    try {
+      image = files.imageInfo(req.query.path);
+    } catch (error) {
+      handleRouteError(res, error);
+      return;
+    }
+    // SVG is served as its own type so it renders, and locked down so a direct
+    // visit cannot run scripts embedded in the file.
+    res.sendFile(image.path, {
+      headers: {
+        'Content-Type': image.contentType,
+        'Content-Disposition': 'inline',
+        'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+        'X-Content-Type-Options': 'nosniff',
+        'Cache-Control': 'no-cache'
+      }
+    }, (error) => {
+      if (error && !res.headersSent) {
+        handleRouteError(res, error);
+      }
+    });
+  });
+
+  app.get('/api/files/image-siblings', requireFileAuth(config), (req, res) => {
+    try {
+      res.json(files.listImageSiblings(req.query.path));
     } catch (error) {
       handleRouteError(res, error);
     }

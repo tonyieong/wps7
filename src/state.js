@@ -14,7 +14,7 @@ const MAX_PANE_CELLS = 48;
 // The original grid laid panes out in 720x480 cells; only migration needs this.
 const LEGACY_CELL_WIDTH = 720;
 const LEGACY_CELL_HEIGHT = 480;
-const PANE_TYPES = new Set(['terminal', 'files', 'browser', 'notepad', 'usage', 'whiteboard']);
+const PANE_TYPES = new Set(['terminal', 'files', 'browser', 'notepad', 'image', 'usage', 'whiteboard']);
 const MAX_WHITEBOARD_LENGTH = 5 * 1024 * 1024;
 const NOTEPAD_ENCODINGS = new Set(['utf8', 'utf8-bom', 'utf16le', 'utf16be', 'latin1']);
 const NOTEPAD_EOLS = new Set(['crlf', 'lf', 'cr']);
@@ -314,7 +314,7 @@ class StateStore {
             type: paneType(pane.type),
             title: pane.title,
             cwd: pane.cwd,
-            path: pane.type === 'files' || pane.type === 'notepad' ? pane.path : undefined,
+            path: pane.type === 'files' || pane.type === 'notepad' || pane.type === 'image' ? pane.path : undefined,
             url: pane.type === 'browser' ? pane.url : undefined,
             whiteboard: pane.type === 'whiteboard' ? whiteboardContent(pane.whiteboard) : undefined,
             terminalTabs: pane.type === 'terminal' ? pane.terminalTabs.map((tab) => terminalTab(tab)) : undefined,
@@ -346,7 +346,7 @@ class StateStore {
             type: paneType(pane.type),
             title: pane.title,
             cwd: pane.cwd,
-            path: pane.type === 'files' || pane.type === 'notepad' ? pane.path : undefined,
+            path: pane.type === 'files' || pane.type === 'notepad' || pane.type === 'image' ? pane.path : undefined,
             url: pane.type === 'browser' ? pane.url : undefined,
             whiteboard: pane.type === 'whiteboard' ? whiteboardContent(pane.whiteboard) : undefined,
             terminalTabs: pane.type === 'terminal' ? pane.terminalTabs.map((tab) => terminalTab(tab)) : undefined,
@@ -742,6 +742,20 @@ class StateStore {
       this.save();
     }
     return pane;
+  }
+
+  createImagePane(paneId, pathValue = '') {
+    return this.createUtilityPane(paneId, 'image', 'Image', pathValue, 'path');
+  }
+
+  setImagePanePath(paneId, pathValue) {
+    const found = this.findPane(paneId);
+    if (!found || found.pane.type !== 'image') {
+      return false;
+    }
+    found.pane.path = String(pathValue || '');
+    this.save();
+    return true;
   }
 
   createUsagePane(paneId) {

@@ -150,3 +150,35 @@ test('text editor rejects directories and binary files', () => {
   assert.throws(() => files.readTextFile(root), /not a file/i);
   assert.throws(() => files.readTextFile(binaryPath), /binary/i);
 });
+
+test('image viewer resolves supported types and rejects everything else', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-files-'));
+  const pngPath = path.join(root, 'photo.png');
+  const textPath = path.join(root, 'notes.txt');
+  fs.writeFileSync(pngPath, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+  fs.writeFileSync(textPath, 'hello');
+
+  assert.equal(files.imageContentType('shot.JPEG'), 'image/jpeg');
+  assert.equal(files.imageContentType('notes.txt'), '');
+  assert.equal(files.imageInfo(pngPath).contentType, 'image/png');
+  assert.throws(() => files.imageInfo(textPath), /not a supported image/i);
+  assert.throws(() => files.imageInfo(root), /not a supported image/i);
+});
+
+test('image siblings list the pictures beside a file in name order', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-files-'));
+  for (const name of ['b.png', 'a.jpg', 'notes.txt', 'c.webp']) {
+    fs.writeFileSync(path.join(root, name), 'x');
+  }
+
+  const siblings = files.listImageSiblings(path.join(root, 'b.png'));
+  assert.equal(siblings.directory, path.win32.resolve(root));
+  assert.deepEqual(siblings.entries.map((entry) => path.win32.basename(entry)), ['a.jpg', 'b.png', 'c.webp']);
+});
+
+test('image siblings still include a picture whose folder cannot be listed', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-files-'));
+  const missing = path.join(root, 'gone', 'photo.png');
+
+  assert.deepEqual(files.listImageSiblings(missing).entries, [path.win32.resolve(missing)]);
+});

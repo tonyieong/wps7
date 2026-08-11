@@ -5488,6 +5488,126 @@ a:focus-visible {
   outline: none;
 }
 
+.image-pane {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  background: var(--terminal-bg);
+}
+
+.image-toolbar {
+  display: flex;
+  align-items: center;
+  height: var(--pane-toolbar-height);
+  gap: 3px;
+  min-width: 0;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.image-actual-size {
+  font-weight: 600;
+  letter-spacing: .02em;
+}
+
+.image-zoom-value {
+  flex: 0 0 auto;
+  min-width: 42px;
+  color: var(--muted);
+  font: 11px/1 "Cascadia Mono", Consolas, monospace;
+  text-align: center;
+}
+
+.image-status {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font: 10px/1 "Cascadia Mono", Consolas, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.image-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--terminal-bg);
+  cursor: grab;
+  touch-action: none;
+}
+
+.image-stage:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.image-stage.panning {
+  cursor: grabbing;
+}
+
+/* Anchored to the stage centre rather than laid out in it: a picture taller
+   than the stage would otherwise be aligned to the top edge, throwing the
+   transform off centre by half the overflow. */
+.image-canvas {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  max-width: none;
+  /* The trailing translate(-50%, -50%) in the inline transform does the
+     centring, so the origin must not add its own compensating shift. */
+  transform-origin: 0 0;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.image-canvas[hidden],
+.image-empty[hidden] {
+  display: none;
+}
+
+.image-empty {
+  grid-area: 1 / 1;
+  margin: 0;
+  color: var(--muted);
+  font: 12px/1.4 "Segoe UI", sans-serif;
+}
+
+.image-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 20px;
+  padding: 0 8px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-soft);
+  color: var(--muted);
+  font: 10px/1 "Cascadia Mono", Consolas, monospace;
+  overflow-x: auto;
+  scrollbar-width: none;
+  white-space: nowrap;
+}
+
+.image-status-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.image-status-bar span {
+  flex: 0 0 auto;
+}
+
+.image-status-name {
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .pane-kind-icon {
   cursor: pointer;
 }
