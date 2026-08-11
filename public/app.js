@@ -2354,12 +2354,8 @@
         begin();
       }
       // A dragging touch is still a swipe to the strip, which would scroll out
-      // from under the tab being dragged, so the strip only moves where this
-      // says to: held still, except at an edge, where it follows the pointer so
-      // a workspace can be dragged to a slot that started out of sight.
-      const bounds = strip.getBoundingClientRect();
-      const overshoot = Math.max(moveEvent.clientX - (bounds.right - 24), 0) - Math.max(bounds.left + 24 - moveEvent.clientX, 0);
-      anchor = Math.max(0, Math.min(strip.scrollWidth - strip.clientWidth, anchor + Math.sign(overshoot) * 12));
+      // from under the tab being dragged. Pinning it holds every slot still, so
+      // the tab goes exactly where it is dragged and nowhere on its own.
       strip.scrollLeft = anchor;
       tab.style.transform = `translateX(${offset(moveEvent.clientX)}px)`;
       reorder(moveEvent.clientX);

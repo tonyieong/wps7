@@ -162,10 +162,12 @@ test('a workspace title can be dragged to reorder it, and a touch must hold firs
   // run rather than disappearing past an edge.
   assert.match(drag, /return Math\.max\(min, Math\.min\(max, pointerX - startX\)\)/);
   assert.match(drag, /tab\.style\.transform = `translateX\(\$\{offset\(moveEvent\.clientX\)\}px\)`/);
-  // Pinned while dragging, except at an edge, where it follows so a workspace
-  // can still be dragged to a slot that started out of sight.
-  assert.match(drag, /anchor = Math\.max\(0, Math\.min\(strip\.scrollWidth - strip\.clientWidth, anchor \+ Math\.sign\(overshoot\) \* 12\)\)/);
+  // The strip is pinned for the whole drag. Scrolling it from inside the move
+  // handler ran once per pointer event, which raced the tab to the far end
+  // instead of leaving it under the pointer.
+  assert.match(drag, /anchor = strip\.scrollLeft/);
   assert.match(drag, /strip\.scrollLeft = anchor/);
+  assert.doesNotMatch(drag, /anchor = Math\./);
   // The pointer that finished a drag must not also select the workspace.
   assert.match(drag, /state\.suppressSessionClickUntil = Date\.now\(\) \+ 300/);
   assert.match(drag, /\/api\/sessions\/\$\{tab\.dataset\.tabSession\}\/move/);
