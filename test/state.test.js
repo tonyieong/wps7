@@ -106,6 +106,42 @@ test('new sessions and panes use unique default names', () => {
   assert.deepEqual(thirdPane.layout, { x: 12, y: 0, w: 6, h: 12 });
 });
 
+// Dragging a workspace title to a new slot in the strip.
+test('moveSession reorders the workspaces and keeps the index in range', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100);
+  store.load();
+  store.createSession();
+  store.createSession();
+  const names = () => store.state.sessions.map((session) => session.name);
+  const idOf = (name) => store.state.sessions.find((session) => session.name === name).id;
+
+  assert.deepEqual(names(), ['Workspace 1', 'Workspace 2', 'Workspace 3']);
+
+  // The last workspace dragged to the front, then back to the end.
+  assert.equal(store.moveSession(idOf('Workspace 3'), 0), true);
+  assert.deepEqual(names(), ['Workspace 3', 'Workspace 1', 'Workspace 2']);
+  assert.equal(store.moveSession(idOf('Workspace 3'), 2), true);
+  assert.deepEqual(names(), ['Workspace 1', 'Workspace 2', 'Workspace 3']);
+
+  // Dropping past either end lands on it rather than falling out of the list.
+  assert.equal(store.moveSession(idOf('Workspace 2'), 99), true);
+  assert.deepEqual(names(), ['Workspace 1', 'Workspace 3', 'Workspace 2']);
+  assert.equal(store.moveSession(idOf('Workspace 2'), -5), true);
+  assert.deepEqual(names(), ['Workspace 2', 'Workspace 1', 'Workspace 3']);
+
+  // A no-op move still succeeds; an unknown workspace or index does not.
+  assert.equal(store.moveSession(idOf('Workspace 2'), 0), true);
+  assert.equal(store.moveSession('missing', 0), false);
+  assert.equal(store.moveSession(idOf('Workspace 2'), 'left'), false);
+  assert.deepEqual(names(), ['Workspace 2', 'Workspace 1', 'Workspace 3']);
+
+  // The new order survives a reload.
+  const reopened = new StateStore(root, 100);
+  reopened.load();
+  assert.deepEqual(reopened.state.sessions.map((session) => session.name), ['Workspace 2', 'Workspace 1', 'Workspace 3']);
+});
+
 test('placePane refuses a position that would overlap another pane', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
   const store = new StateStore(root, 100);

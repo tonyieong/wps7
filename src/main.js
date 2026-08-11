@@ -639,6 +639,7 @@ function main() {
   let trayController = null;
   let autosaveTimer = startAutosave(store, config);
   let usageCache = null;
+  const lastGoodUsage = new Map();
   let stopping = false;
 
   function applyLoadedConfig(nextConfig) {
@@ -662,6 +663,9 @@ function main() {
     autosaveTimer = startAutosave(store, config);
     configReloadError = '';
     usageCache = null;
+    // New settings can point at different accounts, so nothing read under the
+    // previous ones may stand in for a failed lookup.
+    lastGoodUsage.clear();
     if (passwordChanged) {
       queueMicrotask(revokeWebSocketSessions);
     }
@@ -760,7 +764,7 @@ function main() {
       }
       const minimaxApiKey = process.env.MINIMAX_CODING_API_KEY || process.env.MINIMAX_API_KEY || config.usage.minimax_api_key;
       const usageLog = (message) => appendRuntimeLog(root, `usage ${message}`);
-      const value = await usage.fetchUsageOverview({
+      const overview = await usage.fetchUsageOverview({
         codex: config.usage.show_codex !== false ? () => usage.fetchCodexUsage({ codexHome: config.usage.codex_home || undefined, log: usageLog }) : null,
         claude: config.usage.show_claude !== false ? () => usage.fetchClaudeUsage({ claudeHome: config.usage.claude_home || undefined, log: usageLog }) : null,
         minimax: config.usage.show_minimax !== false
@@ -773,11 +777,12 @@ function main() {
           credits: config.usage.show_credits !== false
         }
       });
-      for (const provider of value.providers || []) {
+      for (const provider of overview.providers || []) {
         if (provider.error) {
           usageLog(`${provider.provider} reported: ${provider.error}`);
         }
       }
+      const value = { ...overview, providers: usage.keepLastGoodUsage(overview.providers || [], lastGoodUsage) };
       usageCache = { createdAt: Date.now(), value };
       res.json(value);
     } catch (error) {
@@ -861,6 +866,14 @@ function main() {
 
   app.post('/api/sessions/:sessionId/activate', requireAuth(config), (req, res) => {
     if (!store.setActiveSession(req.params.sessionId)) {
+      res.status(404).json({ error: 'Session not found.' });
+      return;
+    }
+    res.json({ ok: true });
+  });
+
+  app.post('/api/sessions/:sessionId/move', requireAuth(config), (req, res) => {
+    if (!store.moveSession(req.params.sessionId, req.body?.index)) {
       res.status(404).json({ error: 'Session not found.' });
       return;
     }
