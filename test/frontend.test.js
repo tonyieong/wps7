@@ -111,27 +111,68 @@ test('the workspace title row splits into equal thirds', () => {
   assert.match(styles, /\.app\.mode-mobile \.tabs-gap,\s*\.app\.mobile-device \.tabs-gap\s*\{\s*display:\s*none/s);
 });
 
-test('the active workspace stays centred, with arrows to switch and ellipses for the rest', () => {
-  // Half-strip padding at each end is what lets the first and last tab reach the
-  // centre; it also makes centring them land exactly on 0 and on the max scroll,
-  // which is what keeps the overflow hints honest.
-  const centring = appSource.slice(appSource.indexOf('function centerActiveWorkspaceTab'), appSource.indexOf('function updateWorkspaceStripOverflow'));
-  assert.match(centring, /const half = \(tab\) => Math\.max\(0, \(strip\.clientWidth - tab\.offsetWidth\) \/ 2\)/);
-  assert.match(centring, /strip\.style\.paddingLeft = `\$\{half\(tabs\[0\]\)\}px`/);
-  assert.match(centring, /strip\.style\.paddingRight = `\$\{half\(tabs\[tabs\.length - 1\]\)\}px`/);
-  assert.match(centring, /strip\.scrollLeft = active\.offsetLeft \+ active\.offsetWidth \/ 2 - strip\.clientWidth \/ 2/);
-  assert.match(appSource, /ensureActivePaneVisible\('auto'\);\s*centerActiveWorkspaceTab\(\);/);
-  // Arrows switch workspace, and stop at each end.
-  assert.match(appSource, /data-workspace-nav="-1"[^>]*\$\{state\.sessions\[0\]\?\.id === session\.id \? 'disabled' : ''\}/);
-  assert.match(appSource, /data-workspace-nav="1"[^>]*\$\{state\.sessions\[state\.sessions\.length - 1\]\?\.id === session\.id \? 'disabled' : ''\}/);
-  assert.match(appSource, /function switchWorkspaceByOffset\(offset\)/);
-  assert.match(appSource, /const next = state\.sessions\[index \+ offset\]/);
+test('workspaces read left to right and the strip stays where it was put', () => {
+  // Nothing centres or chases the active workspace any more, so the only reason
+  // the strip ever moves is the arrows or the user's own hand. A re-render would
+  // otherwise rebuild it back at the first workspace.
+  assert.doesNotMatch(appSource, /centerActiveWorkspaceTab/);
+  assert.doesNotMatch(appSource, /strip\.style\.paddingLeft/);
+  assert.match(appSource, /ensureActivePaneVisible\('auto'\);\s*restoreWorkspaceStripScroll\(\);/);
+  const restore = appSource.slice(appSource.indexOf('function restoreWorkspaceStripScroll'), appSource.indexOf('function updateWorkspaceStripOverflow'));
+  assert.match(restore, /strip\.scrollLeft = state\.workspaceStripScroll/);
+  assert.match(appSource, /workspaceStripScroll: 0/);
   // The hints live on the wrapper: on the scroller itself they would scroll off.
   assert.match(styles, /\.workspace-strip-wrap::before,\s*\.workspace-strip-wrap::after\s*\{\s*content:\s*"…"/s);
   assert.match(styles, /\.workspace-strip-wrap\.overflow-left::before,\s*\.workspace-strip-wrap\.overflow-right::after\s*\{\s*display:\s*flex/s);
-  const overflow = appSource.slice(appSource.indexOf('function updateWorkspaceStripOverflow'), appSource.indexOf('async function switchWorkspaceByOffset'));
+  const overflow = appSource.slice(appSource.indexOf('function updateWorkspaceStripOverflow'), appSource.indexOf('function scrollWorkspaceStrip'));
   assert.match(overflow, /classList\.toggle\('overflow-left', strip\.scrollLeft > 1\)/);
   assert.match(overflow, /classList\.toggle\('overflow-right', remaining > 1\)/);
+});
+
+test('the workspace arrows scroll the strip one title at a time', () => {
+  // They pan the view now; they no longer switch workspace.
+  assert.doesNotMatch(appSource, /switchWorkspaceByOffset/);
+  assert.match(appSource, /data-workspace-nav="-1"[^>]*aria-label="Scroll workspaces left"/);
+  assert.match(appSource, /data-workspace-nav="1"[^>]*aria-label="Scroll workspaces right"/);
+  assert.match(appSource, /button\.onclick = \(\) => scrollWorkspaceStrip\(Number\(button\.dataset\.workspaceNav\)\)/);
+  const scroll = appSource.slice(appSource.indexOf('function scrollWorkspaceStrip'), appSource.indexOf('const WORKSPACE_DRAG_HOLD_MS'));
+  // The next tab edge off the side being scrolled towards, so no title is skipped.
+  assert.match(scroll, /\.filter\(\(left\) => left < strip\.scrollLeft - 1\)/);
+  assert.match(scroll, /\.filter\(\(left\) => left > strip\.scrollLeft \+ 1\)/);
+  assert.match(scroll, /strip\.scrollTo\(\{ left: Number\.isFinite\(target\) \? target : strip\.scrollLeft, behavior: 'smooth' \}\)/);
+  // Each arrow stops once there is nothing left that way.
+  const overflow = appSource.slice(appSource.indexOf('function updateWorkspaceStripOverflow'), appSource.indexOf('function scrollWorkspaceStrip'));
+  assert.match(overflow, /\[data-workspace-nav="-1"\]'\)\.disabled = strip\.scrollLeft <= 1/);
+  assert.match(overflow, /\[data-workspace-nav="1"\]'\)\.disabled = remaining <= 1/);
+});
+
+test('a workspace title can be dragged to reorder it, and a touch must hold first', () => {
+  assert.match(appSource, /data-tab-session="\$\{item\.id\}" data-workspace-drag/);
+  assert.match(appSource, /tab\.onpointerdown = startWorkspaceTabDrag/);
+  const drag = appSource.slice(appSource.indexOf('function startWorkspaceTabDrag'), appSource.indexOf('function narrowViewport'));
+  // The close button and the rename box own their own pointers.
+  assert.match(drag, /event\.target\.closest\('\[data-close-session\], input'\)/);
+  // A touch drags only after holding still; moving first scrolls the strip.
+  assert.match(drag, /if \(event\.pointerType === 'touch'\) \{\s*hold = setTimeout\(begin, WORKSPACE_DRAG_HOLD_MS\);/);
+  assert.match(drag, /if \(hold && travelled > 6\) \{\s*finish\(\);/);
+  // Swapping moves the tab under the pointer, so the drag offset is rebased.
+  assert.match(drag, /strip\.insertBefore\(tab, before \|\| null\)/);
+  assert.match(drag, /origin \+= tab\.offsetLeft - settled/);
+  // The strip clips its overflow, so a dragged tab is held inside the visible
+  // run rather than disappearing past an edge.
+  assert.match(drag, /return Math\.max\(min, Math\.min\(max, pointerX - startX\)\)/);
+  assert.match(drag, /tab\.style\.transform = `translateX\(\$\{offset\(moveEvent\.clientX\)\}px\)`/);
+  // Pinned while dragging, except at an edge, where it follows so a workspace
+  // can still be dragged to a slot that started out of sight.
+  assert.match(drag, /anchor = Math\.max\(0, Math\.min\(strip\.scrollWidth - strip\.clientWidth, anchor \+ Math\.sign\(overshoot\) \* 12\)\)/);
+  assert.match(drag, /strip\.scrollLeft = anchor/);
+  // The pointer that finished a drag must not also select the workspace.
+  assert.match(drag, /state\.suppressSessionClickUntil = Date\.now\(\) \+ 300/);
+  assert.match(drag, /\/api\/sessions\/\$\{tab\.dataset\.tabSession\}\/move/);
+  assert.match(mainSource, /app\.post\('\/api\/sessions\/:sessionId\/move'/);
+  assert.match(styles, /\.workspace-strip \.tab\.dragging\s*\{/);
+  // Smooth scrolling belongs to the arrows; a drag would lag a frame behind.
+  assert.match(styles, /\.workspace-strip:not\(\.reordering\)\s*\{\s*scroll-behavior:\s*smooth/s);
 });
 
 test('the board always keeps a few empty columns past the rightmost pane', () => {

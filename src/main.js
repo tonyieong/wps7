@@ -872,6 +872,14 @@ function main() {
     res.json({ ok: true });
   });
 
+  app.post('/api/sessions/:sessionId/move', requireAuth(config), (req, res) => {
+    if (!store.moveSession(req.params.sessionId, req.body?.index)) {
+      res.status(404).json({ error: 'Session not found.' });
+      return;
+    }
+    res.json({ ok: true });
+  });
+
   app.delete('/api/sessions/:sessionId', requireAuth(config), (req, res) => {
     const session = store.state.sessions.find((candidate) => candidate.id === req.params.sessionId);
     const ok = store.closeSession(req.params.sessionId);

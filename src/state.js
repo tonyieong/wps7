@@ -452,6 +452,25 @@ class StateStore {
     return true;
   }
 
+  // Dragging a workspace title to a new slot in the strip. The index is where
+  // the workspace lands once it has been lifted out, so dropping it past its
+  // own old slot does not have to account for the gap it left behind.
+  moveSession(sessionId, index) {
+    const from = this.state.sessions.findIndex((session) => session.id === sessionId);
+    const target = Math.max(0, Math.min(this.state.sessions.length - 1, Math.trunc(Number(index))));
+    if (from === -1 || !Number.isFinite(Number(index))) {
+      return false;
+    }
+    if (from === target) {
+      return true;
+    }
+
+    const [session] = this.state.sessions.splice(from, 1);
+    this.state.sessions.splice(target, 0, session);
+    this.save();
+    return true;
+  }
+
   setActiveSession(sessionId) {
     if (!this.state.sessions.some((session) => session.id === sessionId)) {
       return false;

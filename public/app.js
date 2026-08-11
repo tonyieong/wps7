@@ -68,7 +68,8 @@
     customThemeDraft: null,
     whiteboards: new Map(),
     focusedPaneId: '',
-    paneFocusEscapeAt: 0
+    paneFocusEscapeAt: 0,
+    workspaceStripScroll: 0
   };
 
   const app = document.getElementById('app');
@@ -1783,12 +1784,12 @@
               <div class="mobile-actions">
                 <button class="mobile-brand" data-action="toggle" aria-label="Toggle sidebar" aria-expanded="${state.sidebarOpen}" title="${state.sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}"><span class="rail-brand-mark" aria-hidden="true">W7</span></button>
               </div>
-              <button type="button" class="workspace-nav" data-workspace-nav="-1" aria-label="Previous workspace" title="Previous workspace" ${state.sessions[0]?.id === session.id ? 'disabled' : ''}>${fileActionIcon('browser-back')}</button>
-              <button type="button" class="workspace-nav" data-workspace-nav="1" aria-label="Next workspace" title="Next workspace" ${state.sessions[state.sessions.length - 1]?.id === session.id ? 'disabled' : ''}>${fileActionIcon('browser-forward')}</button>
+              <button type="button" class="workspace-nav" data-workspace-nav="-1" aria-label="Scroll workspaces left" title="Scroll workspaces left" disabled>${fileActionIcon('browser-back')}</button>
+              <button type="button" class="workspace-nav" data-workspace-nav="1" aria-label="Scroll workspaces right" title="Scroll workspaces right" disabled>${fileActionIcon('browser-forward')}</button>
               <div class="workspace-strip-wrap">
                 <div class="workspace-strip" data-workspace-strip>
                   ${state.sessions.map((item) => `
-                    <button class="tab ${item.id === session.id ? 'active' : ''}" data-tab-session="${item.id}">
+                    <button class="tab ${item.id === session.id ? 'active' : ''}" data-tab-session="${item.id}" data-workspace-drag>
                       <span data-rename-session="${item.id}">${escapeHtml(item.name)}</span>
                       <span class="tab-close" data-close-session="${item.id}" title="Close workspace">×</span>
                     </button>
@@ -1812,52 +1813,165 @@
 
     wireControls();
     ensureActivePaneVisible('auto');
-    centerActiveWorkspaceTab();
+    restoreWorkspaceStripScroll();
     updateDesktopModeBanner();
     for (const pane of tab.panes) {
       mountPaneContent(pane);
     }
   }
 
-  // The active workspace always sits in the middle of the strip. Half-strip
-  // padding at each end is what lets the first and last tab reach the centre
-  // too; it works out so that centring them lands exactly on scrollLeft 0 and
-  // on the maximum scroll, which keeps the overflow hints below honest.
-  function centerActiveWorkspaceTab() {
+  // Workspaces read left to right in their own order and the view never chases
+  // the active one, so where the strip sits is the user's business alone. A
+  // re-render rebuilds the strip from scratch, which would silently snap it back
+  // to the first workspace; carrying the offset across keeps it put.
+  function restoreWorkspaceStripScroll() {
     const strip = app.querySelector('[data-workspace-strip]');
-    const active = strip?.querySelector('.tab.active');
-    if (!active) {
+    if (!strip) {
       return;
     }
-    const tabs = [...strip.querySelectorAll('.tab')];
-    const half = (tab) => Math.max(0, (strip.clientWidth - tab.offsetWidth) / 2);
-    strip.style.paddingLeft = `${half(tabs[0])}px`;
-    strip.style.paddingRight = `${half(tabs[tabs.length - 1])}px`;
-    strip.scrollLeft = active.offsetLeft + active.offsetWidth / 2 - strip.clientWidth / 2;
+    strip.scrollLeft = state.workspaceStripScroll;
     updateWorkspaceStripOverflow();
   }
 
-  // Ellipses at either end say more workspaces are parked off that side.
+  // Ellipses at either end say more workspaces are parked off that side, and
+  // the arrows that scroll there stop once nothing is left.
   function updateWorkspaceStripOverflow() {
     const strip = app.querySelector('[data-workspace-strip]');
     if (!strip) {
       return;
     }
+    state.workspaceStripScroll = strip.scrollLeft;
     const remaining = strip.scrollWidth - strip.clientWidth - strip.scrollLeft;
     strip.parentElement.classList.toggle('overflow-left', strip.scrollLeft > 1);
     strip.parentElement.classList.toggle('overflow-right', remaining > 1);
+    app.querySelector('[data-workspace-nav="-1"]').disabled = strip.scrollLeft <= 1;
+    app.querySelector('[data-workspace-nav="1"]').disabled = remaining <= 1;
   }
 
-  async function switchWorkspaceByOffset(offset) {
-    const index = state.sessions.findIndex((item) => item.id === state.activeSessionId);
-    const next = state.sessions[index + offset];
-    if (!next) {
+  // One workspace per press, so a narrow title is never skipped over: scroll to
+  // the nearest tab edge that is still off the side being scrolled towards.
+  function scrollWorkspaceStrip(direction) {
+    const strip = app.querySelector('[data-workspace-strip]');
+    if (!strip) {
       return;
     }
-    state.activeSessionId = next.id;
-    state.activePaneId = '';
-    await api(`/api/sessions/${next.id}/activate`, { method: 'POST' });
-    await loadState();
+    const tabs = [...strip.querySelectorAll('.tab')];
+    const edges = direction < 0
+      ? tabs.map((tab) => tab.offsetLeft).filter((left) => left < strip.scrollLeft - 1)
+      : tabs.map((tab) => tab.offsetLeft).filter((left) => left > strip.scrollLeft + 1);
+    const target = direction < 0 ? Math.max(...edges) : Math.min(...edges);
+    strip.scrollTo({ left: Number.isFinite(target) ? target : strip.scrollLeft, behavior: 'smooth' });
+  }
+
+  const WORKSPACE_DRAG_HOLD_MS = 300;
+
+  // Dragging a workspace title to reorder it. A touch has to hold still first,
+  // because the same sideways swipe is how the strip is scrolled by hand; a
+  // mouse has no such conflict and starts as soon as it has clearly moved.
+  function startWorkspaceTabDrag(event) {
+    if (event.button > 0 || event.target.closest('[data-close-session], input')) {
+      return;
+    }
+    const tab = event.currentTarget;
+    const strip = tab.parentElement;
+    const startX = event.clientX;
+    let origin = 0;
+    let anchor = 0;
+    let dragging = false;
+    let hold = 0;
+
+    const begin = () => {
+      dragging = true;
+      hold = 0;
+      cancelClick();
+      origin = tab.offsetLeft;
+      anchor = strip.scrollLeft;
+      tab.classList.add('dragging');
+      strip.classList.add('reordering');
+    };
+
+    // The strip clips what overflows it, so a tab dragged past either edge would
+    // simply vanish. Held inside the visible run it stays under the pointer for
+    // as far as it can go, and reordering follows where it is actually drawn.
+    const offset = (pointerX) => {
+      const min = anchor - origin;
+      const max = anchor + strip.clientWidth - tab.offsetWidth - origin;
+      return Math.max(min, Math.min(max, pointerX - startX));
+    };
+
+    // Each swap moves the tab under the pointer, so the offset it is dragged by
+    // has to be rebased onto the slot it just landed in or it would jump.
+    const reorder = (pointerX) => {
+      const others = [...strip.querySelectorAll('.tab')].filter((item) => item !== tab);
+      const centre = origin + tab.offsetWidth / 2 + offset(pointerX);
+      const before = others.find((item) => centre < item.offsetLeft + item.offsetWidth / 2);
+      const settled = tab.offsetLeft;
+      if (before === tab.nextElementSibling || (!before && !tab.nextElementSibling)) {
+        return;
+      }
+      strip.insertBefore(tab, before || null);
+      origin += tab.offsetLeft - settled;
+    };
+
+    const onMove = (moveEvent) => {
+      const travelled = Math.abs(moveEvent.clientX - startX);
+      if (!dragging) {
+        // A touch that moves before the hold elapses is scrolling, not dragging.
+        if (hold && travelled > 6) {
+          finish();
+          return;
+        }
+        if (hold || travelled <= 6) {
+          return;
+        }
+        begin();
+      }
+      // A dragging touch is still a swipe to the strip, which would scroll out
+      // from under the tab being dragged, so the strip only moves where this
+      // says to: held still, except at an edge, where it follows the pointer so
+      // a workspace can be dragged to a slot that started out of sight.
+      const bounds = strip.getBoundingClientRect();
+      const overshoot = Math.max(moveEvent.clientX - (bounds.right - 24), 0) - Math.max(bounds.left + 24 - moveEvent.clientX, 0);
+      anchor = Math.max(0, Math.min(strip.scrollWidth - strip.clientWidth, anchor + Math.sign(overshoot) * 12));
+      strip.scrollLeft = anchor;
+      tab.style.transform = `translateX(${offset(moveEvent.clientX)}px)`;
+      reorder(moveEvent.clientX);
+    };
+
+    const finish = () => {
+      clearTimeout(hold);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', finish);
+      tab.classList.remove('dragging');
+      strip.classList.remove('reordering');
+      tab.style.transform = '';
+    };
+
+    const onUp = async () => {
+      const moved = dragging;
+      const index = [...strip.querySelectorAll('.tab')].indexOf(tab);
+      finish();
+      if (!moved) {
+        return;
+      }
+      // The pointer that finished a drag must not also select the workspace.
+      state.suppressSessionClickUntil = Date.now() + 300;
+      await api(`/api/sessions/${tab.dataset.tabSession}/move`, {
+        method: 'POST',
+        body: JSON.stringify({ index })
+      });
+      await loadState();
+    };
+
+    // On the window, not the tab: reordering re-inserts the tab into the strip,
+    // which drops any pointer capture it held and cancels the drag mid-flight.
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', finish);
+    if (event.pointerType === 'touch') {
+      hold = setTimeout(begin, WORKSPACE_DRAG_HOLD_MS);
+    }
   }
 
   function narrowViewport() {
@@ -1901,9 +2015,12 @@
     app.querySelectorAll('[data-action="toggle"]').forEach((button) => button.onclick = () => setSidebarOpen(!state.sidebarOpen));
     app.querySelector('[data-sidebar-pin]').onclick = () => setSidebarPinned(!state.sidebarPinned);
     app.querySelectorAll('[data-workspace-nav]').forEach((button) => {
-      button.onclick = () => switchWorkspaceByOffset(Number(button.dataset.workspaceNav));
+      button.onclick = () => scrollWorkspaceStrip(Number(button.dataset.workspaceNav));
     });
     app.querySelector('[data-workspace-strip]')?.addEventListener('scroll', updateWorkspaceStripOverflow);
+    app.querySelectorAll('[data-workspace-drag]').forEach((tab) => {
+      tab.onpointerdown = startWorkspaceTabDrag;
+    });
     app.querySelectorAll('[data-action="new-session"]').forEach((button) => button.onclick = async () => {
       const session = await api('/api/sessions', { method: 'POST', body: JSON.stringify({}) });
       state.activeSessionId = session.id;
