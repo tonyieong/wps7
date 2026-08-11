@@ -866,3 +866,26 @@ test('loading falls back to a fresh workspace when both copies are unreadable', 
   assert.equal(reloaded.state.sessions.length, 1);
   assert.equal(reloaded.state.sessions[0].tabs[0].panes.length, 1);
 });
+
+test('image panes persist only their current picture path', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
+  const store = new StateStore(root, 100);
+  store.load();
+  const basePaneId = store.state.sessions[0].tabs[0].panes[0].id;
+
+  const pane = store.createImagePane(basePaneId, 'C:\\pictures\\a.png');
+  assert.equal(pane.type, 'image');
+  assert.equal(pane.path, 'C:\\pictures\\a.png');
+
+  assert.equal(store.setImagePanePath(pane.id, 'C:\\pictures\\b.png'), true);
+  assert.equal(store.setImagePanePath(basePaneId, 'C:\\pictures\\b.png'), false);
+
+  const persisted = store.getPersistedState().sessions[0].tabs[0].panes.find((item) => item.id === pane.id);
+  assert.equal(persisted.path, 'C:\\pictures\\b.png');
+
+  const reloaded = new StateStore(root, 100);
+  reloaded.load();
+  const restored = reloaded.findPane(pane.id).pane;
+  assert.equal(restored.type, 'image');
+  assert.equal(restored.path, 'C:\\pictures\\b.png');
+});

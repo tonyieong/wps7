@@ -313,6 +313,63 @@ async function saveUploadedFile(parent, name, stream) {
   return fileInfo(target);
 }
 
+const IMAGE_CONTENT_TYPES = new Map([
+  ['.avif', 'image/avif'],
+  ['.bmp', 'image/bmp'],
+  ['.gif', 'image/gif'],
+  ['.ico', 'image/x-icon'],
+  ['.jpeg', 'image/jpeg'],
+  ['.jpg', 'image/jpeg'],
+  ['.png', 'image/png'],
+  ['.svg', 'image/svg+xml'],
+  ['.webp', 'image/webp']
+]);
+
+function imageContentType(value) {
+  return IMAGE_CONTENT_TYPES.get(path.win32.extname(String(value || '')).toLowerCase()) || '';
+}
+
+function imageInfo(targetPath) {
+  const target = assertLocalPath(targetPath);
+  const contentType = imageContentType(target);
+  if (!contentType) {
+    const error = new Error('File is not a supported image.');
+    error.statusCode = 415;
+    throw error;
+  }
+  const stat = fs.statSync(target);
+  if (!stat.isFile()) {
+    const error = new Error('Path is not a file.');
+    error.statusCode = 400;
+    throw error;
+  }
+  return {
+    path: target,
+    name: path.win32.basename(target),
+    size: stat.size,
+    modifiedAt: stat.mtime.toISOString(),
+    contentType
+  };
+}
+
+function listImageSiblings(targetPath) {
+  const target = assertLocalPath(targetPath);
+  const directory = path.win32.dirname(target);
+  let names;
+  try {
+    names = fs.readdirSync(directory).filter((name) => imageContentType(name));
+  } catch (error) {
+    // An unreadable directory still lets the requested image be viewed alone.
+    names = [];
+  }
+  names.sort((a, b) => a.localeCompare(b));
+  const entries = names.map((name) => path.win32.join(directory, name));
+  if (!entries.some((entry) => entry.toLowerCase() === target.toLowerCase())) {
+    entries.unshift(target);
+  }
+  return { path: target, directory, entries };
+}
+
 function downloadInfo(targetPath) {
   const target = assertLocalPath(targetPath);
   const stat = fs.statSync(target);
@@ -418,8 +475,11 @@ module.exports = {
   deleteItem,
   deleteItems,
   downloadInfo,
+  imageContentType,
+  imageInfo,
   listDirectory,
   listDrives,
+  listImageSiblings,
   moveItem,
   normalizeLocalPath,
   prepareBulkDownload,
