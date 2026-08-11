@@ -476,6 +476,15 @@ textarea {
   color: var(--text);
 }
 
+/* Tabs are divs with role="tab", so the global button:focus-visible rule does
+   not reach them. The offset is negative to keep the ring inside the strip. */
+.pane-tab:focus-visible,
+.browser-tab:focus-visible,
+.notepad-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
 .pane-tab-label {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -957,7 +966,7 @@ textarea {
 .file-error {
   min-height: 20px;
   padding: 0 12px 8px;
-  color: #ff8b8b;
+  color: var(--danger);
   font-size: 12px;
 }
 
@@ -1592,10 +1601,10 @@ textarea {
   --line: #d7e0e4;
   --line-strong: #b9c8cf;
   --text: #14202b;
-  --muted: #667582;
-  --accent: #159d83;
+  --muted: #5d6b78;
+  --accent: #0b7561;
   --accent-strong: #0d806a;
-  --accent-soft: rgba(21, 157, 131, 0.1);
+  --accent-soft: rgba(11, 117, 97, 0.1);
   --warn: #b97300;
   --danger: #c43d4b;
   --shadow: rgba(31, 49, 61, 0.14);
@@ -3528,11 +3537,17 @@ textarea:focus-visible {
 }
 
 .file-command-button:hover,
-.file-command-button:focus-visible,
 .file-command-button.active {
   background: var(--accent-soft);
   color: var(--accent);
-  outline: none;
+}
+
+/* Kept separate from .active so a keyboard ring never reads as a pressed
+   state. The offset is negative because the global 2px one overflows the
+   compact toolbar. */
+.file-command-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
 }
 
 .file-command-button:disabled,
