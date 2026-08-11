@@ -903,7 +903,7 @@
           <div class="file-location-row">
             <button class="file-command-button" type="button" data-file-up aria-label="Up one level" title="Up one level" ${pane.path ? '' : 'disabled'}>${fileActionIcon('up')}</button>
             <div class="file-path-control" data-file-path-control>
-              <input class="file-path-input" name="path" value="${escapeAttr(pane.path)}" placeholder="This PC or C:\\path" autocomplete="off" aria-controls="file-path-menu-${pane.id}" aria-expanded="false">
+              <input class="file-path-input" name="path" value="${escapeAttr(pane.path)}" placeholder="This PC or C:\\path" autocomplete="off" aria-label="Folder path" aria-controls="file-path-menu-${pane.id}" aria-expanded="false">
               <button class="file-path-toggle" type="button" data-file-path-toggle aria-label="Show path history and bookmarks" aria-expanded="false" aria-controls="file-path-menu-${pane.id}">${fileActionIcon('chevron-down')}</button>
               <div class="file-path-menu" id="file-path-menu-${pane.id}" data-file-path-menu role="listbox" aria-label="Current, recent and bookmarked paths" hidden>
                 ${renderFilePathOptions(pane)}
@@ -1023,7 +1023,7 @@
             <button class="file-command-button" type="button" data-browser-back aria-label="Back" title="Back">${fileActionIcon('browser-back')}</button>
             <button class="file-command-button" type="button" data-browser-forward aria-label="Forward" title="Forward">${fileActionIcon('browser-forward')}</button>
             <div class="file-path-control" data-browser-url-control>
-              <input class="file-path-input" name="url" type="text" inputmode="url" value="${escapeAttr(active.url || '')}" placeholder="Search or enter website" autocomplete="off" autocapitalize="none" spellcheck="false">
+              <input class="file-path-input" name="url" type="text" inputmode="url" value="${escapeAttr(active.url || '')}" placeholder="Search or enter website" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="Address or search">
               <button class="file-path-toggle" type="button" data-browser-url-toggle aria-label="Show website history and bookmarks" aria-expanded="false">${fileActionIcon('chevron-down')}</button>
               <div class="file-path-menu" data-browser-url-menu role="listbox" aria-label="Current, recent and bookmarked websites" hidden>${renderBrowserUrlOptions(pane)}</div>
             </div>
@@ -2192,7 +2192,7 @@
           </div>
           <footer class="sidebar-footer">
             <button class="rail-button" data-action="settings" aria-label="Settings" title="Settings"><span class="rail-icon">⚙</span><span class="rail-label">Settings</span></button>
-            <button class="rail-button" type="button" data-theme-toggle aria-label="Switch to ${themeMode() === 'dark' ? 'light' : 'dark'} mode" title="Switch theme"><span class="rail-icon">${themeMode() === 'dark' ? '☾' : '☀'}</span><span class="rail-label">${themeMode() === 'dark' ? 'Dark mode' : 'Light mode'}</span></button>
+            <button class="rail-button" type="button" data-theme-toggle role="switch" aria-checked="${themeMode() === 'dark'}" aria-label="${themeMode() === 'dark' ? 'Dark mode' : 'Light mode'}" title="Switch to ${themeMode() === 'dark' ? 'light' : 'dark'} mode"><span class="rail-icon" aria-hidden="true">${themeMode() === 'dark' ? '☾' : '☀'}</span><span class="rail-label">${themeMode() === 'dark' ? 'Dark mode' : 'Light mode'}</span></button>
           </footer>
           <div class="sidebar-resizer" data-action="resize-sidebar"></div>
         </aside>
@@ -6902,13 +6902,15 @@
       item.term.options.theme = terminalTheme();
     }
     app.querySelectorAll('[data-theme-toggle]').forEach((button) => {
-      const nextTheme = themeMode() === 'dark' ? 'light' : 'dark';
-      button.setAttribute('aria-label', `Switch to ${nextTheme} mode`);
-      button.title = 'Switch theme';
+      const dark = themeMode() === 'dark';
+      const modeLabel = dark ? 'Dark mode' : 'Light mode';
+      button.setAttribute('aria-checked', String(dark));
+      button.setAttribute('aria-label', modeLabel);
+      button.title = `Switch to ${dark ? 'light' : 'dark'} mode`;
       const icon = button.querySelector('.rail-icon');
       const label = button.querySelector('.rail-label');
-      if (icon) icon.textContent = themeMode() === 'dark' ? '☾' : '☀';
-      if (label) label.textContent = themeMode() === 'dark' ? 'Dark mode' : 'Light mode';
+      if (icon) icon.textContent = dark ? '☾' : '☀';
+      if (label) label.textContent = modeLabel;
     });
     if (persist && state.token) {
       try {

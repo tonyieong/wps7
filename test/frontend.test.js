@@ -43,10 +43,11 @@ test('collapsed navigation controls have explicit accessible names', () => {
 });
 
 test('the theme toggle button shows the currently active mode, not the switch target', () => {
-  assert.match(appSource, /<span class="rail-icon">\$\{themeMode\(\) === 'dark' \? '☾' : '☀'\}<\/span><span class="rail-label">\$\{themeMode\(\) === 'dark' \? 'Dark mode' : 'Light mode'\}<\/span>/);
+  assert.match(appSource, /<span class="rail-icon" aria-hidden="true">\$\{themeMode\(\) === 'dark' \? '☾' : '☀'\}<\/span><span class="rail-label">\$\{themeMode\(\) === 'dark' \? 'Dark mode' : 'Light mode'\}<\/span>/);
   const setThemeLiveSource = appSource.slice(appSource.indexOf('async function setThemeLive'), appSource.indexOf('function wirePaneGrid'));
-  assert.match(setThemeLiveSource, /icon\.textContent = themeMode\(\) === 'dark' \? '☾' : '☀'/);
-  assert.match(setThemeLiveSource, /label\.textContent = themeMode\(\) === 'dark' \? 'Dark mode' : 'Light mode'/);
+  assert.match(setThemeLiveSource, /const modeLabel = dark \? 'Dark mode' : 'Light mode'/);
+  assert.match(setThemeLiveSource, /icon\.textContent = dark \? '☾' : '☀'/);
+  assert.match(setThemeLiveSource, /label\.textContent = modeLabel/);
 });
 
 test('settings sits above the theme toggle in a shorter sidebar footer', () => {
@@ -1811,4 +1812,45 @@ test('images are streamed inline without letting an SVG run scripts', () => {
   assert.match(mainSource, /'X-Content-Type-Options': 'nosniff'/);
   assert.match(mainSource, /'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox"/);
   assert.match(mainSource, /app\.get\('\/api\/files\/image-siblings'/);
+});
+
+test('the file error message carries the theme danger token, not a fixed red', () => {
+  // A hardcoded #ff8b8b sat at 2.25:1 on the light panel, below the 4.5:1 floor.
+  const rules = styles.slice(styles.indexOf('.file-error {'), styles.indexOf('.file-list {'));
+  assert.match(rules, /color:\s*var\(--danger\)/);
+  assert.doesNotMatch(rules, /#[0-9a-f]{3,6}\b/i);
+});
+
+test('light mode muted and accent text clears the 4.5:1 contrast floor', () => {
+  const lightStart = styles.indexOf(':root[data-theme="light"]');
+  const light = styles.slice(lightStart, styles.indexOf('}', lightStart));
+  assert.match(light, /--muted:\s*#5d6b78/);
+  assert.match(light, /--accent:\s*#0b7561/);
+  // accent-soft is derived from accent, so it has to track the same hue.
+  assert.match(light, /--accent-soft:\s*rgba\(11, 117, 97/);
+});
+
+test('pane tabs get their own focus ring because they are divs, not buttons', () => {
+  assert.match(styles, /\.pane-tab:focus-visible,\s*\.browser-tab:focus-visible,\s*\.notepad-tab:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--accent\)/);
+});
+
+test('a focused file toolbar button is distinguishable from a pressed one', () => {
+  // Sharing one rule made a keyboard ring read as an active state.
+  const active = styles.slice(styles.indexOf('.file-command-button.active {'));
+  assert.match(active.slice(0, active.indexOf('}')), /background:\s*var\(--accent-soft\)/);
+  assert.match(styles, /\.file-command-button:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--accent\)/);
+});
+
+test('the theme toggle names the current mode instead of contradicting itself', () => {
+  // The label said "Dark mode" while aria-label said "Switch to light mode".
+  assert.match(appSource, /data-theme-toggle role="switch" aria-checked="\$\{themeMode\(\) === 'dark'\}"/);
+  assert.match(appSource, /aria-label="\$\{themeMode\(\) === 'dark' \? 'Dark mode' : 'Light mode'\}"/);
+  // The title carries the action, so it must not repeat the label's wording.
+  assert.match(appSource, /title="Switch to \$\{themeMode\(\) === 'dark' \? 'light' : 'dark'\} mode"/);
+  assert.doesNotMatch(appSource, /button\.title = 'Switch theme'/);
+});
+
+test('path and address inputs have accessible names', () => {
+  assert.match(appSource, /class="file-path-input" name="path"[^>]*aria-label="Folder path"/);
+  assert.match(appSource, /class="file-path-input" name="url"[^>]*aria-label="Address or search"/);
 });
