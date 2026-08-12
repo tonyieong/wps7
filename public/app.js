@@ -8791,6 +8791,7 @@
                 <label>Access<select name="server.host"><option value="127.0.0.1" ${settings.server.host === '127.0.0.1' ? 'selected' : ''}>Local</option><option value="0.0.0.0" ${settings.server.host === '0.0.0.0' ? 'selected' : ''}>LAN</option></select></label>
                 <label>Port<input name="server.port" type="number" min="1" max="65535" value="${escapeAttr(settings.server.port)}"></label>
                 <label class="settings-check"><input name="server.open_browser" type="checkbox" ${settings.server.open_browser ? 'checked' : ''}> Open browser on start</label>
+                <label class="settings-wide">Allowed hosts<textarea name="server.allowed_hosts" rows="3" spellcheck="false" aria-describedby="settings-allowed-hosts-rule">${escapeHtml((settings.server.allowed_hosts || []).join('\n'))}</textarea><small class="field-hint" id="settings-allowed-hosts-rule">One hostname per line, for a reverse proxy that forwards its own name. Addresses and localhost are always accepted. Use * to accept every name, which turns off DNS rebinding protection. This list applies without a restart.</small></label>
               </div>
             </section>
             <section class="settings-section" id="settings-security">
@@ -9046,7 +9047,8 @@
       server: {
         host: form.get('server.host'),
         port: numberOrUndefined(form.get('server.port')),
-        open_browser: form.get('server.open_browser') === 'on'
+        open_browser: form.get('server.open_browser') === 'on',
+        allowed_hosts: lines(form.get('server.allowed_hosts'))
       },
       shell: {
         preferred: form.get('shell.preferred'),

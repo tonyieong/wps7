@@ -142,7 +142,8 @@ port = 5000
 open_browser = true
 # Extra Host header values to accept, for a reverse proxy that forwards its own
 # hostname. Addresses and "localhost" are always accepted; any other name is
-# rejected so a DNS rebinding page cannot reach this server. Edit here only.
+# rejected so a DNS rebinding page cannot reach this server.
+# Use ["*"] to accept every name, which turns that rebinding protection off.
 allowed_hosts = []
 
 [auth]
@@ -476,7 +477,7 @@ function updateConfigFile(root, updates) {
   const configPath = path.join(root, 'config.toml');
   let configText = normalizeConfigText(fs.readFileSync(configPath, 'utf8'));
   const allowed = {
-    server: ['host', 'port', 'open_browser'],
+    server: ['host', 'port', 'open_browser', 'allowed_hosts'],
     auth: ['password_hash'],
     shell: ['preferred', 'fallback', 'args'],
     persistence: ['autosave_minutes', 'scrollback_lines'],

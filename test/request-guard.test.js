@@ -19,6 +19,15 @@ test('trusted hosts accept addresses but reject rebinding domains', () => {
   assert.equal(isTrustedHost(undefined, []), false);
 });
 
+test('a wildcard entry accepts every name but still needs a Host header', () => {
+  assert.equal(isTrustedHost('win-ai:5000', ['*']), true);
+  assert.equal(isTrustedHost('attacker.example.com:5000', ['*']), true);
+  assert.equal(isTrustedHost('wps7.internal:5000', ['wps7.internal', '*']), true);
+  assert.equal(isTrustedHost(' * ', ['*']), false);
+  assert.equal(isTrustedHost('', ['*']), false);
+  assert.equal(isTrustedHost(undefined, ['*']), false);
+});
+
 test('same origin allows non-browser clients but rejects cross-site upgrades', () => {
   // Terminal clients and curl send no Origin at all.
   assert.equal(isSameOrigin(undefined, '127.0.0.1:5000'), true);

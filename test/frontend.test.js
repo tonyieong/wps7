@@ -8,6 +8,7 @@ const { Terminal: HeadlessTerminal } = require('@xterm/headless');
 const appSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
 const styles = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles.css'), 'utf8');
 const mainSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'main.js'), 'utf8');
+const configSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'config.js'), 'utf8');
 const browserSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'browser.js'), 'utf8');
 const manifest = fs.readFileSync(path.join(__dirname, '..', 'public', 'manifest.webmanifest'), 'utf8');
 const indexSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
@@ -1967,4 +1968,16 @@ test('the workspace add button centres its icon against the tab border', () => {
   // An odd content box in the tab strip put the whole bar on a half pixel.
   const tabs = styles.slice(styles.indexOf('.tabs {\n  display: grid;'));
   assert.match(tabs.slice(0, tabs.indexOf('}')), /padding:\s*0 8px 3px/);
+});
+
+test('allowed hosts round-trips through the settings API and the Server section', () => {
+  // The value leaves the server, reaches a field, and comes back on save; a
+  // gap in any one of the five makes the setting silently read-only again.
+  // updateConfigFile keeps its own per-section key list, and omitting it there
+  // drops the write after both other layers have already accepted it.
+  assert.match(mainSource, /allowed_hosts:\s*Array\.isArray\(config\.server\.allowed_hosts\)/);
+  assert.match(mainSource, /next\.server\.allowed_hosts\s*=\s*updates\.server\.allowed_hosts/);
+  assert.match(configSource, /server:\s*\['host', 'port', 'open_browser', 'allowed_hosts'\]/);
+  assert.match(appSource, /<textarea name="server\.allowed_hosts"/);
+  assert.match(appSource, /allowed_hosts:\s*lines\(form\.get\('server\.allowed_hosts'\)\)/);
 });
