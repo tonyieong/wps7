@@ -2324,6 +2324,24 @@
       return Math.max(min, Math.min(max, pointerX - startX));
     };
 
+    // A swap moves the title being passed by a whole width at once. Putting it
+    // back where it was and letting its own transform transition carry it over
+    // reads as making room; jumping there reads as a glitch.
+    const slideAside = (wasAt) => {
+      for (const [item, from] of wasAt) {
+        const shift = from - item.offsetLeft;
+        if (!shift) {
+          continue;
+        }
+        item.style.transition = 'none';
+        item.style.transform = `translateX(${shift}px)`;
+        requestAnimationFrame(() => {
+          item.style.transition = '';
+          item.style.transform = '';
+        });
+      }
+    };
+
     const reorder = (pointerX) => {
       const others = [...strip.querySelectorAll('.tab')].filter((item) => item !== tab);
       const centre = tab.offsetLeft + tab.offsetWidth / 2 + offset(pointerX);
@@ -2332,12 +2350,14 @@
       if (before === tab.nextElementSibling || (!before && !tab.nextElementSibling)) {
         return;
       }
+      const wasAt = new Map(others.map((item) => [item, item.offsetLeft]));
       strip.insertBefore(tab, before || null);
       // Taking the new slot moves the tab by the width of whatever it just
       // passed. The pointer did not move, so its own origin has to travel the
       // same distance, or the tab leaps that far ahead and lands on the next
       // title, and the next, until it fetches up against the far edge.
       startX += tab.offsetLeft - settled;
+      slideAside(wasAt);
     };
 
     const onMove = (moveEvent) => {
@@ -2371,7 +2391,12 @@
       window.removeEventListener('pointercancel', finish);
       tab.classList.remove('dragging');
       strip.classList.remove('reordering');
-      tab.style.transform = '';
+      // Including any title still mid-slide, so a drag that ends on top of one
+      // does not strand it away from its slot.
+      for (const item of strip.querySelectorAll('.tab')) {
+        item.style.transition = '';
+        item.style.transform = '';
+      }
     };
 
     const onUp = async () => {

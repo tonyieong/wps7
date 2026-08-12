@@ -3201,6 +3201,11 @@ textarea:focus-visible {
   z-index: 3;
   box-shadow: 0 2px 10px var(--shadow);
   cursor: grabbing;
+  /* Tabs animate their transform for the press effect, which a drag cannot
+     afford: taking a new slot shifts the tab instantly and the transform that
+     cancels the shift would ease in behind it, throwing the tab a full title
+     ahead for those frames. Under the pointer it has to be immediate. */
+  transition: none;
 }
 
 .workspace-strip::-webkit-scrollbar {

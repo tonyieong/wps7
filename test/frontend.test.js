@@ -172,6 +172,17 @@ test('a workspace title can be dragged to reorder it, and a touch must hold firs
   // Reordering has to run before the tab is drawn: the other way round spends a
   // frame with the new slot and the old offset, which reads as a jump.
   assert.match(drag, /reorder\(moveEvent\.clientX\);\s*tab\.style\.transform = `translateX\(\$\{offset\(moveEvent\.clientX\)\}px\)`/);
+  // Tabs ease their transform for the press effect. Under the pointer that
+  // easing lags the correction for a swap, throwing the tab a title ahead for
+  // those frames, so a dragged tab opts out of it.
+  assert.match(styles, /\.workspace-strip \.tab\.dragging\s*\{[^}]*transition:\s*none/s);
+  // The title being passed moves a whole width at once; FLIP slides it from
+  // where it was instead of teleporting it.
+  assert.match(drag, /const wasAt = new Map\(others\.map\(\(item\) => \[item, item\.offsetLeft\]\)\)/);
+  assert.match(drag, /const shift = from - item\.offsetLeft/);
+  assert.match(drag, /item\.style\.transition = 'none';\s*item\.style\.transform = `translateX\(\$\{shift\}px\)`;\s*requestAnimationFrame/);
+  // Whatever is still mid-slide when the drag ends gets put back in its slot.
+  assert.match(drag, /for \(const item of strip\.querySelectorAll\('\.tab'\)\) \{\s*item\.style\.transition = '';\s*item\.style\.transform = '';/);
   // The strip is pinned for the whole drag. Scrolling it from inside the move
   // handler ran once per pointer event, which raced the tab to the far end
   // instead of leaving it under the pointer.
