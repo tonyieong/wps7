@@ -263,7 +263,9 @@ test('pane titles reuse the same pane-type icons as the sidebar', () => {
 
 test('long pane titles keep the close button visible immediately while resizing', () => {
   assert.match(appSource, /\$\{header\}\s*\$\{pane\.type === 'usage'[\s\S]*?\}\s*<button class="pane-close" data-close-pane="\$\{pane\.id\}"/);
-  assert.match(styles, /\.pane-title\s*\{[^}]*padding:\s*0 38px 0 10px/s);
+  // 30px matches the tabbed strips and still clears the close button, which
+  // occupies 28px (22px wide at right: 6px).
+  assert.match(styles, /\.pane-title\s*\{[^}]*padding:\s*0 30px 0 8px/s);
   assert.match(styles, /\.pane-title\s*\{[^}]*width:\s*100%[^}]*max-width:\s*100%[^}]*contain:\s*inline-size[^}]*transition:\s*none/s);
   assert.match(styles, /\.pane-title \[data-rename-pane\]\s*\{[^}]*width:\s*100%/s);
   assert.match(styles, /\.pane-close,\s*\.pane-usage-refresh\s*\{[^}]*position:\s*absolute[^}]*top:\s*3px[^}]*right:\s*6px[^}]*z-index:\s*6/s);
@@ -416,7 +418,7 @@ test('browser tabs replace the browser pane title at the shared title height', (
   assert.match(appSource, /pane\.type === 'browser'[\s\S]*?class="browser-tab-strip"[\s\S]*?data-pane-title="\$\{pane\.id\}"[\s\S]*?fileActionIcon\('browser'\)/);
   assert.doesNotMatch(appSource, /function renderBrowserPane\(pane\)[\s\S]*?<div class="browser-tab-strip"/);
   assert.match(styles, /\.pane\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\)/s);
-  assert.match(styles, /\.browser-tab-strip\s*\{[^}]*height:\s*var\(--pane-toolbar-height\)[^}]*padding-right:\s*30px/s);
+  assert.match(styles, /\.browser-tab-strip\s*\{[^}]*height:\s*var\(--pane-toolbar-height\)[^}]*padding:\s*2px 30px 0 8px/s);
   assert.match(appSource, /data-browser-new-tab[^>]*>\$\{fileActionIcon\('add'\)\}<\/button>/);
   assert.match(appSource, /data-notepad-new-tab[^>]*>\$\{fileActionIcon\('add'\)\}<\/button>/);
 });
@@ -947,7 +949,10 @@ test('files pane supports drag upload and Windows-style sortable detail columns'
   assert.match(appSource, /class="file-size">\$\{entry\.type === 'file' \? formatBytes\(entry\.size\) : 'Folder'\}<\/small>/);
   assert.doesNotMatch(styles, /\.files-pane\.drop-target\s*\{[^}]*box-shadow/s);
   assert.match(styles, /\.files-pane\.drop-target \.file-drop-overlay\s*\{[^}]*display:\s*flex/s);
-  assert.match(styles, /\.file-pane-title\.uploading\s*\{[^}]*grid-template-columns:\s*auto auto minmax\(0, 1fr\)/s);
+  // The upload status now lives in the tab strip, asserted above via
+  // [data-pane-upload-status]; the old .file-pane-title grid is gone.
+  assert.doesNotMatch(styles, /\.file-pane-title/);
+  assert.match(styles, /\.pane-tab-strip \.pane-kind-icon,\s*\.pane-tab-strip \.pane-upload-status\s*\{/);
 });
 
 test('file detail rows share the exact column boundaries of their header', () => {
@@ -1229,13 +1234,16 @@ test('notepad find and replace popovers are draggable and closeable', () => {
   assert.match(styles, /\.notepad-popover-header \.notepad-popover-close\s*\{/);
 });
 
-test('notepad tab strip stays wired from the pane container with compact controls', () => {
+test('notepad tab strip stays wired from the pane container and matches the other panes', () => {
   assert.match(appSource, /wireNotepadTabs\(paneElement\.closest\('\.pane'\) \|\| paneElement, paneId\)/);
   assert.match(appSource, /const newTabButton = paneElement\.querySelector\('\[data-notepad-new-tab\]'\);\s*\n\s*if \(newTabButton\) newTabButton\.onclick = \(\) => addNotepadTab\(paneId, ''\);/);
   assert.doesNotMatch(appSource, /\[data-notepad-new-tab\]'\)\?\.addEventListener/);
-  assert.match(styles, /\.notepad-tab-close\s*\{[^}]*width:\s*14px[^}]*height:\s*14px/s);
-  assert.match(styles, /\.notepad-new-tab\s*\{[^}]*flex:\s*0 0 18px[^}]*width:\s*18px/s);
-  assert.match(styles, /\.notepad-new-tab \.file-action-icon\s*\{[^}]*width:\s*12px/s);
+  assert.match(styles, /\.notepad-tab-close\s*\{[^}]*width:\s*16px[^}]*height:\s*16px/s);
+  // The new-tab button follows the shared 22px control instead of notepad's
+  // own scale, so it matches the close button sitting beside it.
+  assert.match(styles, /\.notepad-new-tab\s*\{[^}]*flex:\s*0 0 22px[^}]*width:\s*22px/s);
+  // It should appear only in the shared 13px icon rule, with no override.
+  assert.equal(styles.split('.notepad-new-tab .file-action-icon').length - 1, 1);
 });
 
 test('notepad toolbar handlers replace instead of stacking so font size steps by one', () => {
@@ -1967,4 +1975,73 @@ test('the workspace add button centres its icon against the tab border', () => {
   // An odd content box in the tab strip put the whole bar on a half pixel.
   const tabs = styles.slice(styles.indexOf('.tabs {\n  display: grid;'));
   assert.match(tabs.slice(0, tabs.indexOf('}')), /padding:\s*0 8px 3px/);
+});
+
+test('new-tab buttons match the close button they sit beside', () => {
+  // The + had no height, so it collapsed to its 13px icon and its hover fill
+  // read as a capsule next to the close button's 22px square.
+  const rule = (selector) => {
+    const start = styles.indexOf(selector + ' {');
+    assert.ok(start !== -1, 'missing rule for ' + selector);
+    return styles.slice(start, styles.indexOf('}', start));
+  };
+  // .pane-close shares its rule with .pane-usage-refresh, so match on the
+  // selector that actually precedes the brace.
+  const close = rule('.pane-usage-refresh');
+  assert.match(close, /width:\s*22px/);
+  assert.match(close, /height:\s*22px/);
+  assert.match(close, /border-radius:\s*4px/);
+  for (const selector of ['.pane-new-tab', '.browser-new-tab', '.notepad-new-tab']) {
+    const body = rule(selector);
+    assert.match(body, /width:\s*22px/, selector + ' width');
+    assert.match(body, /height:\s*22px/, selector + ' height');
+    assert.match(body, /border-radius:\s*4px/, selector + ' radius');
+  }
+  // The strip pads 2px top and 0 bottom, so centring alone leaves the + half a
+  // pixel below the absolutely positioned close button.
+  assert.match(rule('.pane-new-tab'), /margin-bottom:\s*1px/);
+});
+
+test('pane title rows follow one design per kind, and share a common base', () => {
+  // Panes split in two: those with tabs (terminal, files, browser, notepad)
+  // and those without (image, usage, whiteboard). Every pane inside a kind
+  // must look identical, and both kinds share the row's height, background
+  // and border. Browser had drifted to a 3px left pad; notepad to a 2px gap,
+  // 58px tabs, 14px closes and an accent-tinted strip.
+  const block = (selector) => {
+    const start = styles.indexOf(selector + ' {');
+    assert.ok(start !== -1, 'missing rule for ' + selector);
+    return styles.slice(start, styles.indexOf('}', start));
+  };
+  const value = (selector, prop) => {
+    const match = block(selector).match(new RegExp('(?:^|;|\\{)\\s*' + prop + '\\s*:\\s*([^;]+)'));
+    return match ? match[1].trim() : '(unset)';
+  };
+  const groups = [
+    [['.pane-tab-strip', '.browser-tab-strip', '.notepad-tab-strip'], ['height', 'gap', 'padding', 'color']],
+    [['.pane-tab', '.browser-tab', '.notepad-tab'], ['height', 'gap', 'padding', 'min-width', 'max-width', 'grid-template-columns']],
+    [['.pane-tab-close', '.browser-tab-close', '.notepad-tab-close'], ['width', 'height', 'border-radius', 'font-size']],
+    [['.pane-new-tab', '.browser-new-tab', '.notepad-new-tab'], ['width', 'height', 'border-radius', 'flex']]
+  ];
+  for (const [selectors, props] of groups) {
+    for (const prop of props) {
+      const values = selectors.map((s) => value(s, prop));
+      assert.equal(new Set(values).size, 1,
+        `${prop} differs across pane types: ${selectors.map((s, i) => s + '=' + values[i]).join(', ')}`);
+    }
+  }
+
+  // Tabless panes all share .pane-title, so that kind is consistent by
+  // construction. What has to hold is that both kinds sit on the same base:
+  // a second .pane-title block supplies these, overriding an earlier one that
+  // had no height and a hardcoded border colour.
+  const tabless = styles.slice(styles.lastIndexOf('.pane-title {'));
+  const tablessBody = tabless.slice(0, tabless.indexOf('}'));
+  assert.match(tablessBody, /height:\s*var\(--pane-toolbar-height\)/);
+  assert.match(tablessBody, /border-color:\s*var\(--line\)/);
+  assert.match(tablessBody, /background:\s*color-mix\(in srgb, var\(--surface-soft\) 82%, var\(--terminal-bg\)\)/);
+  const strip = styles.slice(styles.indexOf('.pane-tab-strip {'));
+  const stripBody = strip.slice(0, strip.indexOf('}'));
+  assert.match(stripBody, /height:\s*var\(--pane-toolbar-height\)/);
+  assert.match(stripBody, /background:\s*color-mix\(in srgb, var\(--surface-soft\) 82%, var\(--terminal-bg\)\)/);
 });

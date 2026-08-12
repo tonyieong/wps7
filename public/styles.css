@@ -420,14 +420,6 @@ textarea {
   white-space: nowrap;
 }
 
-.file-pane-title {
-  grid-template-columns: auto minmax(0, 1fr);
-}
-
-.file-pane-title.uploading {
-  grid-template-columns: auto auto minmax(0, 1fr);
-}
-
 .pane-upload-status {
   max-width: 42px;
   overflow: hidden;
@@ -555,15 +547,24 @@ textarea {
   font: inherit;
 }
 
+/* Square, and matching .pane-close: the two sit side by side in the pane's top
+   right corner, so without an explicit height this one collapsed to the icon's
+   13px and its hover fill read as a flat capsule next to the close button's
+   square one. */
 .pane-new-tab {
-  flex: 0 0 24px;
-  width: 24px;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
   display: grid;
   place-items: center;
   align-self: center;
   padding: 0;
+  /* The strip pads 2px on top but 0 on the bottom, so centring inside its odd
+     25px content box lands half a pixel below the close button, which is
+     positioned against the strip's true centre. */
+  margin-bottom: 1px;
   border: 0;
-  border-radius: 3px;
+  border-radius: 4px;
   background: transparent;
   color: var(--muted);
 }
@@ -1929,7 +1930,9 @@ textarea:focus-visible {
   transition: none;
   height: var(--pane-toolbar-height);
   min-height: var(--pane-toolbar-height);
-  padding: 0 38px 0 10px;
+  /* Same gutters as the tabbed strips: both kinds of title row clear the same
+     22px close button on the right and start their content at the same x. */
+  padding: 0 30px 0 8px;
   border-color: var(--line);
   background: color-mix(in srgb, var(--surface-soft) 82%, var(--terminal-bg));
   color: var(--muted);
@@ -4555,8 +4558,7 @@ a:focus-visible {
   gap: 4px;
   min-width: 0;
   height: var(--pane-toolbar-height);
-  padding: 2px 3px 0;
-  padding-right: 30px;
+  padding: 2px 30px 0 8px;
   border-bottom: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface-soft) 82%, var(--terminal-bg));
   cursor: move;
@@ -4591,7 +4593,7 @@ a:focus-visible {
   min-width: 62px;
   max-width: 180px;
   height: 25px;
-  padding: 0 4px;
+  padding: 0 6px;
   border: 1px solid transparent;
   border-bottom: 0;
   border-radius: 5px 5px 0 0;
@@ -4622,7 +4624,6 @@ a:focus-visible {
   border-radius: 3px;
   background: transparent;
   color: inherit;
-  font-size: 13px;
 }
 
 .browser-tab-close:hover {
@@ -4630,13 +4631,14 @@ a:focus-visible {
 }
 
 .browser-new-tab {
-  flex: 0 0 24px;
-  width: 24px;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
   display: grid;
   place-items: center;
   padding: 0;
   border: 0;
-  border-radius: 3px;
+  border-radius: 4px;
   background: transparent;
   color: var(--muted);
 }
@@ -4651,10 +4653,6 @@ a:focus-visible {
   height: 14px;
 }
 
-.notepad-new-tab .file-action-icon {
-  width: 12px;
-  height: 12px;
-}
 
 .browser-toolbar {
   grid-row: 1;
@@ -4930,13 +4928,12 @@ a:focus-visible {
 .notepad-tab-strip {
   display: flex;
   align-items: stretch;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
   height: var(--pane-toolbar-height);
   padding: 2px 30px 0 8px;
   border-bottom: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface-soft) 82%, var(--terminal-bg));
-  color: var(--accent);
   cursor: move;
   user-select: none;
 }
@@ -4956,14 +4953,14 @@ a:focus-visible {
 
 .notepad-tab {
   display: grid;
-  grid-template-columns: minmax(24px, 1fr) 14px;
+  grid-template-columns: minmax(24px, 1fr) 16px;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
   flex: 0 1 150px;
-  min-width: 58px;
+  min-width: 62px;
   max-width: 180px;
   height: 25px;
-  padding: 0 3px 0 6px;
+  padding: 0 6px;
   border: 1px solid transparent;
   border-bottom: 0;
   border-radius: 5px 5px 0 0;
@@ -5004,14 +5001,13 @@ a:focus-visible {
 .notepad-tab-close {
   display: grid;
   place-items: center;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   padding: 0;
   border: 0;
   border-radius: 3px;
   background: transparent;
   color: inherit;
-  font-size: 13px;
 }
 
 .notepad-tab-close:hover {
@@ -5019,13 +5015,14 @@ a:focus-visible {
 }
 
 .notepad-new-tab {
-  flex: 0 0 18px;
-  width: 18px;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
   display: grid;
   place-items: center;
   padding: 0;
   border: 0;
-  border-radius: 3px;
+  border-radius: 4px;
   background: transparent;
   color: var(--muted);
 }
