@@ -1866,7 +1866,9 @@ test('icon-only controls keep their icon centred against the cascade', () => {
   const tabAdd = styles.slice(styles.indexOf('.tab.tab-add {'));
   const tabAddBody = tabAdd.slice(0, tabAdd.indexOf('}'));
   assert.match(tabAddBody, /justify-content:\s*center/);
-  assert.match(tabAddBody, /padding:\s*0/);
+  // Horizontal padding has to stay 0 or .tab's 9px left padding shifts the
+  // icon. The vertical value is covered by the border-compensation test.
+  assert.match(tabAddBody, /padding:\s*\d+px 0 0/);
   // These two override the 1px 6px UA button padding, which does not fit a
   // 14px icon inside a 20px box.
   for (const selector of ['.workspace-nav {', '.board-hscroll-arrow {']) {
@@ -1921,4 +1923,18 @@ test('keyboard focus on pin and pane close is not styled as hover or pressed', (
     const rule = styles.slice(idx, styles.indexOf('}', idx));
     assert.doesNotMatch(rule, /:focus-visible/, `${selector} must not share its rule with :focus-visible`);
   }
+});
+
+test('the workspace add button centres its icon against the tab border', () => {
+  // The tab carries its border on one edge only (bottom on desktop, top on
+  // mobile), so the content box is 27px inside a 28px button and a centred
+  // icon lands half a pixel off. Each side compensates in the opposite
+  // direction; keep the two in step.
+  const desktop = styles.slice(styles.indexOf('.tab.tab-add {'));
+  assert.match(desktop.slice(0, desktop.indexOf('}')), /padding:\s*1px 0 0/);
+  const mobile = styles.slice(styles.indexOf('.app.mode-mobile .tab.tab-add,'));
+  assert.match(mobile.slice(0, mobile.indexOf('}')), /padding:\s*0 0 1px/);
+  // An odd content box in the tab strip put the whole bar on a half pixel.
+  const tabs = styles.slice(styles.indexOf('.tabs {\n  display: grid;'));
+  assert.match(tabs.slice(0, tabs.indexOf('}')), /padding:\s*0 8px 3px/);
 });

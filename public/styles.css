@@ -3147,7 +3147,10 @@ textarea:focus-visible {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: center;
   gap: 0;
-  padding: 0 8px 4px;
+  /* 3px, not 4px: the 36px header less its 1px top border leaves an odd 31px
+     content box at 4px, and centring a 28px bar in it lands every child on a
+     half pixel. 3px gives a 32px box and a whole-pixel 2px gutter. */
+  padding: 0 8px 3px;
   overflow: visible;
 }
 
@@ -3290,9 +3293,12 @@ textarea:focus-visible {
   width: 42px;
   flex: 0 0 42px;
   /* .tab above resets these, so .tab-add has to claim them back at a higher
-     specificity or the icon sits left of centre. */
+     specificity or the icon sits left of centre. The 1px top padding offsets
+     the tab's asymmetric border (none on top, 1px below): without it the
+     content box is 27px inside a 28px button and the icon centres half a
+     pixel high. */
   justify-content: center;
-  padding: 0;
+  padding: 1px 0 0;
 }
 
 .tab.tab-add .file-action-icon {
@@ -3357,6 +3363,13 @@ textarea:focus-visible {
   border-top: 1px solid var(--line);
   border-bottom: 0;
   border-radius: 8px 8px 0 0;
+}
+
+/* The mobile tab moves its border to the top, so the padding that compensates
+   for it has to move to the bottom or the + lands a pixel low. */
+.app.mode-mobile .tab.tab-add,
+.app.mobile-device .tab.tab-add {
+  padding: 0 0 1px;
 }
 
 .app.mode-mobile .tab.active,
