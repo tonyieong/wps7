@@ -1480,7 +1480,7 @@ test('checkbox-free file rows expose selection and keyboard behavior', () => {
 
 test('mobile tabs and settings remain usable above the sidebar', () => {
   assert.match(styles, /\.tab\.tab-add\s*\{[^}]*min-width:\s*42px[^}]*flex:\s*0 0 42px/s);
-  assert.match(styles, /\.settings-overlay\s*\{[^}]*z-index:\s*80/s);
+  assert.match(styles, /\.settings-overlay\s*\{[^}]*z-index:\s*var\(--z-settings\)/s);
   assert.match(appSource, /data-settings-close aria-label="Close settings"/);
   for (const label of ['Appearance', 'Terminal', 'Workspace', 'Persistence', 'Shell', 'Files', 'Server', 'Security']) {
     assert.match(appSource, new RegExp(`aria-label="${label}"[^>]+href="#settings-`));
@@ -1637,7 +1637,7 @@ test('bulk download zips server-side and bulk delete uses a single reporting end
 
 test('narrow desktop mode surfaces a recovery banner that switches to mobile', () => {
   assert.match(appSource, /data-desktop-mode-banner role="status" hidden/);
-  assert.match(appSource, /data-switch-mobile>Switch to Mobile/);
+  assert.match(appSource, /data-switch-mobile>Switch to mobile/);
   assert.match(appSource, /function updateDesktopModeBanner\(\)/);
   assert.match(appSource, /function setDisplayMode\(mode, persist = true\)/);
   assert.match(appSource, /state\.displayMode === 'desktop' && narrowViewport\(\) && !state\.dismissedDesktopBanner/);
@@ -1869,4 +1869,83 @@ test('the theme toggle names the current mode instead of contradicting itself', 
 test('path and address inputs have accessible names', () => {
   assert.match(appSource, /class="file-path-input" name="path"[^>]*aria-label="Folder path"/);
   assert.match(appSource, /class="file-path-input" name="url"[^>]*aria-label="Address or search"/);
+});
+
+test('icon-only controls keep their icon centred against the cascade', () => {
+  // .tab resets justify-content and padding after .tab-add sets them, so the
+  // higher-specificity rule has to claim both back or the + sits 3px left.
+  const tabAdd = styles.slice(styles.indexOf('.tab.tab-add {'));
+  const tabAddBody = tabAdd.slice(0, tabAdd.indexOf('}'));
+  assert.match(tabAddBody, /justify-content:\s*center/);
+  // Horizontal padding has to stay 0 or .tab's 9px left padding shifts the
+  // icon. The vertical value is covered by the border-compensation test.
+  assert.match(tabAddBody, /padding:\s*\d+px 0 0/);
+  // These two override the 1px 6px UA button padding, which does not fit a
+  // 14px icon inside a 20px box.
+  for (const selector of ['.workspace-nav {', '.board-hscroll-arrow {']) {
+    const rule = styles.slice(styles.indexOf(selector));
+    assert.match(rule.slice(0, rule.indexOf('}')), /padding:\s*0/);
+  }
+});
+
+test('a long workspace title truncates with an ellipsis like pane tabs do', () => {
+  assert.match(appSource, /<span class="tab-label" data-rename-session=/);
+  const rule = styles.slice(styles.indexOf('.tab-label {'));
+  const body = rule.slice(0, rule.indexOf('}'));
+  assert.match(body, /text-overflow:\s*ellipsis/);
+  assert.match(body, /overflow:\s*hidden/);
+  assert.match(body, /white-space:\s*nowrap/);
+  // A flex child needs this or it refuses to shrink far enough to truncate.
+  assert.match(body, /min-width:\s*0/);
+});
+
+test('user-facing copy stays in sentence case', () => {
+  assert.match(appSource, /data-switch-mobile>Switch to mobile</);
+  assert.doesNotMatch(appSource, /Switch to Mobile/);
+});
+
+test('top-level stacking uses tokens and keeps context menus above a focused pane', () => {
+  const root = styles.slice(styles.indexOf(':root {'), styles.indexOf('* {'));
+  const value = (name) => {
+    const m = root.match(new RegExp('--z-' + name + ':\\s*(\\d+)'));
+    assert.ok(m, 'missing token --z-' + name);
+    return Number(m[1]);
+  };
+  const layers = ['sidebar', 'settings', 'modal', 'focus-backdrop', 'focus-pane', 'context-menu', 'toast'];
+  const values = layers.map(value);
+  for (let i = 1; i < values.length; i++) {
+    assert.ok(values[i] > values[i - 1], `--z-${layers[i]} must sit above --z-${layers[i - 1]}`);
+  }
+  // The bug this replaced: both context menus shared 95 with the focus
+  // backdrop, leaving them under the focused pane at 96.
+  assert.match(styles, /\.file-context-menu\s*\{[^}]*z-index:\s*var\(--z-context-menu\)/);
+  assert.match(styles, /\.terminal-context-menu\s*\{[^}]*z-index:\s*var\(--z-context-menu\)/);
+  assert.match(styles, /\.pane-focus-backdrop\s*\{[^}]*z-index:\s*var\(--z-focus-backdrop\)/);
+  assert.doesNotMatch(styles, /z-index:\s*9[56]\b/);
+});
+
+test('keyboard focus on pin and pane close is not styled as hover or pressed', () => {
+  // All three states shared one rule with outline:none, so a keyboard ring was
+  // indistinguishable from hovering, and from the pinned state.
+  assert.match(styles, /\.sidebar-pin:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--accent\)/);
+  assert.match(styles, /\.pane-close:focus-visible,\s*\.pane-usage-refresh:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--accent\)/);
+  for (const selector of ['.sidebar-pin:hover', '.pane-close:hover']) {
+    const idx = styles.indexOf(selector + ',\n');
+    const rule = styles.slice(idx, styles.indexOf('}', idx));
+    assert.doesNotMatch(rule, /:focus-visible/, `${selector} must not share its rule with :focus-visible`);
+  }
+});
+
+test('the workspace add button centres its icon against the tab border', () => {
+  // The tab carries its border on one edge only (bottom on desktop, top on
+  // mobile), so the content box is 27px inside a 28px button and a centred
+  // icon lands half a pixel off. Each side compensates in the opposite
+  // direction; keep the two in step.
+  const desktop = styles.slice(styles.indexOf('.tab.tab-add {'));
+  assert.match(desktop.slice(0, desktop.indexOf('}')), /padding:\s*1px 0 0/);
+  const mobile = styles.slice(styles.indexOf('.app.mode-mobile .tab.tab-add,'));
+  assert.match(mobile.slice(0, mobile.indexOf('}')), /padding:\s*0 0 1px/);
+  // An odd content box in the tab strip put the whole bar on a half pixel.
+  const tabs = styles.slice(styles.indexOf('.tabs {\n  display: grid;'));
+  assert.match(tabs.slice(0, tabs.indexOf('}')), /padding:\s*0 8px 3px/);
 });
