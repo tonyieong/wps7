@@ -2032,6 +2032,13 @@ test('pane title rows follow one design per kind, and share a common base', () =
     }
   }
 
+  // The icons inside those controls have to match too: comparing only the
+  // buttons let browser keep a 14px glyph while the others drew 13px.
+  for (const selector of ['.pane-new-tab', '.browser-new-tab', '.notepad-new-tab']) {
+    assert.equal(styles.split(selector + ' .file-action-icon').length - 1, 1,
+      selector + ' must use the shared icon rule, with no size override');
+  }
+
   // Tabless panes all share .pane-title, so that kind is consistent by
   // construction. What has to hold is that both kinds sit on the same base:
   // a second .pane-title block supplies these, overriding an earlier one that
