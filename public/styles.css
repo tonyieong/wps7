@@ -4648,11 +4648,6 @@ a:focus-visible {
   color: var(--text);
 }
 
-.browser-new-tab .file-action-icon {
-  width: 14px;
-  height: 14px;
-}
-
 
 .browser-toolbar {
   grid-row: 1;
