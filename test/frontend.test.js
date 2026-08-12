@@ -183,6 +183,25 @@ test('a workspace title can be dragged to reorder it, and a touch must hold firs
   assert.match(drag, /item\.style\.transition = 'none';\s*item\.style\.transform = `translateX\(\$\{shift\}px\)`;\s*requestAnimationFrame/);
   // Whatever is still mid-slide when the drag ends gets put back in its slot.
   assert.match(drag, /for \(const item of strip\.querySelectorAll\('\.tab'\)\) \{\s*item\.style\.transition = '';\s*item\.style\.transform = '';/);
+});
+
+// Held past an end, the strip comes to meet the drag, so a workspace can be
+// carried to a slot that started off screen.
+test('the strip auto-scrolls at a fixed rate per frame, not per pointer event', () => {
+  const drag = appSource.slice(appSource.indexOf('function startWorkspaceTabDrag'), appSource.indexOf('function narrowViewport'));
+  assert.match(appSource, /const EDGE_SCROLL_PX = 6;/);
+  // Per frame, not per pointer event: a mouse reports dozens of times a second,
+  // and driving this from those events scrolled the strip to its end at once.
+  assert.match(drag, /const edgeScroll = \(\) => \{\s*scrolling = requestAnimationFrame\(edgeScroll\)/);
+  assert.match(drag, /scrolling = requestAnimationFrame\(edgeScroll\);\s*tab\.classList\.add\('dragging'\)|tab\.classList\.add\('dragging'\);[\s\S]*?scrolling = requestAnimationFrame\(edgeScroll\)/);
+  assert.match(drag, /cancelAnimationFrame\(scrolling\)/);
+  // Only once the pointer is actually past an edge, with no inset margin that
+  // would start it while the pointer is still over the strip.
+  assert.match(drag, /Math\.max\(pointerX - bounds\.right, 0\) - Math\.max\(bounds\.left - pointerX, 0\)/);
+  assert.match(drag, /if \(!past \|\| next === anchor\) \{\s*return;/);
+  // The slots slide under the tab, so the pointer's origin slides with them.
+  assert.match(drag, /startX -= next - anchor/);
+  assert.match(drag, /anchor = next;\s*strip\.scrollLeft = anchor;\s*reorder\(pointerX\)/);
   // The strip is pinned for the whole drag. Scrolling it from inside the move
   // handler ran once per pointer event, which raced the tab to the far end
   // instead of leaving it under the pointer.
