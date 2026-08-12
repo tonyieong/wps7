@@ -72,7 +72,7 @@ Only package after merge, rebase, and final tests pass. Record the port-5001 lis
 
 ## 7. UI audit
 
-After a successful build, invoke the available `ui-audit` skill against the running website. Use port `5333`; if it is occupied, use `5334`. Keep this temporary audit server separate from ports 5000 and 5001, and shut it down after the audit.
+After a successful build, load and follow the UI audit skill at `C:\Users\Admin\.claude\skills\ui-audit\SKILL.md`. Run its scripts from the main WPS7 checkout, using its isolated port `5057` server; never substitute ports 5000 or 5001. Run the static, accessibility, and layout audits, filter results through that skill's `references/wps7-rules.md` and `references/pitfalls.md`, independently verify surviving findings, and always stop the audit server so it restores stashed runtime files.
 
 ## Report
 
