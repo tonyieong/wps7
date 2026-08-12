@@ -1,0 +1,4 @@
+interface:
+  display_name: "WPS7 Main Integration"
+  short_description: "Merge, rebase, package and audit WPS7 worktrees"
+  default_prompt: "Use $wps7-main-integration to integrate completed AI worktrees and verify the WPS7 release flow."
