@@ -27,4 +27,7 @@ output/
 # to one machine. Contributor-facing conventions live in CONTRIBUTING.md.
 AGENTS.md
 CLAUDE.md
+# Same reason: local Claude Code settings and skills describe the port
+# 5000/5001 split and the control-token shutdown path.
+.claude/
 

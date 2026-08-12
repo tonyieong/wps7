@@ -2199,7 +2199,7 @@
         <section class="workspace">
           <div class="desktop-mode-banner" data-desktop-mode-banner role="status" hidden>
             <span class="desktop-mode-banner-text">Panes are cramped on this narrow screen.</span>
-            <button type="button" class="primary" data-switch-mobile>Switch to Mobile</button>
+            <button type="button" class="primary" data-switch-mobile>Switch to mobile</button>
             <button type="button" class="desktop-mode-banner-dismiss" data-dismiss-banner aria-label="Keep desktop layout" title="Keep desktop layout">×</button>
           </div>
           <div class="pane-grid" data-pane-grid style="${boardStyle()}">
@@ -2217,7 +2217,7 @@
                 <div class="workspace-strip" data-workspace-strip>
                   ${state.sessions.map((item) => `
                     <button class="tab ${item.id === session.id ? 'active' : ''}" data-tab-session="${item.id}" data-workspace-drag>
-                      <span data-rename-session="${item.id}">${escapeHtml(item.name)}</span>
+                      <span class="tab-label" data-rename-session="${item.id}">${escapeHtml(item.name)}</span>
                       <span class="tab-close" data-close-session="${item.id}" title="Close workspace">×</span>
                     </button>
                   `).join('')}
