@@ -2291,6 +2291,7 @@
   }
 
   const WORKSPACE_DRAG_HOLD_MS = 300;
+  const EDGE_SCROLL_PX = 6;
 
   // Dragging a workspace title to reorder it. A touch has to hold still first,
   // because the same sideways swipe is how the strip is scrolled by hand; a
@@ -2302,7 +2303,9 @@
     const tab = event.currentTarget;
     const strip = tab.parentElement;
     let startX = event.clientX;
+    let pointerX = event.clientX;
     let anchor = 0;
+    let scrolling = 0;
     let dragging = false;
     let hold = 0;
 
@@ -2313,6 +2316,7 @@
       anchor = strip.scrollLeft;
       tab.classList.add('dragging');
       strip.classList.add('reordering');
+      scrolling = requestAnimationFrame(edgeScroll);
     };
 
     // The strip clips what overflows it, so a tab dragged past either edge would
@@ -2360,7 +2364,30 @@
       slideAside(wasAt);
     };
 
+    // Held past either end, the strip keeps coming at a fixed distance per
+    // frame, so how fast it travels owes nothing to how often the pointer
+    // happens to report. Driving this from the pointer instead is what sent an
+    // earlier version bolting to the far end: a mouse reports dozens of times a
+    // second, and each one moved the strip again.
+    const edgeScroll = () => {
+      scrolling = requestAnimationFrame(edgeScroll);
+      const bounds = strip.getBoundingClientRect();
+      const past = Math.max(pointerX - bounds.right, 0) - Math.max(bounds.left - pointerX, 0);
+      const next = Math.max(0, Math.min(strip.scrollWidth - strip.clientWidth, anchor + Math.sign(past) * EDGE_SCROLL_PX));
+      if (!past || next === anchor) {
+        return;
+      }
+      // Every slot slides under the tab, so the pointer's origin travels with
+      // them; otherwise the tab drifts off the edge it is being held against.
+      startX -= next - anchor;
+      anchor = next;
+      strip.scrollLeft = anchor;
+      reorder(pointerX);
+      tab.style.transform = `translateX(${offset(pointerX)}px)`;
+    };
+
     const onMove = (moveEvent) => {
+      pointerX = moveEvent.clientX;
       const travelled = Math.abs(moveEvent.clientX - startX);
       if (!dragging) {
         // A touch that moves before the hold elapses is scrolling, not dragging.
@@ -2386,6 +2413,7 @@
 
     const finish = () => {
       clearTimeout(hold);
+      cancelAnimationFrame(scrolling);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', finish);
