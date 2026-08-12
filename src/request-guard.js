@@ -14,7 +14,9 @@ function hostnameOf(hostHeader) {
 
 // DNS rebinding needs a hostname the attacker controls, so a Host header that is
 // a literal address can never be a rebinding attempt. Names are only trusted
-// when the operator listed them, which is what a reverse proxy needs.
+// when the operator listed them, which is what a reverse proxy needs. A "*"
+// entry waives the name check entirely, which also waives the rebinding
+// protection, so it is never the default.
 function isTrustedHost(hostHeader, allowedHosts = []) {
   const hostname = hostnameOf(hostHeader);
   if (!hostname) {
@@ -23,7 +25,10 @@ function isTrustedHost(hostHeader, allowedHosts = []) {
   if (hostname === 'localhost' || net.isIP(hostname)) {
     return true;
   }
-  return allowedHosts.some((allowed) => String(allowed).trim().toLowerCase() === hostname);
+  return allowedHosts.some((allowed) => {
+    const entry = String(allowed).trim().toLowerCase();
+    return entry === '*' || entry === hostname;
+  });
 }
 
 // curl and other non-browser clients send no Origin. Browsers always do, and a

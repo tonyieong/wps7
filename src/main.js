@@ -171,7 +171,10 @@ function settingsConfig(config, runtimeConfig) {
     server: {
       host: typeof config.server.host === 'string' ? config.server.host : runtimeConfig.server.host,
       port: validPort(config.server.port) ? Number(config.server.port) : Number(runtimeConfig.server.port),
-      open_browser: Boolean(config.server.open_browser)
+      open_browser: Boolean(config.server.open_browser),
+      allowed_hosts: Array.isArray(config.server.allowed_hosts)
+        ? config.server.allowed_hosts.map((entry) => String(entry))
+        : []
     },
     auth: {
       password_set: Boolean(config.auth.password_hash)
@@ -299,6 +302,13 @@ function sanitizeSettingsUpdates(updates) {
     }
     if (typeof updates.server.open_browser === 'boolean') {
       next.server.open_browser = updates.server.open_browser;
+    }
+    // isTrustedHost compares against a lower-cased hostname, so store the names
+    // the same way and the saved list reads exactly as it behaves.
+    if (Array.isArray(updates.server.allowed_hosts)) {
+      next.server.allowed_hosts = updates.server.allowed_hosts
+        .map((entry) => String(entry).trim().toLowerCase())
+        .filter(Boolean);
     }
   }
   if (updates.auth) {
