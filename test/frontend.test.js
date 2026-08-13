@@ -724,6 +724,14 @@ test('usage windows count down to the reset instead of printing a timestamp', ()
   assert.match(appSource, /if \(!labels\.length\)[\s\S]*?clearInterval\(usageCountdownTimer\)/);
 });
 
+test('the Codex usage card shows banked reset credits and their expiry, not usage', () => {
+  const markup = appSource.slice(appSource.indexOf('function usageProviderMarkup'), appSource.indexOf('function renderUsagePane'));
+  assert.match(markup, /provider\.resetCredits\?\.count > 0/);
+  assert.match(markup, /<span>Reset credits<\/span><strong>\$\{provider\.resetCredits\.count\}/);
+  assert.match(markup, /provider\.resetCredits\?\.expiresAt/);
+  assert.doesNotMatch(markup, /resetCredits[\s\S]*?consume|redeem/i);
+});
+
 test('a quota window turns amber then red at the configured thresholds', () => {
   const level = appSource.slice(appSource.indexOf('function usageLevel'), appSource.indexOf('function usageWindowMarkup'));
   assert.match(level, /usedPercent >= alert[\s\S]*?return 'danger'/);

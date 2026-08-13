@@ -335,6 +335,31 @@ function resolveCliHome({ configured, fromEnv, subfolder, marker, homedir = os.h
   return signedInProfileHomes({ subfolder, marker, profileRoot: profileRoot || path.dirname(homedir) })[0] || own;
 }
 
+// Undocumented endpoint behind the desktop/VS Code "spend it now" button; the
+// Rust CLI's app-server does not expose it, so this only runs on the direct
+// OAuth path above, never on the app-server fallback. A failure here must not
+// take down the rest of the Codex usage card, so it reports null instead of throwing.
+async function fetchCodexResetCredits({ accessToken, accountId, fetchImpl, log = () => {} }) {
+  try {
+    const payload = await requestJson('https://chatgpt.com/backend-api/wham/rate-limit-reset-credits', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json',
+        ...(accountId ? { 'ChatGPT-Account-Id': accountId } : {})
+      }
+    }, fetchImpl);
+    const available = (Array.isArray(payload.credits) ? payload.credits : []).filter((credit) => credit.status === 'available');
+    const expiresAt = available
+      .map((credit) => isoDate(credit.expires_at))
+      .filter(Boolean)
+      .sort()[0] || null;
+    return { count: Number(payload.available_count ?? available.length) || 0, expiresAt };
+  } catch (error) {
+    log(`codex reset credits unavailable: ${error.message}`);
+    return null;
+  }
+}
+
 async function fetchCodexUsage({ codexHome, fetchImpl = defaultFetch, spawnImpl = spawn, log = () => {} } = {}) {
   const home = resolveCliHome({
     configured: codexHome,
@@ -357,6 +382,7 @@ async function fetchCodexUsage({ codexHome, fetchImpl = defaultFetch, spawnImpl 
   if (!accessToken) {
     throw new Error('Codex OAuth token is missing.');
   }
+  const accountId = auth.tokens?.account_id || auth.account_id || '';
 
   let payload;
   try {
@@ -391,6 +417,7 @@ async function fetchCodexUsage({ codexHome, fetchImpl = defaultFetch, spawnImpl 
       hasCredits: Boolean(payload.credits.has_credits),
       unlimited: Boolean(payload.credits.unlimited)
     } : null,
+    resetCredits: await fetchCodexResetCredits({ accessToken, accountId, fetchImpl, log }),
     updatedAt: new Date().toISOString()
   };
 }
