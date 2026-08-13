@@ -182,3 +182,80 @@ test('image siblings still include a picture whose folder cannot be listed', () 
 
   assert.deepEqual(files.listImageSiblings(missing).entries, [path.win32.resolve(missing)]);
 });
+
+test('moves a file into a destination folder', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-files-'));
+  const source = path.join(root, 'source.txt');
+  fs.writeFileSync(source, 'moved');
+  const folder = files.createFolder(root, 'dest-folder');
+
+  const movedIntoFolder = files.moveItem(source, folder.path);
+  assert.equal(movedIntoFolder.path, path.win32.join(folder.path, 'source.txt'));
+  assert.equal(fs.existsSync(source), false);
+  assert.equal(fs.readFileSync(movedIntoFolder.path, 'utf8'), 'moved');
+});
+
+test('moving onto an existing file path overwrites it, and a missing destination throws', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-files-'));
+  const source = path.join(root, 'source.txt');
+  const existing = path.join(root, 'existing.txt');
+  fs.writeFileSync(source, 'new content');
+  fs.writeFileSync(existing, 'old content');
+
+  const moved = files.moveItem(source, existing);
+  assert.equal(moved.path, path.win32.resolve(existing));
+  assert.equal(fs.readFileSync(existing, 'utf8'), 'new content');
+  assert.equal(fs.existsSync(source), false);
+
+  assert.throws(() => files.moveItem(existing, path.join(root, 'does-not-exist.txt')));
+});
+
+test('creating a folder or file that already exists throws', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-files-'));
+  files.createFolder(root, 'dup-folder');
+  files.createFile(root, 'dup-file.txt');
+
+  assert.throws(() => files.createFolder(root, 'dup-folder'));
+  assert.throws(() => files.createFile(root, 'dup-file.txt'));
+});
+
+test('renaming rejects "." and ".." as the new name', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-files-'));
+  const target = path.join(root, 'note.txt');
+  fs.writeFileSync(target, 'hi');
+
+  assert.throws(() => files.renameItem(target, '.'), /Invalid file name/);
+  assert.throws(() => files.renameItem(target, '..'), /Invalid file name/);
+  assert.equal(fs.existsSync(target), true);
+});
+
+test('writeTextFile rejects directories, missing parents and oversized content', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-files-'));
+  const folder = files.createFolder(root, 'a-folder');
+
+  assert.throws(() => files.writeTextFile(folder.path, 'x'), /not a file/i);
+  assert.throws(() => files.writeTextFile(path.join(root, 'missing-parent', 'note.txt'), 'x'), /parent directory/i);
+
+  const tooLarge = 'x'.repeat(10 * 1024 * 1024 + 1);
+  assert.throws(() => files.writeTextFile(path.join(root, 'huge.txt'), tooLarge), /exceeds the 10 MB limit/);
+});
+
+test('readTextFile rejects files over the 10 MB limit', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-files-'));
+  const hugePath = path.join(root, 'huge.txt');
+  fs.writeFileSync(hugePath, Buffer.alloc(10 * 1024 * 1024 + 1, 'x'));
+
+  assert.throws(() => files.readTextFile(hugePath), /exceeds the 10 MB limit/);
+});
+
+test('reads and writes latin1 and UTF-16 BE text files', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-files-'));
+  const latin1Path = path.join(root, 'latin1.txt');
+  const utf16bePath = path.join(root, 'utf16be.txt');
+
+  files.writeTextFile(latin1Path, 'café', 'latin1');
+  assert.deepEqual(files.readTextFile(latin1Path), { path: latin1Path, content: 'café', encoding: 'latin1' });
+
+  files.writeTextFile(utf16bePath, '甲乙', 'utf16be');
+  assert.deepEqual(files.readTextFile(utf16bePath), { path: utf16bePath, content: '甲乙', encoding: 'utf16be' });
+});

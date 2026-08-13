@@ -38,6 +38,16 @@ test('remote browser launches an isolated headless Chromium profile', () => {
   assert.ok(args.includes('--autoplay-policy=no-user-gesture-required'));
 });
 
+test('Chromium executable search falls back to Edge and then reports nothing found', () => {
+  const edgeOnly = findChromiumExecutable({
+    existsSync: (candidate) => candidate.includes('Microsoft\\Edge')
+  });
+  assert.match(edgeOnly, /Microsoft\\Edge\\Application\\msedge\.exe$/);
+
+  const nothingInstalled = findChromiumExecutable({ existsSync: () => false });
+  assert.equal(nothingInstalled, '');
+});
+
 test('headless Chromium does not announce itself as automation controlled', () => {
   // Headless Chromium sets navigator.webdriver to true, which every major bot
   // check (reCAPTCHA, Cloudflare, Akamai) reads first. It made Browser panes
@@ -99,6 +109,13 @@ test('starting Chromium first clears out any stale process still holding the pro
   await assert.doesNotReject(terminateStaleChromium('C:\\wps7\\data\\browser-profile', failingRun));
 });
 
+test('the stale-Chromium cleanup command escapes a single quote in the profile path', () => {
+  // The path is interpolated into a PowerShell single-quoted string; an
+  // unescaped ' would break out of it and change what the command matches.
+  const command = chromiumProfileCleanupCommand("C:\\wps7's data\\browser-profile");
+  assert.match(command, /CommandLine\.Contains\('C:\\wps7''s data\\browser-profile'\)/);
+});
+
 test('remote browser viewport is bounded for safe screencasting', () => {
   assert.deepEqual(normalizeViewport(12, 9000, 4), { width: 320, height: 2160, deviceScaleFactor: 2 });
   assert.deepEqual(normalizeViewport(1280, 720, 1), { width: 1280, height: 720, deviceScaleFactor: 1 });
@@ -111,6 +128,15 @@ test('mobile emulation uses an Android Chromium identity', () => {
   assert.equal(normalizeEmulationMode('tablet'), 'desktop');
   assert.match(mobileUserAgent('Mozilla/5.0 Chrome/150.0.7339.12 Safari/537.36'), /Android 15/);
   assert.match(mobileUserAgent('Mozilla/5.0 Chrome/150.0.7339.12 Safari/537.36'), /Chrome\/150\.0\.0\.0 Mobile/);
+});
+
+test('emulation mode only ever resolves to mobile or desktop', () => {
+  assert.equal(normalizeEmulationMode('desktop'), 'desktop');
+  assert.equal(normalizeEmulationMode(undefined), 'desktop');
+  assert.equal(normalizeEmulationMode(null), 'desktop');
+  assert.equal(normalizeEmulationMode(''), 'desktop');
+  // Case-sensitive on purpose: only the exact stored value switches modes.
+  assert.equal(normalizeEmulationMode('Mobile'), 'desktop');
 });
 
 test('desktop identity masks the Headless marker instead of going blank', () => {
@@ -262,6 +288,23 @@ test('an invalid background color is ignored rather than sent to Chromium', asyn
   await page.applyBackground('not-a-color');
 
   assert.deepEqual(calls, []);
+});
+
+test('applyBackground accepts padded, uppercase hex but rejects shorthand or unprefixed values', async () => {
+  const accepted = Object.create(RemoteBrowserPage.prototype);
+  const acceptedCalls = [];
+  accepted.send = async (method, params) => { acceptedCalls.push({ method, params }); return {}; };
+  await accepted.applyBackground('  #FFFFFF  ');
+  const override = acceptedCalls.find((call) => call.method === 'Emulation.setDefaultBackgroundColorOverride');
+  assert.deepEqual(override.params, { color: { r: 255, g: 255, b: 255, a: 1 } });
+
+  for (const invalid of ['#fff', 'ffffff', '#gggggg', '#1234567']) {
+    const page = Object.create(RemoteBrowserPage.prototype);
+    const calls = [];
+    page.send = async (method, params) => { calls.push({ method, params }); return {}; };
+    await page.applyBackground(invalid);
+    assert.deepEqual(calls, [], `expected "${invalid}" to be rejected`);
+  }
 });
 
 test('a <select> dropdown is drawn as page content so the capture paths can see it', async () => {
@@ -491,6 +534,17 @@ test('remote browser blocks every local interface on the WPS7 server port', () =
   assert.equal(isOwnServerWebsite('http://192.168.1.25:5001/', 5000, interfaces), false);
 });
 
+test('isOwnServerWebsite recognizes the host name and tolerates a malformed URL', () => {
+  const interfaces = { Ethernet: [{ address: '192.168.1.25' }] };
+
+  assert.equal(isOwnServerWebsite(`http://${os.hostname()}:5000/`, 5000, interfaces), true);
+  assert.equal(isOwnServerWebsite(`http://${os.hostname().toUpperCase()}:5000/`, 5000, interfaces), true);
+  assert.equal(isOwnServerWebsite('not a url', 5000, interfaces), false);
+  assert.equal(isOwnServerWebsite('', 5000, interfaces), false);
+  // https on the port 80 default never coincides with our own http-only port 5000.
+  assert.equal(isOwnServerWebsite('https://192.168.1.25/', 5000, interfaces), false);
+});
+
 test('browser resize waits for the initial frame before handling client messages', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-browser-test-'));
   const pane = {
@@ -547,6 +601,83 @@ test('a new browser manager defaults new tabs to the app\'s dark theme backgroun
   });
 
   assert.equal(manager.themeBackground, '#06111b');
+
+  manager.shutdown();
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('a download is only served once Chromium reports it complete and the file is actually on disk', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-browser-test-'));
+  const manager = new BrowserManager({
+    root,
+    store: { findPane: () => null },
+    normalizeWebsite: (value) => value,
+    serverPort: 5000,
+    networkInterfaces: {}
+  });
+  const broadcasts = [];
+  const client = { readyState: WebSocket.OPEN, send: (payload) => broadcasts.push(JSON.parse(payload)) };
+  manager.paneClients.set('pane-1', new Set([client]));
+
+  manager.beginDownload('pane-1', 'tab-1', { guid: 'abc', suggestedFilename: 'report.pdf', url: 'https://example.com/report.pdf' });
+  assert.equal(manager.downloads.get('abc').state, 'inProgress');
+  assert.equal(broadcasts.at(-1).download.filename, 'report.pdf');
+
+  // Chromium says it finished, but the bytes have not landed on disk yet.
+  manager.updateDownload('pane-1', { guid: 'abc', state: 'completed', receivedBytes: 10, totalBytes: 10 });
+  assert.equal(manager.downloads.get('abc').state, 'completed');
+  assert.equal(manager.downloadFile('abc'), null);
+
+  fs.writeFileSync(path.join(manager.downloadDir, 'abc'), 'pdf bytes');
+  assert.deepEqual(manager.downloadFile('abc'), { path: path.join(manager.downloadDir, 'abc'), filename: 'report.pdf' });
+
+  // An update for a guid nobody started stays a no-op rather than a phantom entry.
+  manager.updateDownload('pane-1', { guid: 'unknown', state: 'completed' });
+  assert.equal(manager.downloads.has('unknown'), false);
+
+  manager.shutdown();
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('assertWebsiteAllowed blocks the app\'s own address and lets everything else through', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-browser-test-'));
+  const manager = new BrowserManager({
+    root,
+    store: { findPane: () => null },
+    normalizeWebsite: (value) => value,
+    serverPort: 5000,
+    networkInterfaces: {}
+  });
+
+  assert.throws(() => manager.assertWebsiteAllowed('http://localhost:5000/'), /cannot open its own server address/);
+  assert.doesNotThrow(() => manager.assertWebsiteAllowed('https://example.com/'));
+
+  manager.shutdown();
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('killSession tears down every pane across every tab, tolerating a session with no tabs', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-browser-test-'));
+  const manager = new BrowserManager({
+    root,
+    store: { findPane: () => null },
+    normalizeWebsite: (value) => value,
+    serverPort: 5000,
+    networkInterfaces: {}
+  });
+  const killed = [];
+  manager.killPane = async (paneId) => { killed.push(paneId); };
+
+  manager.killSession({
+    tabs: [
+      { panes: [{ id: 'pane-1' }, { id: 'pane-2' }] },
+      { panes: [{ id: 'pane-3' }] }
+    ]
+  });
+  assert.deepEqual(killed, ['pane-1', 'pane-2', 'pane-3']);
+
+  assert.doesNotThrow(() => manager.killSession({}));
+  assert.doesNotThrow(() => manager.killSession(null));
 
   manager.shutdown();
   fs.rmSync(root, { recursive: true, force: true });
