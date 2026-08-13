@@ -122,6 +122,59 @@ test('uses Codex app-server to refresh subscription login and read rate limits',
   assert.equal('email' in result, false);
 });
 
+test('reads Codex banked reset credits alongside rate limits', async () => {
+  const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-codex-'));
+  fs.writeFileSync(path.join(codexHome, 'auth.json'), JSON.stringify({
+    tokens: { access_token: 'secret-token', account_id: 'acct-123' }
+  }));
+  const result = await fetchCodexUsage({
+    codexHome,
+    fetchImpl: async (url, options) => {
+      assert.equal(options.headers.Authorization, 'Bearer secret-token');
+      if (url === 'https://chatgpt.com/backend-api/wham/usage') {
+        return { ok: true, status: 200, json: async () => ({ plan_type: 'plus', rate_limit: {} }) };
+      }
+      assert.equal(url, 'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits');
+      assert.equal(options.headers['ChatGPT-Account-Id'], 'acct-123');
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          available_count: 2,
+          credits: [
+            { id: 'c1', status: 'available', expires_at: '2027-02-01T00:00:00Z' },
+            { id: 'c2', status: 'available', expires_at: '2027-01-15T00:00:00Z' },
+            { id: 'c3', status: 'consumed', expires_at: '2026-06-01T00:00:00Z' }
+          ]
+        })
+      };
+    }
+  });
+
+  // The nearest expiry among the *available* credits is what is worth showing,
+  // not the earliest of all of them, since a consumed one is no longer at risk.
+  assert.deepEqual(result.resetCredits, { count: 2, expiresAt: '2027-01-15T00:00:00.000Z' });
+});
+
+test('does not fail Codex usage when the reset-credit lookup fails', async () => {
+  const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-codex-'));
+  fs.writeFileSync(path.join(codexHome, 'auth.json'), JSON.stringify({
+    tokens: { access_token: 'secret-token' }
+  }));
+  const result = await fetchCodexUsage({
+    codexHome,
+    fetchImpl: async (url) => {
+      if (url === 'https://chatgpt.com/backend-api/wham/usage') {
+        return { ok: true, status: 200, json: async () => ({ plan_type: 'plus', rate_limit: {} }) };
+      }
+      return { ok: false, status: 500, text: async () => 'boom' };
+    }
+  });
+
+  assert.equal(result.provider, 'codex');
+  assert.equal(result.resetCredits, null);
+});
+
 test('reads MiniMax Coding Plan windows with bearer authentication', async () => {
   const result = await fetchMiniMaxUsage({
     apiKey: 'sk-cp-secret',

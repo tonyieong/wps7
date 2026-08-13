@@ -8136,11 +8136,18 @@
     const credits = provider.credits?.hasCredits || provider.credits?.unlimited
       ? `<div class="usage-credits"><span>Credits</span><strong>${provider.credits.unlimited ? 'Unlimited' : provider.credits.balance}</strong></div>`
       : '';
+    const resetExpiry = provider.resetCredits?.expiresAt
+      ? ` · expires ${new Date(provider.resetCredits.expiresAt).toLocaleDateString([], { dateStyle: 'medium' })}`
+      : '';
+    const resetCredits = provider.resetCredits?.count > 0
+      ? `<div class="usage-credits"><span>Reset credits</span><strong>${provider.resetCredits.count}${escapeHtml(resetExpiry)}</strong></div>`
+      : '';
     return `
       <article class="usage-card">
         <header><div><h3>${escapeHtml(provider.label)}</h3><small>${escapeHtml(detail || 'Connected')}</small></div><span class="usage-state${provider.stale ? '' : ' ok'}">●</span></header>
         ${windows || '<p>No quota windows returned.</p>'}
         ${credits}
+        ${resetCredits}
       </article>
     `;
   }
