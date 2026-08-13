@@ -15,6 +15,7 @@ Use this skill from the repository root as the main-branch coordinator. Read `AG
 - Do not push, create a release, or change remote settings unless explicitly requested.
 - Never stop, replace, or restart the port-5001 instance. Do not launch the port-5000 executable directly from Session 0.
 - Do not commit ignored files, secrets, `config.toml`, runtime state, logs, or generated output.
+- When the user confirms an agent's work is complete, the main coordinator may commit that agent's uncommitted tracked changes on the agent's behalf. Treat this as an explicit commit request, not permission to modify an active worktree.
 
 ## Default execution contract
 
@@ -28,7 +29,8 @@ Use this skill from the repository root as the main-branch coordinator. Read `AG
 1. Check each worktree with `git status --short --branch`, `git log`, and `git diff --check`.
 2. Confirm which agents are actually complete. If one is still working, leave that worktree untouched unless the user explicitly asks to integrate only the completed agent.
 3. In each completed task worktree, read the diff and the affected files before staging anything. Run the relevant focused tests, `npm run lint`, and `npm test`.
-4. Commit only that task's changes, using a short imperative message. Keep local instructions and ignored files out of the commit.
+4. If the agent has not committed and the user confirms completion (or explicitly asks main to commit for it), main may stage explicit tracked/untracked project files from that worktree and create the commit on the agent's behalf. Do not stage ignored files, local instructions, secrets, runtime state, generated output, or unrelated changes. Use a short imperative message and report that main created the commit for the agent.
+5. If the agent already has a commit, do not create an empty replacement commit; record its hash and continue with merge. If the worktree still has unrelated or unexplained changes, stop and report the blocker rather than guessing.
 
 ## 2. Merge into main
 
