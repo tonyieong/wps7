@@ -1535,13 +1535,15 @@ test('settings navigation maps to real sections and follows the visible section'
   assert.match(appSource, /requestAnimationFrame\(\(\) => setActiveSettingsSection\(section\.id\)\)/);
 });
 
-test('settings use the same compact density as the workspace', () => {
-  assert.match(styles, /\.settings-panel\s*\{[^}]*width:\s*min\(980px,[^}]*height:\s*min\(720px/s);
-  assert.match(styles, /\.settings-shell\s*\{[^}]*grid-template-columns:\s*184px minmax\(0, 1fr\)/s);
-  assert.match(styles, /\.settings-nav a\s*\{[^}]*min-height:\s*34px/s);
-  assert.match(styles, /\.settings-body\s*\{[^}]*padding:\s*16px 18px 24px/s);
+test('settings use a compact, minimal density tighter than the legacy workspace panel', () => {
+  assert.match(styles, /\.settings-panel\s*\{[^}]*width:\s*min\(860px,[^}]*height:\s*min\(600px/s);
+  assert.match(styles, /\.settings-shell\s*\{[^}]*grid-template-columns:\s*164px minmax\(0, 1fr\)/s);
+  assert.match(styles, /\.settings-nav a\s*\{[^}]*min-height:\s*30px/s);
+  assert.match(styles, /\.settings-body\s*\{[^}]*padding:\s*12px 14px 16px/s);
+  // Inputs keep the app-wide 34px control height for hit-target consistency
+  // even though the surrounding chrome is tighter.
   assert.match(styles, /\.settings-grid input,[\s\S]*?\.settings-grid textarea\s*\{[^}]*min-height:\s*34px/s);
-  assert.match(styles, /\.settings-footer\s*\{[^}]*min-height:\s*52px/s);
+  assert.match(styles, /\.settings-footer\s*\{[^}]*min-height:\s*44px/s);
 });
 
 test('settings apply stays open while save closes the dialog', () => {

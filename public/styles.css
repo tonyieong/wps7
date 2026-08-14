@@ -2319,16 +2319,26 @@ textarea:focus-visible {
 }
 
 .settings-panel {
-  width: min(980px, calc(100vw - 32px));
-  height: min(720px, calc(100vh - 32px));
+  width: min(860px, calc(100vw - 32px));
+  height: min(600px, calc(100vh - 32px));
   max-height: none;
   border-radius: 8px;
   transform-origin: center;
 }
 
 .settings-header {
-  min-height: 54px;
-  padding: 8px 12px;
+  min-height: 46px;
+  padding: 6px 12px;
+}
+
+.settings-header .product-mark {
+  gap: 8px;
+  font-size: 14px;
+}
+
+.settings-header .brand-mark {
+  width: 28px;
+  height: 26px;
 }
 
 .settings-header small {
@@ -2341,12 +2351,12 @@ textarea:focus-visible {
 .settings-shell {
   min-height: 0;
   display: grid;
-  grid-template-columns: 184px minmax(0, 1fr);
+  grid-template-columns: 164px minmax(0, 1fr);
 }
 
 .settings-nav {
   min-height: 0;
-  padding: 8px 7px;
+  padding: 6px;
   border-right: 1px solid var(--line);
   background: var(--rail);
   overflow: auto;
@@ -2355,9 +2365,9 @@ textarea:focus-visible {
 .settings-nav a {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: 34px;
-  padding: 0 9px;
+  gap: 7px;
+  min-height: 30px;
+  padding: 0 8px;
   border-radius: 6px;
   color: var(--muted);
   text-decoration: none;
@@ -2390,12 +2400,12 @@ textarea:focus-visible {
 }
 
 .settings-body {
-  padding: 16px 18px 24px;
+  padding: 12px 14px 16px;
   scroll-behavior: smooth;
 }
 
 .settings-section {
-  margin: 0 0 20px;
+  margin: 0 0 16px;
 }
 
 .settings-section:last-child {
@@ -2407,19 +2417,19 @@ textarea:focus-visible {
   align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
-  margin-bottom: 12px;
-  padding-bottom: 10px;
+  margin-bottom: 9px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--line);
 }
 
 .section-heading h2 {
   margin: 0;
   color: var(--text);
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .section-heading p {
-  margin: 5px 0 0;
+  margin: 4px 0 0;
   color: var(--muted);
   font-size: 12px;
 }
@@ -2428,7 +2438,7 @@ textarea:focus-visible {
 .restart-badge {
   flex: 0 0 auto;
   border-radius: 999px;
-  padding: 4px 7px;
+  padding: 3px 7px;
   background: var(--accent-soft);
   color: var(--accent);
   font-size: 10px;
@@ -2475,21 +2485,21 @@ textarea:focus-visible {
 .theme-preset-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
+  gap: 5px;
 }
 
 .theme-mode-setting,
 .display-mode-setting {
   display: grid;
-  gap: 8px;
-  padding: 10px;
+  gap: 7px;
+  padding: 8px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: color-mix(in srgb, var(--surface-soft) 60%, transparent);
 }
 
 .display-mode-setting {
-  margin-top: 12px;
+  margin-top: 10px;
   justify-items: start;
 }
 
@@ -2503,9 +2513,9 @@ textarea:focus-visible {
 }
 
 .segmented-option {
-  min-width: 74px;
+  min-width: 68px;
   height: 28px;
-  padding: 0 12px;
+  padding: 0 10px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
@@ -2548,11 +2558,11 @@ textarea:focus-visible {
 
 .theme-preset {
   min-width: 0;
-  min-height: 52px;
+  min-height: 46px;
   display: grid;
   align-content: center;
-  gap: 6px;
-  padding: 7px;
+  gap: 5px;
+  padding: 6px;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: var(--surface-soft);
@@ -2582,8 +2592,8 @@ textarea:focus-visible {
 
 .custom-theme-editor {
   display: grid;
-  gap: 10px;
-  padding-top: 12px;
+  gap: 8px;
+  padding-top: 10px;
   border-top: 1px solid var(--line);
 }
 
@@ -2621,9 +2631,9 @@ textarea:focus-visible {
 
 .mobile-keybar-setting {
   display: grid;
-  gap: 8px;
-  margin-top: 14px;
-  padding-top: 12px;
+  gap: 6px;
+  margin-top: 12px;
+  padding-top: 10px;
   border-top: 1px solid var(--line);
 }
 
@@ -2701,7 +2711,7 @@ textarea:focus-visible {
   grid-template-columns: 20px 54px 88px 104px minmax(150px, 1fr) auto;
   align-items: end;
   gap: 6px;
-  padding: 6px;
+  padding: 5px;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: var(--surface-soft);
@@ -2814,7 +2824,7 @@ textarea:focus-visible {
 .custom-theme-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px 12px;
+  gap: 6px 10px;
 }
 
 .custom-theme-grid label {
@@ -2841,11 +2851,11 @@ textarea:focus-visible {
 }
 
 .settings-grid {
-  gap: 10px 14px;
+  gap: 8px 12px;
 }
 
 .settings-grid label {
-  gap: 5px;
+  gap: 4px;
   font-size: 12px;
 }
 
@@ -2853,7 +2863,7 @@ textarea:focus-visible {
 .settings-grid select,
 .settings-grid textarea {
   min-height: 34px;
-  padding: 6px 8px;
+  padding: 5px 7px;
   border-radius: 6px;
 }
 
@@ -2862,7 +2872,7 @@ textarea:focus-visible {
 .settings-check {
   min-height: 34px;
   align-content: center;
-  padding: 6px 0;
+  padding: 5px 0;
   border: 0;
   background: transparent;
 }
@@ -2877,13 +2887,13 @@ textarea:focus-visible {
 }
 
 .settings-footer {
-  min-height: 52px;
-  padding: 8px 12px;
+  min-height: 44px;
+  padding: 6px 12px;
   background: var(--panel);
 }
 
 .settings-footer button {
-  min-width: 96px;
+  min-width: 84px;
 }
 
 @media (max-width: 760px) {
@@ -2918,7 +2928,7 @@ textarea:focus-visible {
   }
 
   .settings-nav {
-    padding: 7px 4px;
+    padding: 6px 4px;
   }
 
   .settings-nav a {
@@ -2932,7 +2942,7 @@ textarea:focus-visible {
   }
 
   .settings-body {
-    padding: 14px 12px 20px;
+    padding: 12px 10px 16px;
   }
 
   .theme-setting {
