@@ -1546,6 +1546,11 @@ test('settings use a compact, minimal density tighter than the legacy workspace 
   assert.match(styles, /\.settings-footer\s*\{[^}]*min-height:\s*44px/s);
 });
 
+test('settings fields cap to a short width, but paths, keys and multi-line values stay full width', () => {
+  assert.match(styles, /\.settings-grid input,[\s\S]*?\.settings-grid textarea\s*\{[^}]*max-width:\s*160px/s);
+  assert.match(styles, /\.settings-wide input,[\s\S]*?\.settings-wide textarea\s*\{[^}]*max-width:\s*none/s);
+});
+
 test('settings apply stays open while save closes the dialog', () => {
   assert.match(appSource, /data-settings-apply title="Save and keep this dialog open">Apply<\/button>/);
   assert.match(appSource, /data-settings-save title="Save and close">Save<\/button>/);

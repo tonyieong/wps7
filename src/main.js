@@ -70,6 +70,28 @@ function writeRuntimeInfo(root, config) {
   }, null, 2));
 }
 
+function readRuntimeInfo(root) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(root, 'data', 'runtime.json'), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function isProcessAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return false;
+  }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM means the process exists but belongs to another user; ESRCH means
+    // there is no such process.
+    return error.code === 'EPERM';
+  }
+}
+
 function stateCounts(store) {
   let panes = 0;
   for (const session of store.state.sessions || []) {
@@ -1758,40 +1780,79 @@ function main() {
     }
   });
 
-  const handleListenError = (error) => {
+  // The ws library re-emits the underlying http.Server's own 'error' event as
+  // its own, so every EADDRINUSE the port-fallback retry below produces (and
+  // already handles) arrives here too. Only a genuinely different error is
+  // ours to treat as fatal.
+  wss.on('error', (error) => {
     if (error.code === 'EADDRINUSE') {
-      const url = `http://${config.server.host === '0.0.0.0' ? '127.0.0.1' : config.server.host}:${config.server.port}`;
+      return;
+    }
+    appendRuntimeLog(root, `websocket server error: ${error.message}`);
+    throw error;
+  });
+
+  const requestedPort = config.server.port;
+
+  function listenOnPort(port) {
+    const onListenError = (error) => {
+      server.removeListener('error', onListenError);
+      if (error.code !== 'EADDRINUSE') {
+        throw error;
+      }
+      // Only the originally requested port can be this same data directory's
+      // own already-running process: reopening its browser tab instead of
+      // starting a second writer avoids two processes racing state.json.
+      const runtimeInfo = port === requestedPort ? readRuntimeInfo(root) : null;
+      const sameInstanceAlreadyRunning = runtimeInfo
+        && runtimeInfo.host === config.server.host
+        && runtimeInfo.port === port
+        && runtimeInfo.pid !== process.pid
+        && isProcessAlive(runtimeInfo.pid);
+      if (sameInstanceAlreadyRunning) {
+        const url = `http://${config.server.host === '0.0.0.0' ? '127.0.0.1' : config.server.host}:${port}`;
+        if (config.server.open_browser) {
+          openBrowser(url);
+        }
+        process.exit(1);
+        return;
+      }
+      if (port >= 65535) {
+        throw error;
+      }
+      appendRuntimeLog(root, `port ${port} unavailable, trying ${port + 1}`);
+      listenOnPort(port + 1);
+    };
+
+    server.once('error', onListenError);
+    server.listen(port, config.server.host, () => {
+      server.removeListener('error', onListenError);
+      config.server.port = port;
+      browserManager.serverPort = port;
+      if (port !== requestedPort) {
+        appendRuntimeLog(root, `requested port ${requestedPort} unavailable, listening on ${port} instead`);
+      }
+      writeRuntimeInfo(root, config);
+      appendRuntimeLog(root, `listening pid=${process.pid} host=${config.server.host} port=${port}`);
+      const url = `http://${config.server.host === '0.0.0.0' ? '127.0.0.1' : config.server.host}:${port}`;
+      trayController = startTray({
+        root,
+        url,
+        save: () => store.save(),
+        openBrowser,
+        restart: () => stopRuntime({ restart: true }),
+        shutdown: () => stopRuntime(),
+        // The packaged exe is on the windows subsystem and has no console, so
+        // anything the tray writes to stderr would otherwise be lost.
+        log: (message) => appendRuntimeLog(root, `tray ${message}`)
+      });
       if (config.server.open_browser) {
         openBrowser(url);
       }
-      process.exit(1);
-    }
-    throw error;
-  };
-
-  server.on('error', handleListenError);
-  wss.on('error', handleListenError);
-
-  server.listen(config.server.port, config.server.host, () => {
-    writeRuntimeInfo(root, config);
-    appendRuntimeLog(root, `listening pid=${process.pid} host=${config.server.host} port=${config.server.port}`);
-    const url = `http://${config.server.host === '0.0.0.0' ? '127.0.0.1' : config.server.host}:${config.server.port}`;
-    trayController = startTray({
-      root,
-      url,
-      save: () => store.save(),
-      openBrowser,
-      restart: () => stopRuntime({ restart: true }),
-      shutdown: () => stopRuntime(),
-      // The packaged exe is on the windows subsystem and has no console, so
-      // anything the tray writes to stderr would otherwise be lost.
-      log: (message) => appendRuntimeLog(root, `tray ${message}`)
     });
-    if (config.server.open_browser) {
-      openBrowser(url);
-    }
-  });
+  }
 
+  listenOnPort(requestedPort);
 }
 
 function startAutosave(store, config) {

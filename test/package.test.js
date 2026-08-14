@@ -122,7 +122,9 @@ test('the service stack is gone from the scripts and the npm commands', () => {
   // sets either now, so the server must not read them.
   assert.doesNotMatch(mainSource, /WPS7_SERVICE_MANAGED|serviceManaged|WPS7_HEADLESS|isHeadlessMode/);
   // The tray is unconditional, which is the whole point of running at logon.
-  assert.match(mainSource, /^ {4}trayController = startTray\(\{$/m);
+  // It sits inside the listen-success callback of the port-fallback retry
+  // helper, one indent level deeper than the old direct server.listen() call.
+  assert.match(mainSource, /^ {6}trayController = startTray\(\{$/m);
 });
 
 test('Windows packaging refreshes generated folders without nesting them', () => {
