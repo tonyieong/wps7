@@ -1838,6 +1838,11 @@ textarea:focus-visible {
   box-shadow: inset 2px 0 var(--accent);
 }
 
+.session-item .file-action-icon {
+  flex: 0 0 15px;
+  margin-right: 8px;
+}
+
 .workspace {
   grid-row: 2;
   grid-template-rows: 54px minmax(0, 1fr) 30px;
@@ -5900,4 +5905,3 @@ a:focus-visible {
   z-index: var(--z-focus-pane);
   box-shadow: 0 24px 64px var(--shadow);
 }
-
