@@ -6974,12 +6974,26 @@
     return value;
   }
 
+  // Only a named key or a modifier combination counts as a key, so the braces
+  // in a real command survive: `${env:PATH}`, `@{a=1}` and `% { $_.Name }` are
+  // typed as written. A lone character never needs the brace form, because
+  // typing it directly does the same thing.
+  function isKeyToken(token) {
+    const parts = String(token || '').split('+').map((part) => part.trim()).filter(Boolean);
+    const key = parts.pop() || '';
+    return parts.length ? isSupportedShortcut(token) : namedShortcutKeys.has(key);
+  }
+
   // A typed-text button may chain keys with braces, so one button can send
-  // `claude{Enter}`. `{{` types a literal brace.
+  // `claude{Enter}`. `{{` types a literal brace, for text that really wants to
+  // read `{Enter}`.
   function terminalTextSequence(text) {
-    return String(text || '').replace(/\{\{|\{([^{}]+)\}/g, (match, token) => (
-      token ? terminalShortcutSequence(token) : '{'
-    ));
+    return String(text || '').replace(/\{\{|\{([^{}]+)\}/g, (match, token) => {
+      if (!token) {
+        return '{';
+      }
+      return isKeyToken(token) ? terminalShortcutSequence(token) : match;
+    });
   }
 
   function applyMobileModifiers(element, data) {
@@ -8358,15 +8372,18 @@
     return namedShortcutKeys.has(key) || key.length === 1;
   }
 
-  function unsupportedTextTokens(value) {
-    const unsupported = [];
+  // Braces that do not name a key are typed as written, so a command such as
+  // `Get-ChildItem | % { $_.Name }` is valid. It is still worth saying so,
+  // because a misspelled {Etner} would otherwise fail silently.
+  function literalBraceTokens(value) {
+    const literal = [];
     String(value || '').replace(/\{\{|\{([^{}]+)\}/g, (match, token) => {
-      if (token && !isSupportedShortcut(token)) {
-        unsupported.push(token);
+      if (token && !isKeyToken(token)) {
+        literal.push(token);
       }
       return match;
     });
-    return unsupported;
+    return literal;
   }
 
   function mobileKeybarRowValidity(action, value) {
@@ -8375,9 +8392,9 @@
       if (!trimmed) {
         return { valid: false, hint: 'Enter the text to type.' };
       }
-      const unsupported = unsupportedTextTokens(trimmed);
-      return unsupported.length
-        ? { valid: false, hint: `{${unsupported[0]}} is not a key this terminal can send.` }
+      const literal = literalBraceTokens(trimmed);
+      return literal.length
+        ? { valid: true, hint: `{${literal[0]}} is not a key name, so it is typed as text.` }
         : { valid: true, hint: '' };
     }
     if (action === 'modifier') {
@@ -8478,7 +8495,7 @@
       row.classList.toggle('invalid', invalid);
       const hintEl = row.querySelector('[data-mobile-keybar-hint]');
       if (hintEl) {
-        hintEl.textContent = invalid ? hint : '';
+        hintEl.textContent = hint;
       }
     });
     if (preview) {
@@ -8826,7 +8843,7 @@
                 </div>
               </div>
               <div class="mobile-keybar-setting">
-                <div class="mobile-keybar-setting-heading"><div><h3>PowerShell shortcut buttons</h3><p>Choose buttons shown below PowerShell on desktop and mobile, arrange their order, or add a shortcut or text command. A modifier stays active for the next key; double-click it on the toolbar to lock it on. Typed text can chain keys with braces, so <code>claude{Enter}</code> types the word and runs it, and <code>{{</code> types a literal brace.</p></div><div class="mobile-keybar-setting-actions"><button class="secondary" type="button" data-mobile-keybar-reset>Reset to defaults</button><button class="secondary" type="button" data-mobile-keybar-add>${fileActionIcon('add')}<span>Add button</span></button></div></div>
+                <div class="mobile-keybar-setting-heading"><div><h3>PowerShell shortcut buttons</h3><p>Choose buttons shown below PowerShell on desktop and mobile, arrange their order, or add a shortcut or text command. A modifier stays active for the next key; double-click it on the toolbar to lock it on. Typed text can chain keys with braces, so <code>claude{Enter}</code> types the word and runs it. Only a key name counts, so the braces in a command such as <code>\${env:PATH}</code> are typed as written; write <code>{{</code> for text that has to read like a key name.</p></div><div class="mobile-keybar-setting-actions"><button class="secondary" type="button" data-mobile-keybar-reset>Reset to defaults</button><button class="secondary" type="button" data-mobile-keybar-add>${fileActionIcon('add')}<span>Add button</span></button></div></div>
                 ${renderMobileKeybarEditor(settings.terminal?.mobile_keybar_buttons)}
               </div>
             </section>

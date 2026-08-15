@@ -866,13 +866,20 @@ test('a keybar modifier arms for one key and locks on a double-click', () => {
 });
 
 // The sequence helpers are pure string maths, so they run for real rather than
-// being matched as source text.
+// being matched as source text. isKeyToken leans on the settings editor's key
+// vocabulary, so that block is loaded alongside them.
 function loadTerminalSequenceHelpers() {
-  const start = appSource.indexOf('  // Keys whose escape sequence ends in a letter');
-  const end = appSource.indexOf('  function applyMobileModifiers(element, data) {');
-  assert.ok(start >= 0 && end > start, 'terminal sequence helpers not found in app.js');
+  const slice = (from, to) => {
+    const start = appSource.indexOf(from);
+    const end = appSource.indexOf(to);
+    assert.ok(start >= 0 && end > start, `not found in app.js: ${from}`);
+    return appSource.slice(start, end);
+  };
   const context = vm.createContext({});
-  vm.runInContext(appSource.slice(start, end), context);
+  vm.runInContext([
+    slice('  const namedShortcutKeys = new Set([', '  function mobileKeybarRowValidity(action, value) {'),
+    slice('  // Keys whose escape sequence ends in a letter', '  function applyMobileModifiers(element, data) {')
+  ].join('\n'), context);
   return context;
 }
 
@@ -905,8 +912,37 @@ test('a typed-text button can chain keys so one press runs a command', () => {
   assert.equal(terminalTextSequence('npm test{Enter}'), 'npm test\r');
   assert.equal(terminalTextSequence('{Ctrl+C}{Enter}'), '\x03\r');
   assert.equal(terminalTextSequence('git status'), 'git status');
-  // A doubled brace types one, so text that really wants braces still works.
+  // A doubled brace types one, so text that really wants to read like a key
+  // name still works.
   assert.equal(terminalTextSequence('{{Enter}'), '{Enter}');
+});
+
+test('braces that name no key are typed as written, so PowerShell syntax survives', () => {
+  const { terminalTextSequence } = loadTerminalSequenceHelpers();
+  // A lone character never needs the brace form, and reading it as a key used
+  // to eat the braces of a variable reference.
+  assert.equal(terminalTextSequence('${x}'), '${x}');
+  assert.equal(terminalTextSequence('${env:PATH}'), '${env:PATH}');
+  assert.equal(terminalTextSequence('@{a=1}'), '@{a=1}');
+  assert.equal(terminalTextSequence('Get-ChildItem | % { $_.Name }'), 'Get-ChildItem | % { $_.Name }');
+  assert.equal(terminalTextSequence('echo {}'), 'echo {}');
+  assert.equal(terminalTextSequence('if ($x) { echo hi }'), 'if ($x) { echo hi }');
+  // Key names still win, including inside a longer command.
+  assert.equal(terminalTextSequence('echo ${x}{Enter}'), 'echo ${x}\r');
+});
+
+test('a text row holding a brace-heavy command is valid, with a hint rather than an error', () => {
+  const validity = appSource.slice(
+    appSource.indexOf('  function mobileKeybarRowValidity(action, value) {'),
+    appSource.indexOf('  function readMobileKeybarRow(row) {')
+  );
+  assert.match(validity, /literal\.length\s*\?\s*\{ valid: true/);
+  assert.match(validity, /is not a key name, so it is typed as text/);
+  // The hint is shown whether or not the row is in error, so a valid row can
+  // still explain itself; only an error paints it red.
+  assert.match(appSource, /hintEl\.textContent = hint;/);
+  assert.match(styles, /\.mobile-keybar-hint\s*\{[^}]*color:\s*var\(--muted\)/s);
+  assert.match(styles, /\.mobile-keybar-setting-row\.invalid \.mobile-keybar-hint\s*\{[^}]*color:\s*var\(--danger\)/s);
 });
 
 test('mobile keybar can be configured, reordered and extended from server-synced settings', () => {

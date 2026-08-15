@@ -2778,11 +2778,17 @@ textarea:focus-visible {
   display: none;
 }
 
+/* A row can be valid and still have something to say, such as braces that name
+   no key and are therefore typed as text, so only a real error reads as one. */
 .mobile-keybar-hint {
   grid-column: 1 / -1;
   min-height: 0;
-  color: var(--danger);
+  color: var(--muted);
   font-size: 11px;
+}
+
+.mobile-keybar-setting-row.invalid .mobile-keybar-hint {
+  color: var(--danger);
 }
 
 .mobile-keybar-hint:empty {
