@@ -1687,6 +1687,20 @@ test('settings use a compact, minimal density tighter than the legacy workspace 
   assert.match(styles, /\.settings-footer\s*\{[^}]*min-height:\s*44px/s);
 });
 
+test('settings sizes against the visual viewport so the footer stays on screen', () => {
+  // `100vh` on a phone spans the collapsible URL bar, which pushed Cancel,
+  // Apply and Save below the visible area.
+  assert.match(styles, /\.settings-overlay\s*\{[^}]*height:\s*var\(--app-height, 100dvh\)/s);
+  assert.match(styles, /\.settings-panel\s*\{[^}]*max-height:\s*calc\(var\(--app-height, 100dvh\) - 32px\)/s);
+  assert.match(styles, /\.settings-panel\s*\{[^}]*height:\s*min\(600px, calc\(var\(--app-height, 100dvh\) - 32px\)\)/s);
+  assert.match(styles, /@media \(max-width:\s*760px\)[\s\S]*?\.settings-panel\s*\{[^}]*height:\s*calc\(var\(--app-height, 100dvh\) - 12px\)/s);
+  const settingsRules = styles.replace(/\/\*[\s\S]*?\*\//g, '').match(/\.settings-(overlay|panel)\s*\{[^}]*\}/gs) || [];
+  assert.ok(settingsRules.length >= 4);
+  for (const rule of settingsRules) {
+    assert.ok(!/\d+vh/.test(rule), `settings rule still sizes against vh: ${rule}`);
+  }
+});
+
 test('settings read as rows with the control right aligned against a shared edge', () => {
   assert.match(styles, /\.settings-grid > label,\s*\.settings-grid > \.settings-wide\s*\{[^}]*border-bottom:\s*1px solid var\(--line\)/s);
   assert.match(styles, /\.settings-grid > label\s*\{[^}]*justify-content:\s*space-between/s);
