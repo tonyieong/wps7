@@ -2850,45 +2850,79 @@ textarea:focus-visible {
   background: var(--surface-soft);
 }
 
+/* Settings read as a list of rows: the name on the left, its control right
+   aligned against a shared edge, with a hairline between rows. Captioning
+   every field from above doubled the height of one-word numeric settings and
+   left the value column ragged. */
 .settings-grid {
-  gap: 8px 12px;
+  gap: 0 20px;
 }
 
-.settings-grid label {
-  gap: 4px;
+.settings-grid > label,
+.settings-grid > .settings-wide {
+  min-height: 32px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.settings-grid > label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   font-size: 12px;
 }
 
 .settings-grid input,
 .settings-grid select,
 .settings-grid textarea {
-  min-height: 34px;
-  max-width: 160px;
-  padding: 5px 7px;
-  border-radius: 6px;
+  flex: 0 0 auto;
+  width: 132px;
+  min-height: 28px;
+  max-width: none;
+  padding: 4px 7px;
+  border-radius: 5px;
 }
 
-/* Fields that hold longer free text (paths, keys, multi-line values) still
-   need the full column width; only the narrow numeric/short-text fields
-   should shrink to their content. */
+/* Fields that hold longer free text (paths, keys, multi-line values) have no
+   room left beside their caption, so they keep the stacked layout and span
+   both columns. */
+.settings-grid > .settings-wide {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 5px;
+  align-content: center;
+}
+
+/* An explicit track plus the grid item's own stretch: a percentage width here
+   would collapse the auto track down to the field's intrinsic size instead. */
 .settings-wide input,
 .settings-wide select,
 .settings-wide textarea {
-  max-width: none;
+  width: auto;
 }
 
 /* Checkboxes are not text fields: the input-style frame made them read as
-   disabled inputs next to the real ones. */
+   disabled inputs next to the real ones. Reversing the row puts the box on
+   the same right-hand edge as every other control. */
 .settings-check {
-  min-height: 34px;
-  align-content: center;
-  padding: 5px 0;
+  flex-direction: row-reverse;
+  justify-content: space-between;
+  gap: 12px;
   border: 0;
   background: transparent;
 }
 
 .settings-check input {
+  flex: none;
+  width: auto;
+  min-height: 0;
   accent-color: var(--accent);
+}
+
+.notification-setting .settings-check {
+  min-height: 0;
+  padding: 0;
 }
 
 .settings-section.restart {
@@ -2968,6 +3002,23 @@ textarea:focus-visible {
   .section-heading {
     flex-direction: column;
     gap: 10px;
+  }
+
+  /* One row per line, and back to full-size hit targets: two columns of
+     right-aligned controls leave no readable room for the captions. */
+  .settings-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-grid > label,
+  .settings-grid > .settings-wide {
+    min-height: 40px;
+  }
+
+  .settings-grid input,
+  .settings-grid select,
+  .settings-grid textarea {
+    min-height: 34px;
   }
 
   .settings-footer button {

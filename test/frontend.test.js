@@ -1540,15 +1540,26 @@ test('settings use a compact, minimal density tighter than the legacy workspace 
   assert.match(styles, /\.settings-shell\s*\{[^}]*grid-template-columns:\s*164px minmax\(0, 1fr\)/s);
   assert.match(styles, /\.settings-nav a\s*\{[^}]*min-height:\s*30px/s);
   assert.match(styles, /\.settings-body\s*\{[^}]*padding:\s*12px 14px 16px/s);
-  // Inputs keep the app-wide 34px control height for hit-target consistency
-  // even though the surrounding chrome is tighter.
-  assert.match(styles, /\.settings-grid input,[\s\S]*?\.settings-grid textarea\s*\{[^}]*min-height:\s*34px/s);
   assert.match(styles, /\.settings-footer\s*\{[^}]*min-height:\s*44px/s);
 });
 
-test('settings fields cap to a short width, but paths, keys and multi-line values stay full width', () => {
-  assert.match(styles, /\.settings-grid input,[\s\S]*?\.settings-grid textarea\s*\{[^}]*max-width:\s*160px/s);
-  assert.match(styles, /\.settings-wide input,[\s\S]*?\.settings-wide textarea\s*\{[^}]*max-width:\s*none/s);
+test('settings read as rows with the control right aligned against a shared edge', () => {
+  assert.match(styles, /\.settings-grid > label,\s*\.settings-grid > \.settings-wide\s*\{[^}]*border-bottom:\s*1px solid var\(--line\)/s);
+  assert.match(styles, /\.settings-grid > label\s*\{[^}]*justify-content:\s*space-between/s);
+  assert.match(styles, /\.settings-grid input,[\s\S]*?\.settings-grid textarea\s*\{[^}]*width:\s*132px/s);
+  // Checkboxes reverse so their box lands on the same edge as the text fields.
+  assert.match(styles, /\.settings-check\s*\{[^}]*flex-direction:\s*row-reverse/s);
+});
+
+test('settings fields that hold long text span both columns and stretch', () => {
+  assert.match(styles, /\.settings-grid > \.settings-wide\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);
+  assert.match(styles, /\.settings-wide input,[\s\S]*?\.settings-wide textarea\s*\{[^}]*width:\s*auto/s);
+});
+
+test('settings rows drop to one column with full-size hit targets on mobile', () => {
+  const mobile = styles.slice(styles.indexOf('@media (max-width: 760px)'));
+  assert.match(mobile, /\.settings-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/s);
+  assert.match(mobile, /\.settings-grid input,[\s\S]*?\.settings-grid textarea\s*\{[^}]*min-height:\s*34px/s);
 });
 
 test('settings apply stays open while save closes the dialog', () => {
