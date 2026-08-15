@@ -5345,6 +5345,10 @@
         event.preventDefault();
         setPathMenuOpen(true);
         pathMenu.querySelector('[data-file-path-choice]')?.focus();
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        setPathMenuOpen(false);
+        setFilesPanePath(paneId, pathInput.value);
       } else if (event.key === 'Escape') {
         setPathMenuOpen(false);
       }
@@ -6342,6 +6346,15 @@
       return `${Math.round(size / 1024)} KB`;
     }
     return `${Math.round(size / 1024 / 1024)} MB`;
+  }
+
+  // The upload limit is stored in bytes, so the raw number tells a user nothing
+  // about the size it allows.
+  function uploadLimitHint(bytes) {
+    const size = Number(bytes) || 0;
+    return size > 0
+      ? `Largest single upload: ${formatBytes(size)}. Use 0 for no limit.`
+      : 'No limit. Enter a size in bytes to cap a single upload.';
   }
 
   function wirePaneControls(root) {
@@ -8726,9 +8739,6 @@
             <a aria-label="Workspace" href="#settings-workspace">
               <span class="settings-nav-icon" aria-hidden="true">${fileActionIcon('workspace')}</span><span class="settings-nav-label">Workspace</span>
             </a>
-            <a aria-label="Persistence" href="#settings-persistence">
-              <span class="settings-nav-icon" aria-hidden="true">${fileActionIcon('persistence')}</span><span class="settings-nav-label">Persistence</span>
-            </a>
             <a aria-label="Shell" href="#settings-shell">
               <span class="settings-nav-icon" aria-hidden="true">${fileActionIcon('shell')}</span><span class="settings-nav-label">Shell</span>
             </a>
@@ -8741,11 +8751,8 @@
             <a aria-label="Usage" href="#settings-usage">
               <span class="settings-nav-icon" aria-hidden="true">${fileActionIcon('usage')}</span><span class="settings-nav-label">Usage</span>
             </a>
-            <a aria-label="Server" href="#settings-server">
+            <a aria-label="Server and security" href="#settings-server">
               <span class="settings-nav-icon" aria-hidden="true">${fileActionIcon('server')}</span><span class="settings-nav-label">Server</span>
-            </a>
-            <a aria-label="Security" href="#settings-security">
-              <span class="settings-nav-icon" aria-hidden="true">${fileActionIcon('security')}</span><span class="settings-nav-label">Security</span>
             </a>
           </nav>
           <div class="settings-body">
@@ -8811,7 +8818,7 @@
                 </div>
               </div>
               <div class="display-mode-setting">
-                <div class="theme-mode-heading"><span>Layout</span><small>Mobile shows one pane at a time. Auto follows the viewport width.</small></div>
+                <div class="theme-mode-heading"><span>Layout</span><small>Mobile shows one pane at a time. Auto follows the window width.</small></div>
                 <div class="segmented" role="group" aria-label="Display mode">
                   ${['auto', 'mobile', 'desktop'].map((mode) => `
                     <button type="button" class="segmented-option ${state.displayMode === mode ? 'active' : ''}" data-display-mode="${mode}" aria-pressed="${state.displayMode === mode}">${mode[0].toUpperCase()}${mode.slice(1)}</button>
@@ -8825,102 +8832,126 @@
                 </div>
               </div>
               <div class="settings-grid appearance-font-setting">
-                <label>System font size<input name="ui.system_font_size" type="number" min="10" max="24" value="${escapeAttr(settings.ui.system_font_size ?? 13)}"></label>
+                <label>System font size<input name="ui.system_font_size" type="number" min="10" max="24" value="${escapeAttr(settings.ui.system_font_size ?? 13)}"><small class="field-hint">Pixels. Menus, tabs and dialogs. PowerShell and file panes have their own sizes.</small></label>
               </div>
             </section>
             <section class="settings-section" id="settings-terminal">
-              <div class="section-heading"><div><h2>Terminal</h2><p>Typography, cursor and resize behavior.</p></div></div>
+              <div class="section-heading"><div><h2>Terminal</h2><p>Type, cursor and alerts for every PowerShell pane.</p></div></div>
+              <h3 class="settings-subhead">Type</h3>
               <div class="settings-grid">
                 <label>Terminal font<select name="ui.terminal_font_family">
                   ${fontOptions.map((font) => `<option value="${escapeAttr(font.value)}" ${font.value === settings.ui.terminal_font_family ? 'selected' : ''}>${escapeHtml(font.label)}</option>`).join('')}
-                </select></label>
-                <label>PowerShell font size<input name="ui.terminal_font_size" type="number" min="8" max="32" value="${escapeAttr(settings.ui.terminal_font_size)}"></label>
-                <label>PowerShell mobile font size<input name="ui.mobile_terminal_font_size" type="number" min="8" max="24" value="${escapeAttr(settings.ui.mobile_terminal_font_size ?? 12)}"></label>
-                <label class="settings-check"><input name="terminal.auto_scroll_on_resize" type="checkbox" ${settings.terminal?.auto_scroll_on_resize ? 'checked' : ''}> Auto scroll on resize</label>
-                <label class="settings-check"><input name="terminal.cursor_blink" type="checkbox" ${settings.terminal?.cursor_blink !== false ? 'checked' : ''}> Cursor blink</label>
+                </select><small class="field-hint">Falls back to Consolas when the font is not installed.</small></label>
+                <label>PowerShell font size<input name="ui.terminal_font_size" type="number" min="8" max="32" value="${escapeAttr(settings.ui.terminal_font_size)}"><small class="field-hint">Pixels, used on desktop.</small></label>
+                <label>PowerShell mobile font size<input name="ui.mobile_terminal_font_size" type="number" min="8" max="24" value="${escapeAttr(settings.ui.mobile_terminal_font_size ?? 12)}"><small class="field-hint">Pixels, used in mobile layout.</small></label>
+              </div>
+              <h3 class="settings-subhead">Behavior</h3>
+              <div class="settings-grid">
+                <label class="settings-check"><input name="terminal.cursor_blink" type="checkbox" ${settings.terminal?.cursor_blink !== false ? 'checked' : ''}> Cursor blink<small class="field-hint">Blink the cursor instead of leaving it solid.</small></label>
+                <label class="settings-check"><input name="terminal.auto_scroll_on_resize" type="checkbox" ${settings.terminal?.auto_scroll_on_resize ? 'checked' : ''}> Auto scroll on resize<small class="field-hint">Jump back to the newest line after a pane changes size.</small></label>
                 <div class="notification-setting settings-wide">
-                  <label class="settings-check"><input name="terminal.browser_notifications" type="checkbox" ${settings.terminal?.browser_notifications ? 'checked' : ''} ${notificationCapability.available ? '' : 'disabled'}> Browser notifications for terminal bells</label>
+                  <label class="settings-check"><input name="terminal.browser_notifications" type="checkbox" ${settings.terminal?.browser_notifications ? 'checked' : ''} ${notificationCapability.available ? '' : 'disabled'}> Browser notifications for terminal bells<small class="field-hint">Notify when a command rings the bell, for example when it finishes.</small></label>
                   <small class="notification-capability ${notificationCapability.available ? '' : 'blocked'}" data-browser-notification-status>${escapeHtml(notificationCapability.message)}</small>
                 </div>
               </div>
               <div class="mobile-keybar-setting">
-                <div class="mobile-keybar-setting-heading"><div><h3>PowerShell shortcut buttons</h3><p>Choose buttons shown below PowerShell on desktop and mobile, arrange their order, or add a shortcut or text command. A modifier stays active for the next key; double-click it on the toolbar to lock it on. Typed text can chain keys with braces, so <code>claude{Enter}</code> types the word and runs it. Only a key name counts, so the braces in a command such as <code>\${env:PATH}</code> are typed as written; write <code>{{</code> for text that has to read like a key name.</p></div><div class="mobile-keybar-setting-actions"><button class="secondary" type="button" data-mobile-keybar-reset>Reset to defaults</button><button class="secondary" type="button" data-mobile-keybar-add>${fileActionIcon('add')}<span>Add button</span></button></div></div>
+                <div class="mobile-keybar-setting-heading"><div><h3>PowerShell shortcut buttons</h3><p>The key row shown under every PowerShell pane, on desktop and mobile. Untick a button to hide it, drag to reorder, or add your own.</p></div><div class="mobile-keybar-setting-actions"><button class="secondary" type="button" data-mobile-keybar-reset>Reset to defaults</button><button class="secondary" type="button" data-mobile-keybar-add>${fileActionIcon('add')}<span>Add button</span></button></div></div>
+                <ul class="field-hint mobile-keybar-rules"><li>A modifier stays armed for the next key. Double-click it on the toolbar to lock it on.</li><li>Typed text can chain keys with braces, so <code>claude{Enter}</code> types the word and runs it.</li><li>Only a key name counts, so braces in a command such as <code>\${env:PATH}</code> are typed as written. Write <code>{{</code> for text that has to read like a key name.</li></ul>
                 ${renderMobileKeybarEditor(settings.terminal?.mobile_keybar_buttons)}
               </div>
             </section>
             <section class="settings-section" id="settings-workspace">
-              <div class="section-heading"><div><h2>Workspace</h2><p>Sidebar size and how new columns are split.</p></div></div>
+              <div class="section-heading"><div><h2>Workspace</h2><p>Panes snap to a grid of cells. These set the cell size, the size of a new pane, and how often the layout is saved.</p></div></div>
+              <h3 class="settings-subhead">Board grid</h3>
               <div class="settings-grid">
-                <label>Grid cell width (px)<input name="ui.grid_size" type="number" min="20" max="400" step="10" value="${escapeAttr(settings.ui.grid_size)}"></label>
-                <label>Rows per screen<input name="ui.vertical_slots" type="number" min="1" max="24" value="${escapeAttr(settings.ui.vertical_slots)}"></label>
-                <label>New pane width (cells)<input name="ui.default_pane_width" type="number" min="1" max="48" value="${escapeAttr(settings.ui.default_pane_width ?? 6)}"></label>
-                <label>New pane height (cells)<input name="ui.default_pane_height" type="number" min="1" max="${escapeAttr(settings.ui.vertical_slots)}" value="${escapeAttr(settings.ui.default_pane_height ?? 2)}"></label>
+                <label>Grid cell width (px)<input name="ui.grid_size" type="number" min="20" max="400" step="10" value="${escapeAttr(settings.ui.grid_size)}"><small class="field-hint">A smaller cell lets panes be sized and moved more finely.</small></label>
+                <label>Rows per screen<input name="ui.vertical_slots" type="number" min="1" max="24" value="${escapeAttr(settings.ui.vertical_slots)}"><small class="field-hint">The screen height is split into this many cells. Changing it rescales every open pane.</small></label>
               </div>
-            </section>
-            <section class="settings-section" id="settings-persistence">
-              <div class="section-heading"><div><h2>Persistence</h2><p>How often the workspace is written to disk.</p></div></div>
+              <h3 class="settings-subhead">New panes</h3>
               <div class="settings-grid">
-                <label>Autosave minutes<input name="persistence.autosave_minutes" type="number" min="1" value="${escapeAttr(settings.persistence.autosave_minutes)}"></label>
+                <label>New pane width (cells)<input name="ui.default_pane_width" type="number" min="1" max="48" value="${escapeAttr(settings.ui.default_pane_width ?? 6)}"><small class="field-hint">Existing panes keep their size.</small></label>
+                <label>New pane height (cells)<input name="ui.default_pane_height" type="number" min="1" max="${escapeAttr(settings.ui.vertical_slots)}" value="${escapeAttr(settings.ui.default_pane_height ?? 2)}"><small class="field-hint">Capped at rows per screen, so a new pane never overflows.</small></label>
+              </div>
+              <h3 class="settings-subhead">Saving</h3>
+              <div class="settings-grid">
+                <label>Autosave minutes<input name="persistence.autosave_minutes" type="number" min="1" value="${escapeAttr(settings.persistence.autosave_minutes)}"><small class="field-hint">How often the layout is written to disk. It is also saved whenever WPS7 shuts down.</small></label>
               </div>
             </section>
             <section class="settings-section" id="settings-shell">
-              <div class="section-heading"><div><h2>Shell</h2><p>PowerShell executables and startup arguments.</p></div></div>
+              <div class="section-heading"><div><h2>Shell</h2><p>Which PowerShell a new pane starts, and how. Panes already open keep what they started with.</p></div></div>
               <div class="settings-grid">
-                <label>PowerShell preferred<input name="shell.preferred" value="${escapeAttr(settings.shell.preferred)}"></label>
-                <label>PowerShell fallback<input name="shell.fallback" value="${escapeAttr(settings.shell.fallback)}"></label>
-                <label class="settings-wide">Shell args<textarea name="shell.args" rows="3">${escapeHtml((settings.shell.args || []).join('\n'))}</textarea></label>
+                <label>PowerShell preferred<input name="shell.preferred" value="${escapeAttr(settings.shell.preferred)}"><small class="field-hint">Tried first. <code>pwsh.exe</code> is PowerShell 7.</small></label>
+                <label>PowerShell fallback<input name="shell.fallback" value="${escapeAttr(settings.shell.fallback)}"><small class="field-hint">Used when the preferred one is not installed. <code>powershell.exe</code> ships with Windows.</small></label>
+                <label class="settings-wide">Startup arguments<textarea name="shell.args" rows="3">${escapeHtml((settings.shell.args || []).join('\n'))}</textarea><small class="field-hint">One argument per line, passed on the command line. Clearing this restores the defaults.</small></label>
               </div>
             </section>
             <section class="settings-section" id="settings-files">
-              <div class="section-heading"><div><h2>Files</h2><p>File manager access and upload limits.</p></div></div>
+              <div class="section-heading"><div><h2>Files</h2><p>Upload limit and text size for file panes.</p></div></div>
               <div class="settings-grid">
-                <label>Upload limit bytes<input name="file_manager.max_upload_bytes" type="number" min="0" value="${escapeAttr(settings.file_manager?.max_upload_bytes ?? 0)}"></label>
-                <label>File pane font size<input name="ui.file_pane_font_size" type="number" min="10" max="24" value="${escapeAttr(settings.ui.file_pane_font_size ?? 13)}"></label>
+                <label>Upload limit (bytes)<input name="file_manager.max_upload_bytes" type="number" min="0" value="${escapeAttr(settings.file_manager?.max_upload_bytes ?? 0)}"><small class="field-hint" data-upload-limit-hint>${escapeHtml(uploadLimitHint(settings.file_manager?.max_upload_bytes ?? 0))}</small></label>
+                <label>File pane font size<input name="ui.file_pane_font_size" type="number" min="10" max="24" value="${escapeAttr(settings.ui.file_pane_font_size ?? 13)}"><small class="field-hint">Pixels, used by the file browser and its preview.</small></label>
               </div>
             </section>
             <section class="settings-section" id="settings-notepad">
-              <div class="section-heading"><div><h2>Notepad</h2><p>Defaults applied to newly opened Notepad tabs.</p></div></div>
+              <div class="section-heading"><div><h2>Notepad</h2><p>Starting state for newly opened Notepad tabs. Tabs already open keep their own switches.</p></div></div>
               <div class="settings-grid">
-                <label class="settings-check"><input name="ui.notepad_word_wrap" type="checkbox" ${settings.ui.notepad_word_wrap ? 'checked' : ''}> Word wrap</label>
-                <label class="settings-check"><input name="ui.notepad_indent_guides" type="checkbox" ${settings.ui.notepad_indent_guides ? 'checked' : ''}> Indent guides</label>
-                <label class="settings-check"><input name="ui.notepad_autosave" type="checkbox" ${settings.ui.notepad_autosave ? 'checked' : ''}> Auto save</label>
+                <label class="settings-check"><input name="ui.notepad_word_wrap" type="checkbox" ${settings.ui.notepad_word_wrap ? 'checked' : ''}> Word wrap<small class="field-hint">Wrap long lines instead of scrolling sideways.</small></label>
+                <label class="settings-check"><input name="ui.notepad_indent_guides" type="checkbox" ${settings.ui.notepad_indent_guides ? 'checked' : ''}> Indent guides<small class="field-hint">Draw a faint line at each indent level.</small></label>
+                <label class="settings-check"><input name="ui.notepad_autosave" type="checkbox" ${settings.ui.notepad_autosave ? 'checked' : ''}> Auto save<small class="field-hint">Write changes back to the file without pressing save.</small></label>
               </div>
             </section>
             <section class="settings-section" id="settings-usage">
-              <div class="section-heading"><div><h2>Usage</h2><p>Choose the provider cards and quota windows shown in Usage panes.</p></div></div>
+              <div class="section-heading"><div><h2>Usage</h2><p>What a Usage pane shows: which provider cards, which quota windows on each card, and when a window changes color.</p></div></div>
+              <h3 class="settings-subhead">Provider cards<small>Untick a provider to leave its card out of every Usage pane.</small></h3>
               <div class="settings-grid">
-                <label>Auto-refresh minutes<input name="usage.refresh_minutes" type="number" min="0" max="999" step="1" value="${escapeAttr(settings.usage?.refresh_minutes ?? 10)}" title="0 turns auto-refresh off"></label>
-                <label class="settings-check"><input name="usage.show_codex" type="checkbox" ${settings.usage?.show_codex !== false ? 'checked' : ''}> Codex</label>
-                <label class="settings-check"><input name="usage.show_claude" type="checkbox" ${settings.usage?.show_claude !== false ? 'checked' : ''}> Claude Code</label>
-                <label class="settings-check"><input name="usage.show_minimax" type="checkbox" ${settings.usage?.show_minimax !== false ? 'checked' : ''}> MiniMax</label>
-                <label class="settings-check"><input name="usage.show_five_hour" type="checkbox" ${settings.usage?.show_five_hour !== false ? 'checked' : ''}> 5-hour window</label>
-                <label class="settings-check"><input name="usage.show_weekly" type="checkbox" ${settings.usage?.show_weekly !== false ? 'checked' : ''}> Weekly window</label>
-                <label class="settings-check"><input name="usage.show_model_weekly" type="checkbox" ${settings.usage?.show_model_weekly !== false ? 'checked' : ''}> Per-model weekly windows</label>
-                <label class="settings-check"><input name="usage.show_credits" type="checkbox" ${settings.usage?.show_credits !== false ? 'checked' : ''}> Credit balance</label>
-                <label>Amber at<input name="usage.warn_percent" type="number" min="0" max="100" step="1" value="${escapeAttr(settings.usage?.warn_percent ?? 75)}" title="Percent used at which a quota window turns amber."></label>
-                <label>Red at<input name="usage.alert_percent" type="number" min="0" max="100" step="1" value="${escapeAttr(settings.usage?.alert_percent ?? 90)}" title="Percent used at which a quota window turns red. Also the notification threshold."></label>
-                <label class="settings-check"><input name="usage.notify_quota" type="checkbox" ${settings.usage?.notify_quota ? 'checked' : ''} ${notificationCapability.available ? '' : 'disabled'}> Notify when a quota window turns red</label>
-                <label class="settings-wide">MiniMax Coding Plan API key<input name="usage.minimax_api_key" type="password" autocomplete="off" placeholder="${settings.usage?.minimax_configured ? 'Saved — leave blank to keep' : 'sk-cp-…'}"></label>
-                <label>MiniMax region<select name="usage.minimax_region"><option value="global" ${settings.usage?.minimax_region !== 'china' ? 'selected' : ''}>Global</option><option value="china" ${settings.usage?.minimax_region === 'china' ? 'selected' : ''}>China mainland</option></select></label>
-                <label class="settings-check"><input name="usage.clear_minimax_api_key" type="checkbox"> Clear saved MiniMax key</label>
-                <label class="settings-wide">Codex home folder<input name="usage.codex_home" type="text" autocomplete="off" placeholder="Blank = current user's home" value="${escapeAttr(settings.usage?.codex_home || '')}" title="Override where the signed-in Codex CLI credentials (auth.json) are read from. Needed when wps7.exe runs as a service account."></label>
-                <label class="settings-wide">Claude Code home folder<input name="usage.claude_home" type="text" autocomplete="off" placeholder="Blank = current user's home" value="${escapeAttr(settings.usage?.claude_home || '')}" title="Override where the signed-in Claude Code CLI credentials (.credentials.json) are read from. Needed when wps7.exe runs as a service account."></label>
+                <label class="settings-check"><input name="usage.show_codex" type="checkbox" ${settings.usage?.show_codex !== false ? 'checked' : ''}> Codex<small class="field-hint">Reads the Codex CLI account signed in on this machine.</small></label>
+                <label class="settings-check"><input name="usage.show_claude" type="checkbox" ${settings.usage?.show_claude !== false ? 'checked' : ''}> Claude Code<small class="field-hint">Reads the Claude Code CLI account signed in on this machine.</small></label>
+                <label class="settings-check"><input name="usage.show_minimax" type="checkbox" ${settings.usage?.show_minimax !== false ? 'checked' : ''}> MiniMax<small class="field-hint">Needs a Coding Plan API key, entered below.</small></label>
               </div>
+              <h3 class="settings-subhead">Quota windows<small>Rows shown on every provider card. A provider that has no such window simply omits it.</small></h3>
+              <div class="settings-grid">
+                <label class="settings-check"><input name="usage.show_five_hour" type="checkbox" ${settings.usage?.show_five_hour !== false ? 'checked' : ''}> 5-hour window<small class="field-hint">The short rolling limit that resets a few times a day.</small></label>
+                <label class="settings-check"><input name="usage.show_weekly" type="checkbox" ${settings.usage?.show_weekly !== false ? 'checked' : ''}> Weekly window<small class="field-hint">The account's overall weekly allowance.</small></label>
+                <label class="settings-check"><input name="usage.show_model_weekly" type="checkbox" ${settings.usage?.show_model_weekly !== false ? 'checked' : ''}> Per-model weekly windows<small class="field-hint">One extra row per model that has its own weekly cap.</small></label>
+                <label class="settings-check"><input name="usage.show_credits" type="checkbox" ${settings.usage?.show_credits !== false ? 'checked' : ''}> Credit balance<small class="field-hint">Money left on the account, for plans that bill by credit.</small></label>
+              </div>
+              <h3 class="settings-subhead">Refresh and warnings</h3>
+              <div class="settings-grid">
+                <label>Auto-refresh minutes<input name="usage.refresh_minutes" type="number" min="0" max="999" step="1" value="${escapeAttr(settings.usage?.refresh_minutes ?? 10)}"><small class="field-hint">0 refreshes only when you ask.</small></label>
+                <label>Amber at (%)<input name="usage.warn_percent" type="number" min="0" max="100" step="1" value="${escapeAttr(settings.usage?.warn_percent ?? 75)}"><small class="field-hint">Percent used at which a quota window turns amber.</small></label>
+                <label>Red at (%)<input name="usage.alert_percent" type="number" min="0" max="100" step="1" value="${escapeAttr(settings.usage?.alert_percent ?? 90)}"><small class="field-hint">Percent used at which it turns red. Also the notification threshold.</small></label>
+                <label class="settings-check"><input name="usage.notify_quota" type="checkbox" ${settings.usage?.notify_quota ? 'checked' : ''} ${notificationCapability.available ? '' : 'disabled'}> Notify when a window turns red<small class="field-hint ${notificationCapability.available ? '' : 'blocked'}">Once per window each reset period.${notificationCapability.available ? '' : ` ${escapeHtml(notificationCapability.message)}`}</small></label>
+              </div>
+              <div data-minimax-setting class="minimax-setting ${settings.usage?.show_minimax !== false ? '' : 'hidden'}">
+                <h3 class="settings-subhead">MiniMax Coding Plan</h3>
+                <div class="settings-grid">
+                  <label class="settings-wide">API key<input name="usage.minimax_api_key" type="password" autocomplete="off" placeholder="${settings.usage?.minimax_configured ? 'Saved — leave blank to keep it' : 'sk-cp-…'}"><small class="field-hint">${settings.usage?.minimax_configured ? 'A key is saved on this server. Type a new one to replace it.' : 'From the MiniMax Coding Plan dashboard. Stored on this server only.'}</small></label>
+                  <label>Region<select name="usage.minimax_region"><option value="global" ${settings.usage?.minimax_region !== 'china' ? 'selected' : ''}>Global</option><option value="china" ${settings.usage?.minimax_region === 'china' ? 'selected' : ''}>China mainland</option></select><small class="field-hint">Which MiniMax endpoint the key belongs to.</small></label>
+                  ${settings.usage?.minimax_configured ? '<label class="settings-check"><input name="usage.clear_minimax_api_key" type="checkbox"> Forget the saved key<small class="field-hint">Removes it from this server when you save.</small></label>' : ''}
+                </div>
+              </div>
+              <details class="settings-advanced">
+                <summary>Advanced</summary>
+                <div class="settings-grid">
+                  <label class="settings-wide">Codex home folder<input name="usage.codex_home" type="text" autocomplete="off" placeholder="Blank = search this account's home" value="${escapeAttr(settings.usage?.codex_home || '')}"><small class="field-hint">Where the signed-in Codex CLI credentials (auth.json) are read from. Set it only to pin one profile.</small></label>
+                  <label class="settings-wide">Claude Code home folder<input name="usage.claude_home" type="text" autocomplete="off" placeholder="Blank = search this account's home" value="${escapeAttr(settings.usage?.claude_home || '')}"><small class="field-hint">Same for the Claude Code CLI credentials (.credentials.json).</small></label>
+                </div>
+              </details>
             </section>
             <section class="settings-section restart" id="settings-server">
-              <div class="section-heading"><div><h2>Server</h2><p>LAN access requires a password and restarts WPS7 automatically.</p></div><span class="restart-badge">△ Restart required</span></div>
+              <div class="section-heading"><div><h2>Server &amp; security</h2><p>Who can reach this workspace, and the password they need. Switching to LAN saves and restarts WPS7 for you.</p></div><span class="restart-badge">△ Restart required</span></div>
               <div class="settings-grid">
-                <label>Access<select name="server.host"><option value="127.0.0.1" ${settings.server.host === '127.0.0.1' ? 'selected' : ''}>Local</option><option value="0.0.0.0" ${settings.server.host === '0.0.0.0' ? 'selected' : ''}>LAN</option></select></label>
-                <label>Port<input name="server.port" type="number" min="1" max="65535" value="${escapeAttr(settings.server.port)}"></label>
-                <label class="settings-check"><input name="server.open_browser" type="checkbox" ${settings.server.open_browser ? 'checked' : ''}> Open browser on start</label>
-                <label class="settings-wide">Allowed hosts<textarea name="server.allowed_hosts" rows="3" spellcheck="false" aria-describedby="settings-allowed-hosts-rule">${escapeHtml((settings.server.allowed_hosts || []).join('\n'))}</textarea><small class="field-hint" id="settings-allowed-hosts-rule">One hostname per line, for a reverse proxy that forwards its own name. Addresses and localhost are always accepted. Use * to accept every name, which turns off DNS rebinding protection. This list applies without a restart.</small></label>
+                <label>Access<select name="server.host"><option value="127.0.0.1" ${settings.server.host === '127.0.0.1' ? 'selected' : ''}>Local</option><option value="0.0.0.0" ${settings.server.host === '0.0.0.0' ? 'selected' : ''}>LAN</option></select><small class="field-hint">Local: this machine only. LAN: any device on your network, which requires a password.</small></label>
+                <label>Port<input name="server.port" type="number" min="1" max="65535" value="${escapeAttr(settings.server.port)}"><small class="field-hint">The address becomes http://127.0.0.1:&lt;port&gt;/. Takes effect after a restart.</small></label>
+                <label class="settings-check"><input name="server.open_browser" type="checkbox" ${settings.server.open_browser ? 'checked' : ''}> Open browser on start<small class="field-hint">Open the workspace automatically when WPS7 launches.</small></label>
+                <label class="settings-wide">${settings.auth?.password_set ? 'New password' : 'Password'}<input name="auth.password" type="password" autocomplete="new-password" aria-describedby="settings-password-rule" placeholder="${settings.auth?.password_set ? 'Leave blank to keep the current password' : 'Not set — anyone reaching this port can sign in'}"><small class="field-hint" id="settings-password-rule">At least 12 characters, including an upper case letter, a lower case letter, a number and a symbol. Saving a new one signs every device out.</small></label>
               </div>
-            </section>
-            <section class="settings-section" id="settings-security">
-              <div class="section-heading"><div><h2>Security</h2><p>Set a new password for workspace access.</p></div></div>
-              <div class="settings-grid">
-                <label class="settings-wide">New password<input name="auth.password" type="password" autocomplete="new-password" aria-describedby="settings-password-rule" placeholder="Leave blank to keep the current password"><small class="field-hint" id="settings-password-rule">At least 12 characters, including an upper case letter, a lower case letter, a number and a symbol.</small></label>
-              </div>
+              <details class="settings-advanced">
+                <summary>Advanced</summary>
+                <div class="settings-grid">
+                  <label class="settings-wide">Allowed hosts<textarea name="server.allowed_hosts" rows="3" spellcheck="false" aria-describedby="settings-allowed-hosts-rule">${escapeHtml((settings.server.allowed_hosts || []).join('\n'))}</textarea><small class="field-hint" id="settings-allowed-hosts-rule">One hostname per line, for a reverse proxy that forwards its own name. Addresses and localhost are always accepted. Use * to accept every name, which turns off DNS rebinding protection. This list applies without a restart.</small></label>
+                </div>
+              </details>
             </section>
           </div>
         </div>
@@ -9066,6 +9097,15 @@
       button.onclick = () => resetCustomThemePalette(button.dataset.customThemeReset, overlay);
     });
     wireMobileKeybarEditor(overlay);
+    const uploadLimitInput = overlay.querySelector('[name="file_manager.max_upload_bytes"]');
+    uploadLimitInput.oninput = () => {
+      overlay.querySelector('[data-upload-limit-hint]').textContent = uploadLimitHint(uploadLimitInput.value);
+    };
+    // The MiniMax key and region only matter while its card is shown.
+    const minimaxToggle = overlay.querySelector('[name="usage.show_minimax"]');
+    minimaxToggle.onchange = () => {
+      overlay.querySelector('[data-minimax-setting]').classList.toggle('hidden', !minimaxToggle.checked);
+    };
     overlay.addEventListener('click', (event) => {
       if (event.target === overlay) {
         closeSettings();
