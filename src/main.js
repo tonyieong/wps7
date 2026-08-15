@@ -225,7 +225,10 @@ function settingsConfig(config, runtimeConfig) {
       terminal_font_size: positiveInteger(config.ui.terminal_font_size, runtimeConfig.ui.terminal_font_size),
       mobile_terminal_font_size: positiveInteger(config.ui.mobile_terminal_font_size, runtimeConfig.ui.mobile_terminal_font_size),
       file_pane_font_size: positiveInteger(config.ui.file_pane_font_size, runtimeConfig.ui.file_pane_font_size),
-      system_font_size: positiveInteger(config.ui.system_font_size, runtimeConfig.ui.system_font_size)
+      system_font_size: positiveInteger(config.ui.system_font_size, runtimeConfig.ui.system_font_size),
+      notepad_word_wrap: Boolean(config.ui.notepad_word_wrap),
+      notepad_indent_guides: Boolean(config.ui.notepad_indent_guides),
+      notepad_autosave: Boolean(config.ui.notepad_autosave)
     },
     file_manager: {
       enabled: Boolean(config.file_manager.enabled),

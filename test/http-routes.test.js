@@ -296,6 +296,29 @@ test('logging in with the wrong password is rejected and the right one issues a 
   assert.equal(authed.status, 200);
 });
 
+test('saved notepad pane settings survive a reopen of the settings dialog', async () => {
+  // Regression: settingsConfig() used to omit these three ui keys from its
+  // response, so GET /api/settings (what reopening the dialog fetches) always
+  // read them back as undefined even though config.toml had the saved value.
+  const auth = { Authorization: `Bearer ${sessionToken}` };
+
+  const saved = await request('/api/settings', {
+    method: 'POST',
+    headers: auth,
+    body: { ui: { notepad_word_wrap: true, notepad_indent_guides: true, notepad_autosave: true } }
+  });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.json.ui.notepad_word_wrap, true);
+  assert.equal(saved.json.ui.notepad_indent_guides, true);
+  assert.equal(saved.json.ui.notepad_autosave, true);
+
+  const reopened = await request('/api/settings', { headers: auth });
+  assert.equal(reopened.status, 200);
+  assert.equal(reopened.json.ui.notepad_word_wrap, true);
+  assert.equal(reopened.json.ui.notepad_indent_guides, true);
+  assert.equal(reopened.json.ui.notepad_autosave, true);
+});
+
 test('a full create/list/delete round trip through the file manager routes', async () => {
   const auth = { Authorization: `Bearer ${sessionToken}` };
   const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-http-route-test-'));
