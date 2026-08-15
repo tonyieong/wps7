@@ -758,6 +758,10 @@ textarea {
 .settings-overlay {
   position: fixed;
   inset: 0;
+  /* Mobile browsers report a `100vh` that includes the collapsible URL bar, so
+     a full-height overlay pushes its footer off screen. --app-height tracks
+     visualViewport, and also shrinks when the software keyboard opens. */
+  height: var(--app-height, 100dvh);
   z-index: var(--z-settings);
   display: grid;
   place-items: center;
@@ -831,7 +835,7 @@ textarea {
 
 .settings-panel {
   width: min(920px, calc(100vw - 32px));
-  max-height: calc(100vh - 32px);
+  max-height: calc(var(--app-height, 100dvh) - 32px);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   border: 1px solid var(--line);
@@ -2328,7 +2332,7 @@ textarea:focus-visible {
 
 .settings-panel {
   width: min(860px, calc(100vw - 32px));
-  height: min(600px, calc(100vh - 32px));
+  height: min(600px, calc(var(--app-height, 100dvh) - 32px));
   max-height: none;
   border-radius: 8px;
   transform-origin: center;
@@ -3056,7 +3060,7 @@ textarea:focus-visible {
 @media (max-width: 760px) {
   .settings-panel {
     width: calc(100vw - 12px);
-    height: calc(100vh - 12px);
+    height: calc(var(--app-height, 100dvh) - 12px);
   }
 
   .settings-shell {
