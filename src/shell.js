@@ -41,10 +41,10 @@ function resolveShell(config) {
   };
 }
 
-// Installed as a Windows service, wps7 runs as LocalSystem and inherits only
-// the machine PATH, so user-scoped tool folders -- npm's global folder, where
-// claude and codex live -- are missing and the shell answers "not recognized"
-// for commands that work in a normal terminal. shell.extra_path adds them back.
+// wps7 inherits the PATH it had at logon, so a tool folder added after that --
+// npm's global folder, where claude and codex live, is the usual one -- is
+// missing until wps7 restarts, and the shell answers "not recognized" for
+// commands that work in a normal terminal. shell.extra_path adds them back.
 // Appending rather than prepending keeps a machine-wide tool the one that wins.
 function shellEnv(config, env = process.env) {
   const key = Object.keys(env).find((name) => name.toLowerCase() === 'path') || 'PATH';

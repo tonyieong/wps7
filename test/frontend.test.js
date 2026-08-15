@@ -695,7 +695,7 @@ test('usage settings configure the MiniMax key and the visible quota windows', (
   assert.match(mainSource, /fetchClaudeUsage\(\{ claudeHome: config\.usage\.claude_home \|\| undefined, log: usageLog \}\)/);
 });
 
-test('usage settings allow overriding the Codex/Claude Code CLI home folder for service accounts', () => {
+test('usage settings allow pinning the Codex/Claude Code CLI home folder', () => {
   assert.match(appSource, /name="usage\.codex_home"/);
   assert.match(appSource, /name="usage\.claude_home"/);
   assert.match(appSource, /codex_home: String\(form\.get\('usage\.codex_home'\) \|\| ''\)\.trim\(\)/);
