@@ -165,6 +165,7 @@ class TerminalManager {
       status: 'running',
       createdAt: Date.now(),
       hasOutput: false,
+      hasPtySize: false,
       exitedAt: ''
     };
 
@@ -267,8 +268,16 @@ class TerminalManager {
         const cols = Number(message.cols);
         const rows = Number(message.rows);
         if (Number.isInteger(cols) && Number.isInteger(rows) && cols > 0 && rows > 0) {
+          // xterm can reflow its local viewport when only the pane height
+          // changes. ConPTY makes full-screen CLIs redraw on that resize, so
+          // leave the PTY alone until the width changes. The first size still
+          // has to reach the PTY even when it matches the default columns.
+          if (runtime.hasPtySize && cols === runtime.cols) {
+            return;
+          }
           runtime.cols = cols;
           runtime.rows = rows;
+          runtime.hasPtySize = true;
           runtime.proc.resize(cols, rows);
           runtime.headless.resize(cols, rows);
           clearTimeout(fallbackSnapshotTimer);
