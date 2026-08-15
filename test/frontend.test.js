@@ -13,6 +13,12 @@ const browserSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'browser
 const manifest = fs.readFileSync(path.join(__dirname, '..', 'public', 'manifest.webmanifest'), 'utf8');
 const indexSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
 
+function settingsSection(id) {
+  const start = appSource.indexOf(`<section class="settings-section`, appSource.indexOf(`id="${id}"`) - 200);
+  const end = appSource.indexOf('</section>', start);
+  return appSource.slice(start, end);
+}
+
 test('mobile display mode uses the current two-column navigation layout', () => {
   assert.match(styles, /\.app\.mode-mobile\s*\{\s*grid-template-columns:\s*0 minmax\(0, 1fr\)/);
   assert.match(styles, /\.app\.mode-mobile \.workspace\s*\{\s*grid-column:\s*2/);
@@ -309,7 +315,7 @@ test('settings hide internal sidebar and file-manager switches and use clear sha
   assert.doesNotMatch(appSource, /File manager enabled<\/label>/);
   assert.match(appSource, /aria-label="Terminal"[^>]*>\s*<span class="settings-nav-icon"[^>]*>\$\{fileActionIcon\('terminal'\)\}/);
   assert.match(appSource, /aria-label="Files"[^>]*>\s*<span class="settings-nav-icon"[^>]*>\$\{fileActionIcon\('file'\)\}/);
-  for (const icon of ['appearance', 'workspace', 'persistence', 'shell', 'server', 'security']) {
+  for (const icon of ['appearance', 'workspace', 'shell', 'server']) {
     assert.match(appSource, new RegExp(`fileActionIcon\\('${icon}'\\)`));
   }
   assert.match(styles, /\.settings-nav-icon \.file-action-icon\s*\{/);
@@ -1638,15 +1644,20 @@ test('mobile tabs and settings remain usable above the sidebar', () => {
   assert.match(styles, /\.tab\.tab-add\s*\{[^}]*min-width:\s*42px[^}]*flex:\s*0 0 42px/s);
   assert.match(styles, /\.settings-overlay\s*\{[^}]*z-index:\s*var\(--z-settings\)/s);
   assert.match(appSource, /data-settings-close aria-label="Close settings"/);
-  for (const label of ['Appearance', 'Terminal', 'Workspace', 'Persistence', 'Shell', 'Files', 'Server', 'Security']) {
+  for (const label of ['Appearance', 'Terminal', 'Workspace', 'Shell', 'Files', 'Server and security']) {
     assert.match(appSource, new RegExp(`aria-label="${label}"[^>]+href="#settings-`));
   }
 });
 
 test('settings navigation maps to real sections and follows the visible section', () => {
-  for (const section of ['appearance', 'terminal', 'workspace', 'persistence', 'shell', 'files', 'server', 'security']) {
+  for (const section of ['appearance', 'terminal', 'workspace', 'shell', 'files', 'notepad', 'usage', 'server']) {
     assert.match(appSource, new RegExp(`<section class="settings-section[^"]*" id="settings-${section}"`));
   }
+  // Every nav entry must point at a section that exists, and every section must
+  // be reachable from the nav.
+  const navTargets = [...appSource.matchAll(/<a aria-label="[^"]+" href="#(settings-[a-z-]+)">/g)].map((match) => match[1]);
+  const sectionIds = [...appSource.matchAll(/<section class="settings-section[^"]*" id="(settings-[a-z-]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(navTargets, sectionIds);
   assert.match(appSource, /function setActiveSettingsSection\(sectionId\)/);
   assert.match(appSource, /settingsBody\.addEventListener\('scroll', syncSettingsNav/);
   assert.match(appSource, /new ResizeObserver\(\(\) => \{\s*syncSettingsScrollPadding\(\);\s*syncSettingsNav\(\);\s*\}\)/);
@@ -1687,6 +1698,59 @@ test('settings apply stays open while save closes the dialog', () => {
   assert.match(appSource, /data-settings-save title="Save and close">Save<\/button>/);
   assert.match(appSource, /const keepSettingsOpen = event\.submitter\?\.hasAttribute\('data-settings-apply'\) === true/);
   assert.match(appSource, /if \(!keepSettingsOpen\) \{\s*state\.customThemeDraft = null;\s*closeSettings\(false\);\s*\}/);
+});
+
+// A title attribute never shows on a phone and only shows on desktop after a
+// hover pause, so what a setting does has to be on the page.
+test('every settings row explains itself in visible text, not a title attribute', () => {
+  const settingsMarkup = appSource.slice(appSource.indexOf('<div class="settings-body">'), appSource.indexOf('<footer class="settings-footer">'));
+  assert.doesNotMatch(settingsMarkup, /<label[^>]*\stitle="/);
+  assert.doesNotMatch(settingsMarkup, /<(?:input|select|textarea)[^>]*\stitle="/);
+  for (const name of ['ui.system_font_size', 'ui.grid_size', 'ui.vertical_slots', 'persistence.autosave_minutes', 'shell.preferred', 'usage.warn_percent', 'usage.alert_percent', 'server.port']) {
+    assert.match(settingsMarkup, new RegExp(`name="${name.replace('.', '\\.')}"[^>]*>\\s*<small class="field-hint"`));
+  }
+  // The hint wraps onto its own full-width line below the row, including in the
+  // reversed checkbox rows.
+  assert.match(styles, /\.settings-grid label:not\(\.settings-wide\) > \.field-hint\s*\{[^}]*flex:\s*1 0 100%[^}]*order:\s*1/s);
+  assert.match(styles, /\.settings-check\s*\{[^}]*flex-wrap:\s*wrap/s);
+});
+
+test('single-field settings sections are folded into the section they belong to', () => {
+  assert.doesNotMatch(appSource, /id="settings-persistence"|id="settings-security"/);
+  const workspace = settingsSection('settings-workspace');
+  assert.match(workspace, /name="persistence\.autosave_minutes"/);
+  const server = settingsSection('settings-server');
+  assert.match(server, /name="auth\.password"/);
+  assert.match(server, /<h2>Server &amp; security<\/h2>/);
+  // Grouped rows carry a subhead saying what the group is for.
+  for (const subhead of ['Board grid', 'New panes', 'Saving', 'Provider cards', 'Quota windows']) {
+    assert.match(appSource, new RegExp(`<h3 class="settings-subhead">${subhead}`));
+  }
+  assert.match(styles, /\.settings-subhead small\s*\{[^}]*display:\s*block/s);
+});
+
+test('rarely used settings sit behind an Advanced disclosure', () => {
+  assert.match(settingsSection('settings-server'), /<details class="settings-advanced">\s*<summary>Advanced<\/summary>[\s\S]*name="server\.allowed_hosts"/);
+  assert.match(settingsSection('settings-usage'), /<details class="settings-advanced">\s*<summary>Advanced<\/summary>[\s\S]*name="usage\.codex_home"/);
+  assert.match(styles, /\.settings-advanced > summary\s*\{[^}]*cursor:\s*pointer/s);
+  assert.match(styles, /\.settings-advanced > summary:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--accent\)/s);
+});
+
+test('MiniMax credentials only appear while its provider card is shown', () => {
+  const usage = settingsSection('settings-usage');
+  assert.match(usage, /<div data-minimax-setting class="minimax-setting \$\{settings\.usage\?\.show_minimax !== false \? '' : 'hidden'\}">/);
+  assert.match(usage, /name="usage\.minimax_api_key"/);
+  assert.match(appSource, /minimaxToggle\.onchange = \(\) => \{\s*overlay\.querySelector\('\[data-minimax-setting\]'\)\.classList\.toggle\('hidden', !minimaxToggle\.checked\);/);
+  assert.match(styles, /\.minimax-setting\.hidden\s*\{\s*display:\s*none/s);
+  // Nothing to forget until a key has been saved.
+  assert.match(usage, /settings\.usage\?\.minimax_configured \? '<label class="settings-check"><input name="usage\.clear_minimax_api_key"/);
+});
+
+test('the upload limit shows the size its byte count allows', () => {
+  assert.match(appSource, /function uploadLimitHint\(bytes\)/);
+  assert.match(appSource, /Largest single upload: \$\{formatBytes\(size\)\}/);
+  assert.match(appSource, /'No limit\. Enter a size in bytes to cap a single upload\.'/);
+  assert.match(appSource, /uploadLimitInput\.oninput = \(\) => \{\s*overlay\.querySelector\('\[data-upload-limit-hint\]'\)\.textContent = uploadLimitHint\(uploadLimitInput\.value\);/);
 });
 
 test('path dropdown combines current, history, and bookmarked paths', () => {

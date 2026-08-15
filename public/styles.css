@@ -932,7 +932,8 @@ textarea {
   font-size: 11px;
 }
 
-.notification-capability.blocked {
+.notification-capability.blocked,
+.field-hint.blocked {
   color: var(--warn);
 }
 
@@ -2648,9 +2649,20 @@ textarea:focus-visible {
 
 .mobile-keybar-setting-heading {
   display: flex;
+  flex-wrap: wrap;
   align-items: end;
   justify-content: space-between;
   gap: 12px;
+}
+
+/* The two buttons cannot shrink, so the description gives up width first and
+   they only drop to their own row once a narrow panel leaves no room. */
+.mobile-keybar-setting-heading > div {
+  flex: 1 1 260px;
+}
+
+.mobile-keybar-setting-actions {
+  margin-left: auto;
 }
 
 .mobile-keybar-setting-heading h3,
@@ -2663,6 +2675,15 @@ textarea:focus-visible {
   margin-top: 3px;
   color: var(--muted);
   font-size: 11px;
+}
+
+/* A key example such as ${env:PATH} is one unbreakable word, and on a phone the
+   panel is too narrow to hold it beside the bullet indent. */
+.mobile-keybar-rules {
+  margin: 6px 0 0;
+  padding-left: 15px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .mobile-keybar-setting-heading button {
@@ -2882,10 +2903,23 @@ textarea:focus-visible {
 
 .settings-grid > label {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  align-content: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 0 12px;
   font-size: 12px;
+}
+
+/* What a setting does used to live in a title attribute, which a phone never
+   shows and a mouse only reveals after a pause. The sentence wraps onto its own
+   full-width line below the row instead. */
+.settings-grid label:not(.settings-wide) > .field-hint {
+  flex: 1 0 100%;
+  order: 1;
+  margin-top: 1px;
+  text-align: left;
+  line-height: 1.45;
 }
 
 .settings-grid input,
@@ -2922,8 +2956,9 @@ textarea:focus-visible {
    the same right-hand edge as every other control. */
 .settings-check {
   flex-direction: row-reverse;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: 12px;
+  gap: 0 12px;
   border: 0;
   background: transparent;
 }
@@ -2938,6 +2973,71 @@ textarea:focus-visible {
 .notification-setting .settings-check {
   min-height: 0;
   padding: 0;
+}
+
+/* Sections that hold more than a handful of rows read as one undifferentiated
+   list, so related rows carry a subhead saying what the group is for. */
+.settings-subhead {
+  margin: 14px 0 4px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.settings-section > .settings-subhead:first-of-type {
+  margin-top: 0;
+}
+
+.settings-subhead small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+/* Settings almost nobody touches, kept reachable without adding noise to the
+   rows that people do change. */
+.settings-advanced {
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.settings-advanced > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 12px;
+  list-style: none;
+}
+
+.settings-advanced > summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-advanced > summary::before {
+  content: "›";
+  display: inline-block;
+  width: 12px;
+}
+
+.settings-advanced[open] > summary::before {
+  content: "⌄";
+}
+
+.settings-advanced > summary:hover {
+  color: var(--text);
+}
+
+.settings-advanced > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.minimax-setting.hidden {
+  display: none;
 }
 
 .settings-section.restart {
