@@ -89,6 +89,65 @@ function waitForHttp(timeoutMs) {
   });
 }
 
+// Same as waitForHttp, but against a port other than the shared instance's,
+// for the port-fallback tests below which spawn their own throwaway children.
+function waitForHttpOnPort(targetPort, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  return new Promise((resolve, reject) => {
+    const attempt = () => {
+      const req = http.get({ host: '127.0.0.1', port: targetPort, path: '/api/config', timeout: 1000 }, (res) => {
+        res.resume();
+        res.statusCode === 200 ? resolve() : retry();
+      });
+      req.on('error', retry);
+      req.on('timeout', () => { req.destroy(); retry(); });
+    };
+    const retry = () => {
+      if (Date.now() > deadline) {
+        reject(new Error(`Nothing answered on port ${targetPort} within ${timeoutMs}ms`));
+        return;
+      }
+      setTimeout(attempt, 300);
+    };
+    attempt();
+  });
+}
+
+function waitForRuntimeInfo(predicate, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  return new Promise((resolve, reject) => {
+    const attempt = () => {
+      let info = null;
+      try {
+        info = JSON.parse(fs.readFileSync(path.join(dataDir, 'runtime.json'), 'utf8'));
+      } catch {
+        // Not written yet.
+      }
+      if (info && predicate(info)) {
+        resolve(info);
+        return;
+      }
+      if (Date.now() > deadline) {
+        reject(new Error('runtime.json did not reach the expected state in time'));
+        return;
+      }
+      setTimeout(attempt, 200);
+    };
+    attempt();
+  });
+}
+
+function waitForExit(child, timeoutMs) {
+  return new Promise((resolve) => {
+    if (child.exitCode !== null) {
+      resolve(child.exitCode);
+      return;
+    }
+    child.once('exit', (code) => resolve(code));
+    setTimeout(() => resolve(null), timeoutMs).unref();
+  });
+}
+
 // A thin request helper built on http.request rather than fetch(): fetch
 // silently drops "forbidden" headers (Host, Origin, ...) per the Fetch spec,
 // which is exactly what the Host-header rejection test needs to set.
@@ -292,5 +351,90 @@ test('a WebSocket upgrade with a valid session token and pane id connects', asyn
     });
   } finally {
     ws.close();
+  }
+});
+
+// These two tests each spawn their own throwaway main.js child on a fresh
+// port, independent of the shared instance above. They overwrite config.toml
+// while doing so, which is safe: nothing after them re-reads it (the shared
+// instance already has its config in memory), and after() restores the
+// original file from its own backup regardless of what is left on disk.
+test('falls back to the next free port when the configured one is held by another process', async () => {
+  const busyPort = await freePort();
+  const blocker = net.createServer();
+  await new Promise((resolve, reject) => {
+    blocker.once('error', reject);
+    blocker.listen(busyPort, '127.0.0.1', resolve);
+  });
+
+  fs.writeFileSync(configPath, [
+    '[server]',
+    'host = "127.0.0.1"',
+    `port = ${busyPort}`,
+    'open_browser = false',
+    '',
+    '[auth]',
+    'password_hash = ""',
+    ''
+  ].join('\n'));
+
+  const fallbackChild = spawn(process.execPath, [path.join(root, 'src', 'main.js')], {
+    cwd: root,
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+
+  try {
+    const info = await waitForRuntimeInfo(
+      (candidate) => candidate.pid === fallbackChild.pid && candidate.port > busyPort,
+      20000
+    );
+    await waitForHttpOnPort(info.port, 5000);
+  } finally {
+    fallbackChild.kill();
+    await waitForExit(fallbackChild, 3000);
+    blocker.close();
+  }
+});
+
+test('a genuine duplicate launch on the same port still exits instead of hopping to a new port', async () => {
+  const dupPort = await freePort();
+  fs.writeFileSync(configPath, [
+    '[server]',
+    'host = "127.0.0.1"',
+    `port = ${dupPort}`,
+    'open_browser = false',
+    '',
+    '[auth]',
+    'password_hash = ""',
+    ''
+  ].join('\n'));
+
+  const first = spawn(process.execPath, [path.join(root, 'src', 'main.js')], {
+    cwd: root,
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+
+  try {
+    await waitForRuntimeInfo((candidate) => candidate.pid === first.pid && candidate.port === dupPort, 20000);
+    await waitForHttpOnPort(dupPort, 5000);
+
+    const second = spawn(process.execPath, [path.join(root, 'src', 'main.js')], {
+      cwd: root,
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+    const secondExitCode = await waitForExit(second, 8000);
+    assert.equal(secondExitCode, 1);
+
+    // The duplicate must not have stolen the next port for itself.
+    await assert.rejects(waitForHttpOnPort(dupPort + 1, 1500));
+
+    // The original instance is still the one recorded and still answering.
+    const runtimeInfo = JSON.parse(fs.readFileSync(path.join(dataDir, 'runtime.json'), 'utf8'));
+    assert.equal(runtimeInfo.pid, first.pid);
+    assert.equal(runtimeInfo.port, dupPort);
+    await waitForHttpOnPort(dupPort, 2000);
+  } finally {
+    first.kill();
+    await waitForExit(first, 3000);
   }
 });

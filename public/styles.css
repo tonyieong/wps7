@@ -2863,8 +2863,18 @@ textarea:focus-visible {
 .settings-grid select,
 .settings-grid textarea {
   min-height: 34px;
+  max-width: 160px;
   padding: 5px 7px;
   border-radius: 6px;
+}
+
+/* Fields that hold longer free text (paths, keys, multi-line values) still
+   need the full column width; only the narrow numeric/short-text fields
+   should shrink to their content. */
+.settings-wide input,
+.settings-wide select,
+.settings-wide textarea {
+  max-width: none;
 }
 
 /* Checkboxes are not text fields: the input-style frame made them read as
