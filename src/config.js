@@ -47,8 +47,6 @@ const defaultConfig = {
     autosave_minutes: 15
   },
   terminal: {
-    backend: 'conpty_screen',
-    resize_debounce_ms: 100,
     auto_scroll_on_resize: false,
     cursor_blink: true,
     browser_notifications: false,
@@ -167,8 +165,6 @@ autosave_minutes = 15
 
 [terminal]
 # Hot reload.
-backend = "conpty_screen"
-resize_debounce_ms = 100
 auto_scroll_on_resize = false
 cursor_blink = true
 browser_notifications = false
@@ -390,8 +386,6 @@ bookmarks = []
     nextText = `${nextText.trimEnd()}
 
 [terminal]
-backend = "conpty_screen"
-resize_debounce_ms = 100
 auto_scroll_on_resize = false
 cursor_blink = true
 browser_notifications = false
@@ -399,8 +393,6 @@ mobile_keybar_buttons = ${formatTomlValue(defaultMobileKeybarButtons)}
 `;
   }
   if (/^\[terminal\]\s*$/m.test(nextText)) {
-    nextText = ensureTomlKey(nextText, 'terminal', 'backend', defaultConfig.terminal.backend);
-    nextText = ensureTomlKey(nextText, 'terminal', 'resize_debounce_ms', defaultConfig.terminal.resize_debounce_ms);
     nextText = ensureTomlKey(nextText, 'terminal', 'auto_scroll_on_resize', defaultConfig.terminal.auto_scroll_on_resize);
     nextText = ensureTomlKey(nextText, 'terminal', 'cursor_blink', defaultConfig.terminal.cursor_blink);
     nextText = ensureTomlKey(nextText, 'terminal', 'browser_notifications', defaultConfig.terminal.browser_notifications);
@@ -474,7 +466,7 @@ function updateConfigFile(root, updates) {
     auth: ['password_hash'],
     shell: ['preferred', 'fallback', 'args'],
     persistence: ['autosave_minutes'],
-    terminal: ['backend', 'resize_debounce_ms', 'auto_scroll_on_resize', 'cursor_blink', 'browser_notifications', 'mobile_keybar_buttons'],
+    terminal: ['auto_scroll_on_resize', 'cursor_blink', 'browser_notifications', 'mobile_keybar_buttons'],
     ui: ['sidebar_width', 'grid_size', 'vertical_slots', 'default_pane_width', 'default_pane_height', 'terminal_font_family', 'terminal_font_size', 'mobile_terminal_font_size', 'file_pane_font_size', 'system_font_size', 'notepad_word_wrap', 'notepad_indent_guides', 'notepad_autosave'],
     file_manager: ['enabled', 'root_mode', 'max_upload_bytes', 'show_hidden', 'bookmarks'],
     browser: ['bookmarks', 'history'],

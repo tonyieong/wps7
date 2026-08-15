@@ -10,7 +10,7 @@ const { appRoot, loadConfig, updateConfigFile } = require('./config');
 const { createSessionToken, hashPassword, validatePassword, verifyPassword, verifySessionToken } = require('./auth');
 const files = require('./files');
 const { resolveShell } = require('./shell');
-const { SCROLLBACK_LIMIT, StateStore } = require('./state');
+const { StateStore } = require('./state');
 const { TerminalManager } = require('./terminal');
 const { startTray } = require('./tray');
 const { loadOrCreateControlToken, requireRuntimeControl } = require('./runtime-control');
@@ -206,8 +206,6 @@ function settingsConfig(config, runtimeConfig) {
       autosave_minutes: positiveInteger(config.persistence.autosave_minutes, runtimeConfig.persistence.autosave_minutes)
     },
     terminal: {
-      backend: typeof config.terminal.backend === 'string' ? config.terminal.backend : runtimeConfig.terminal.backend,
-      resize_debounce_ms: positiveInteger(config.terminal.resize_debounce_ms, runtimeConfig.terminal.resize_debounce_ms),
       auto_scroll_on_resize: Boolean(config.terminal.auto_scroll_on_resize),
       cursor_blink: Boolean(config.terminal.cursor_blink),
       browser_notifications: Boolean(config.terminal.browser_notifications),
@@ -367,12 +365,6 @@ function sanitizeSettingsUpdates(updates) {
   }
   if (updates.terminal) {
     next.terminal = {};
-    if (updates.terminal.backend === 'conpty_screen' || updates.terminal.backend === 'xterm_pty') {
-      next.terminal.backend = updates.terminal.backend;
-    }
-    if (positiveInteger(updates.terminal.resize_debounce_ms, 0)) {
-      next.terminal.resize_debounce_ms = Number(updates.terminal.resize_debounce_ms);
-    }
     if (typeof updates.terminal.auto_scroll_on_resize === 'boolean') {
       next.terminal.auto_scroll_on_resize = updates.terminal.auto_scroll_on_resize;
     }
@@ -621,7 +613,7 @@ function main() {
   let shell = resolveShell(config);
   let configReloadError = '';
   let restartRequired = false;
-  const store = new StateStore(root, SCROLLBACK_LIMIT, {
+  const store = new StateStore(root, {
     gridSize: config.ui.grid_size,
     verticalSlots: config.ui.vertical_slots,
     defaultPaneWidth: config.ui.default_pane_width,

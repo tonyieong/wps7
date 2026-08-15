@@ -121,13 +121,13 @@ class TerminalManager {
   findTarget(id) {
     const terminalTab = this.store.findTerminalTab(id);
     if (terminalTab) {
-      return { pane: terminalTab.pane, cwd: terminalTab.terminalTab.cwd, scrollback: terminalTab.terminalTab.scrollback };
+      return { pane: terminalTab.pane, cwd: terminalTab.terminalTab.cwd };
     }
     const found = this.store.findPane(id);
     if (!found || found.pane.type !== 'terminal') {
       return null;
     }
-    return { pane: found.pane, cwd: found.pane.cwd, scrollback: found.pane.scrollback };
+    return { pane: found.pane, cwd: found.pane.cwd };
   }
 
   getOrCreate(terminalId) {
@@ -186,7 +186,6 @@ class TerminalManager {
     runtime.proc = proc;
 
     proc.onData((data) => {
-      this.store.appendScrollback(terminalId, data);
       runtime.hasOutput = true;
       runtime.writeChain = runtime.writeChain.then(() => writeHeadless(headless, data)).catch(() => {});
     });
@@ -201,14 +200,13 @@ class TerminalManager {
     return runtime;
   }
 
-  // Three buffers hold the same output: the browser terminal, the replay copies
-  // here, and the one ConPTY keeps for itself. Clearing fewer than all three
-  // lets the old output reappear, because ConPTY repaints its screen after a
-  // reconnect and that repaint refills the replay buffer. Form feed is what
-  // clears ConPTY: PSReadLine and readline bind it to ClearScreen, so it keeps
-  // a half-typed input line and never reaches the shell history.
+  // Two buffers hold the same output: the headless copy this server serializes
+  // for reconnects, and the one ConPTY keeps for itself. Clearing only one lets
+  // the old output reappear, because ConPTY repaints its screen after a
+  // reconnect. Form feed is what clears ConPTY: PSReadLine and readline bind it
+  // to ClearScreen, so it keeps a half-typed input line and never reaches the
+  // shell history.
   clearTerminal(terminalId) {
-    this.store.clearScrollback(terminalId);
     const runtime = this.processes.get(terminalId);
     if (!runtime) {
       return;
@@ -221,11 +219,6 @@ class TerminalManager {
     const target = this.findTarget(terminalId);
     if (!target) {
       ws.close(1008, 'Unknown terminal');
-      return;
-    }
-
-    if (this.config.terminal?.backend === 'xterm_pty') {
-      this.attachReplay(terminalId, target, ws);
       return;
     }
 
@@ -290,49 +283,6 @@ class TerminalManager {
 
     ws.on('close', () => {
       clearTimeout(fallbackSnapshotTimer);
-      disposable.dispose();
-      sender.dispose();
-      this.store.save();
-    });
-  }
-
-  attachReplay(terminalId, target, ws) {
-    const sender = createOutputSender(ws);
-    for (const chunk of target.scrollback || []) {
-      sender.send(chunk);
-    }
-
-    const runtime = this.getOrCreate(terminalId);
-    const disposable = runtime.proc.onData((data) => {
-      sender.send(data);
-    });
-
-    ws.on('message', (raw) => {
-      let message;
-      try {
-        message = JSON.parse(raw.toString());
-      } catch {
-        return;
-      }
-      if (message.type === 'input') {
-        runtime.proc.write(message.data);
-      }
-      if (message.type === 'clear') {
-        this.clearTerminal(terminalId);
-      }
-      if (message.type === 'resize') {
-        const cols = Number(message.cols);
-        const rows = Number(message.rows);
-        if (Number.isInteger(cols) && Number.isInteger(rows) && cols > 0 && rows > 0) {
-          runtime.cols = cols;
-          runtime.rows = rows;
-          runtime.proc.resize(cols, rows);
-          runtime.headless.resize(cols, rows);
-        }
-      }
-    });
-
-    ws.on('close', () => {
       disposable.dispose();
       sender.dispose();
       this.store.save();

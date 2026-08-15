@@ -39,8 +39,6 @@ autosave_minutes = 15
 
 [terminal]
 # Hot reload.
-backend = "conpty_screen"
-resize_debounce_ms = 100
 auto_scroll_on_resize = false
 cursor_blink = true
 browser_notifications = false
