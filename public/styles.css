@@ -1291,11 +1291,13 @@ textarea {
   touch-action: manipulation;
 }
 
+/* Sized to the label instead of a fixed slot, so an arrow key does not take the
+   same room as Shift and fewer buttons get pushed onto a second toolbar page. */
 .mobile-keybar [data-toolbar-item] {
-  width: 52px;
-  min-width: 52px;
-  max-width: 52px;
-  flex: 0 0 52px;
+  width: auto;
+  min-width: 34px;
+  flex: 0 0 auto;
+  padding: 0 7px;
 }
 
 .mobile-keybar .paged-toolbar-button {
@@ -1311,6 +1313,14 @@ textarea {
   border-color: var(--accent);
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+/* A locked modifier stays on past the next key, so it reads as filled rather
+   than as the soft tint an armed one gets. */
+.mobile-keybar button[data-modifier-state="locked"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--ink);
 }
 
 .app.mode-mobile .terminal,
@@ -1352,12 +1362,11 @@ textarea {
 
 .app.mode-mobile .mobile-keybar [data-toolbar-item],
 .app.mobile-device .mobile-keybar [data-toolbar-item] {
-  width: 52px;
-  min-width: 52px;
-  max-width: 52px;
-  flex: 0 0 52px;
+  width: auto;
+  min-width: 44px;
+  flex: 0 0 auto;
   height: 32px;
-  padding: 0 6px;
+  padding: 0 10px;
 }
 
 .app.mode-mobile .mobile-keybar .paged-toolbar-button,
@@ -2769,11 +2778,17 @@ textarea:focus-visible {
   display: none;
 }
 
+/* A row can be valid and still have something to say, such as braces that name
+   no key and are therefore typed as text, so only a real error reads as one. */
 .mobile-keybar-hint {
   grid-column: 1 / -1;
   min-height: 0;
-  color: var(--danger);
+  color: var(--muted);
   font-size: 11px;
+}
+
+.mobile-keybar-setting-row.invalid .mobile-keybar-hint {
+  color: var(--danger);
 }
 
 .mobile-keybar-hint:empty {
@@ -4579,10 +4594,10 @@ textarea:focus-visible {
   }
 
   .app.mode-auto .mobile-keybar [data-toolbar-item] {
-    width: 52px;
-    min-width: 52px;
-    max-width: 52px;
-    flex: 0 0 52px;
+    width: auto;
+    min-width: 44px;
+    flex: 0 0 auto;
+    padding: 0 10px;
   }
 
   .app.mode-auto .mobile-keybar .paged-toolbar-button {

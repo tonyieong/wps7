@@ -823,16 +823,129 @@ test('the terminal menu waits for the finger to lift so a selection can still be
   assert.match(touchEnd, /openContextMenu\?\.\(touch\.clientX, touch\.clientY\)/);
 });
 
-test('mobile Ctrl keeps terminal focus and modifies the next software-keyboard character', () => {
+test('a keybar modifier keeps terminal focus and modifies the next software-keyboard character', () => {
   assert.match(appSource, /button\.onpointerdown = \(event\) => event\.preventDefault\(\)/);
-  assert.match(appSource, /function applyMobileControlModifier\(element, data\)/);
+  assert.match(appSource, /function applyMobileModifiers\(element, data\)/);
   assert.match(appSource, /String\.fromCharCode\(code & 31\)/);
-  assert.match(appSource, /applyMobileControlModifier\(element, data\)/);
-  assert.match(appSource, /control\.setAttribute\('aria-pressed', 'false'\)/);
-  assert.match(appSource, /modifierButtons\.forEach\(\(modifier\) => modifier\.setAttribute\('aria-pressed', 'false'\)\)/);
+  assert.match(appSource, /applyMobileModifiers\(element, data\)/);
   assert.match(appSource, /terminal\.term\.focus\(\)/);
   assert.match(appSource, /function terminalShortcutSequence\(shortcut\)/);
   assert.match(appSource, /data-terminal-action/);
+});
+
+test('Alt and Shift are keybar modifiers of their own, not just Ctrl', () => {
+  // applyMobileModifiers reads every pressed modifier, so a typed character can
+  // pick up Alt or Shift the same way it already picked up Ctrl.
+  const applyModifiers = appSource.slice(
+    appSource.indexOf('  function applyMobileModifiers(element, data) {'),
+    appSource.indexOf('  function closeFloatingSidebarFromOutside(event) {')
+  );
+  assert.match(applyModifiers, /active\.has\('Shift'\)/);
+  assert.match(applyModifiers, /active\.has\('Control'\)/);
+  assert.match(applyModifiers, /active\.has\('Alt'\)/);
+  // xterm reports focus and paste through onData too; those must not spend a
+  // modifier that was armed for the keystroke still to come.
+  assert.match(applyModifiers, /if \(!keybar \|\| data\.length !== 1\) \{\s*return data;/);
+  const defaults = appSource.slice(
+    appSource.indexOf('const defaultMobileKeybarButtons = ['),
+    appSource.indexOf("const savedSidebarOpen =")
+  );
+  assert.match(defaults, /label: 'Alt', action: 'modifier', value: 'Alt'/);
+  assert.match(defaults, /label: 'Shift', action: 'modifier', value: 'Shift'/);
+  assert.match(configSource, /label: 'Alt', action: 'modifier', value: 'Alt'/);
+  assert.match(configSource, /label: 'Shift', action: 'modifier', value: 'Shift'/);
+});
+
+test('a keybar modifier arms for one key and locks on a double-click', () => {
+  assert.match(appSource, /setKeybarModifierState\(button, button\.dataset\.modifierState \? '' : 'armed'\)/);
+  assert.match(appSource, /button\.ondblclick = \(\) => \{\s*setKeybarModifierState\(button, 'locked'\)/);
+  // Only an armed modifier is spent by the key that follows it.
+  const consume = appSource.slice(
+    appSource.indexOf('  function consumeKeybarModifiers(keybar) {'),
+    appSource.indexOf('  // Keys whose escape sequence ends in a letter')
+  );
+  assert.match(consume, /if \(button\.dataset\.modifierState === 'armed'\) \{\s*setKeybarModifierState\(button, ''\);/);
+  assert.match(styles, /\.mobile-keybar button\[data-modifier-state="locked"\]/);
+});
+
+// The sequence helpers are pure string maths, so they run for real rather than
+// being matched as source text. isKeyToken leans on the settings editor's key
+// vocabulary, so that block is loaded alongside them.
+function loadTerminalSequenceHelpers() {
+  const slice = (from, to) => {
+    const start = appSource.indexOf(from);
+    const end = appSource.indexOf(to);
+    assert.ok(start >= 0 && end > start, `not found in app.js: ${from}`);
+    return appSource.slice(start, end);
+  };
+  const context = vm.createContext({});
+  vm.runInContext([
+    slice('  const namedShortcutKeys = new Set([', '  function mobileKeybarRowValidity(action, value) {'),
+    slice('  // Keys whose escape sequence ends in a letter', '  function applyMobileModifiers(element, data) {')
+  ].join('\n'), context);
+  return context;
+}
+
+test('terminalShortcutSequence covers the keys the settings editor accepts', () => {
+  const { terminalShortcutSequence } = loadTerminalSequenceHelpers();
+  assert.equal(terminalShortcutSequence('Escape'), '\x1b');
+  assert.equal(terminalShortcutSequence('Enter'), '\r');
+  assert.equal(terminalShortcutSequence('Ctrl+C'), '\x03');
+  assert.equal(terminalShortcutSequence('ArrowUp'), '\x1b[A');
+  assert.equal(terminalShortcutSequence('Ctrl+ArrowLeft'), '\x1b[1;5D');
+  assert.equal(terminalShortcutSequence('Home'), '\x1b[H');
+  assert.equal(terminalShortcutSequence('End'), '\x1b[F');
+  assert.equal(terminalShortcutSequence('Delete'), '\x1b[3~');
+  assert.equal(terminalShortcutSequence('PageUp'), '\x1b[5~');
+  assert.equal(terminalShortcutSequence('Ctrl+PageDown'), '\x1b[6;5~');
+  assert.equal(terminalShortcutSequence('F5'), '\x1b[15~');
+  assert.equal(terminalShortcutSequence('F12'), '\x1b[24~');
+  assert.equal(terminalShortcutSequence('Alt+f'), '\x1bf');
+});
+
+test('Shift+Tab sends back-tab instead of a plain Tab', () => {
+  const { terminalShortcutSequence } = loadTerminalSequenceHelpers();
+  assert.equal(terminalShortcutSequence('Tab'), '\t');
+  assert.equal(terminalShortcutSequence('Shift+Tab'), '\x1b[Z');
+});
+
+test('a typed-text button can chain keys so one press runs a command', () => {
+  const { terminalTextSequence } = loadTerminalSequenceHelpers();
+  assert.equal(terminalTextSequence('claude{Enter}'), 'claude\r');
+  assert.equal(terminalTextSequence('npm test{Enter}'), 'npm test\r');
+  assert.equal(terminalTextSequence('{Ctrl+C}{Enter}'), '\x03\r');
+  assert.equal(terminalTextSequence('git status'), 'git status');
+  // A doubled brace types one, so text that really wants to read like a key
+  // name still works.
+  assert.equal(terminalTextSequence('{{Enter}'), '{Enter}');
+});
+
+test('braces that name no key are typed as written, so PowerShell syntax survives', () => {
+  const { terminalTextSequence } = loadTerminalSequenceHelpers();
+  // A lone character never needs the brace form, and reading it as a key used
+  // to eat the braces of a variable reference.
+  assert.equal(terminalTextSequence('${x}'), '${x}');
+  assert.equal(terminalTextSequence('${env:PATH}'), '${env:PATH}');
+  assert.equal(terminalTextSequence('@{a=1}'), '@{a=1}');
+  assert.equal(terminalTextSequence('Get-ChildItem | % { $_.Name }'), 'Get-ChildItem | % { $_.Name }');
+  assert.equal(terminalTextSequence('echo {}'), 'echo {}');
+  assert.equal(terminalTextSequence('if ($x) { echo hi }'), 'if ($x) { echo hi }');
+  // Key names still win, including inside a longer command.
+  assert.equal(terminalTextSequence('echo ${x}{Enter}'), 'echo ${x}\r');
+});
+
+test('a text row holding a brace-heavy command is valid, with a hint rather than an error', () => {
+  const validity = appSource.slice(
+    appSource.indexOf('  function mobileKeybarRowValidity(action, value) {'),
+    appSource.indexOf('  function readMobileKeybarRow(row) {')
+  );
+  assert.match(validity, /literal\.length\s*\?\s*\{ valid: true/);
+  assert.match(validity, /is not a key name, so it is typed as text/);
+  // The hint is shown whether or not the row is in error, so a valid row can
+  // still explain itself; only an error paints it red.
+  assert.match(appSource, /hintEl\.textContent = hint;/);
+  assert.match(styles, /\.mobile-keybar-hint\s*\{[^}]*color:\s*var\(--muted\)/s);
+  assert.match(styles, /\.mobile-keybar-setting-row\.invalid \.mobile-keybar-hint\s*\{[^}]*color:\s*var\(--danger\)/s);
 });
 
 test('mobile keybar can be configured, reordered and extended from server-synced settings', () => {
@@ -873,7 +986,7 @@ test('keybar editor switches input by action and offers a modifier select', () =
   assert.match(appSource, /const mobileKeybarModifierOptions = \['Control', 'Alt', 'Shift'\]/);
   assert.match(appSource, /data-mobile-keybar-modifier/);
   assert.match(appSource, /function syncMobileKeybarRowAction\(row\)/);
-  assert.match(appSource, /action === 'text' \? 'npm test' : 'Ctrl\+C, Escape, ArrowUp'/);
+  assert.match(appSource, /action === 'text' \? 'claude\{Enter\}' : 'Ctrl\+C, Escape, Home, F5'/);
   assert.match(appSource, /function modifierShortcutToken\(value\)/);
   assert.match(appSource, /\{ Control: 'Ctrl', Alt: 'Alt', Shift: 'Shift' \}/);
 });
@@ -896,7 +1009,7 @@ test('mobile PowerShell toolbar stays compact at the bottom without hiding the k
   assert.match(appSource, /keybar\.querySelectorAll\('button'\)\.forEach\(\(button\) => \{\s*button\.onpointerdown = \(event\) => event\.preventDefault\(\)/s);
   assert.match(styles, /\.app\.mode-mobile \.pane\[data-pane-type="terminal"\],[\s\S]*?grid-template-rows:\s*auto minmax\(0, 1fr\) auto/s);
   assert.match(styles, /\.app\.mode-mobile \.mobile-keybar,[\s\S]*?grid-row:\s*3/s);
-  assert.match(styles, /\.app\.mode-mobile \.mobile-keybar \[data-toolbar-item\],[\s\S]*?width:\s*52px[^}]*max-width:\s*52px/s);
+  assert.match(styles, /\.app\.mode-mobile \.mobile-keybar \[data-toolbar-item\],[\s\S]*?width:\s*auto[^}]*min-width:\s*44px/s);
   assert.match(styles, /\.app\.mode-mobile \.mobile-keybar \.paged-toolbar-button,[\s\S]*?width:\s*34px[^}]*max-width:\s*34px/s);
   assert.match(styles, /@media \(max-width:\s*760px\)[\s\S]*?\.app\.mode-auto \.mobile-keybar\s*\{[^}]*display:\s*flex/s);
 });
@@ -1487,8 +1600,12 @@ test('compact pane toolbars paginate buttons instead of scrolling horizontally',
   assert.doesNotMatch(appSource, /keybar\.scrollLeft \+= delta/);
 });
 
-test('desktop PowerShell buttons keep five-character width and paginate during pane resize', () => {
-  assert.match(styles, /\.mobile-keybar \[data-toolbar-item\]\s*\{[^}]*width:\s*52px[^}]*min-width:\s*52px[^}]*max-width:\s*52px/s);
+test('desktop PowerShell buttons size to their label and paginate during pane resize', () => {
+  // A fixed 52px slot made an arrow key as wide as Shift and paged buttons away
+  // sooner than the pane needed to.
+  assert.match(styles, /\.mobile-keybar \[data-toolbar-item\]\s*\{[^}]*width:\s*auto[^}]*min-width:\s*34px/s);
+  assert.doesNotMatch(styles, /\.mobile-keybar \[data-toolbar-item\][^{]*\{[^}]*max-width:\s*52px/s);
+  assert.match(appSource, /title="\$\{escapeAttr\(mobileKeybarButtonName\(button\)\)\}"/);
   assert.match(styles, /\.mobile-keybar \.paged-toolbar-button\s*\{[^}]*width:\s*28px[^}]*max-width:\s*28px/s);
   assert.match(appSource, /function applyPaneLayoutStyle\(paneElement, layout\)[\s\S]*?syncPaneTitleWidth\(paneElement\);[\s\S]*?paneElement\.querySelectorAll\('\[data-paged-toolbar\]'\)\.forEach\(updatePagedToolbar\)/);
 });
