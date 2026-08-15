@@ -1773,6 +1773,11 @@ test('path dropdown combines current, history, and bookmarked paths', () => {
   assert.match(styles, /\.file-path-divider\s*\{[^}]*border-top:\s*1px solid var\(--line\)/s);
 });
 
+test('file path input navigates when Enter is pressed', () => {
+  const filesPaneWireSource = appSource.slice(appSource.indexOf('function wireFilesPane'), appSource.indexOf('function selectedFileList'));
+  assert.match(filesPaneWireSource, /pathInput\?\.addEventListener\('keydown', \(event\) => \{[\s\S]*?event\.key === 'Enter'[\s\S]*?event\.preventDefault\(\);[\s\S]*?setFilesPanePath\(paneId, pathInput\.value\)/);
+});
+
 test('file rows use solid icons, dim hidden entries, and toggle select all', () => {
   assert.match(styles, /\.compact-file-row \.file-name \.file-action-icon\s*\{[^}]*fill:\s*currentColor/s);
   assert.match(appSource, /entry\.hidden \? 'hidden-entry' : ''/);

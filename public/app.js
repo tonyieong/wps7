@@ -5345,6 +5345,10 @@
         event.preventDefault();
         setPathMenuOpen(true);
         pathMenu.querySelector('[data-file-path-choice]')?.focus();
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        setPathMenuOpen(false);
+        setFilesPanePath(paneId, pathInput.value);
       } else if (event.key === 'Escape') {
         setPathMenuOpen(false);
       }
