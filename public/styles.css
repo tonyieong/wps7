@@ -989,13 +989,6 @@ textarea {
   display: none;
 }
 
-.file-error {
-  min-height: 20px;
-  padding: 0 12px 8px;
-  color: var(--danger);
-  font-size: 12px;
-}
-
 .file-list {
   min-height: 0;
   overflow: auto;
@@ -1068,7 +1061,7 @@ textarea {
   min-height: 0;
   overflow: hidden;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .file-row-button {
@@ -3591,7 +3584,7 @@ textarea:focus-visible {
 
 .files-pane {
   position: relative;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   font-size: 12px;
   container-type: inline-size;
 }
@@ -3941,19 +3934,8 @@ textarea:focus-visible {
   cursor: default;
 }
 
-.files-pane .file-error {
-  grid-row: 2;
-  min-height: 0;
-  padding: 3px 6px;
-  font-size: 11px;
-}
-
-.files-pane .file-error:empty {
-  display: none;
-}
-
 .files-pane .file-list {
-  grid-row: 3;
+  grid-row: 2;
   padding: 0 2px 2px;
 }
 
@@ -4436,7 +4418,6 @@ textarea:focus-visible {
 }
 
 .file-path-value,
-.files-pane .file-error,
 .compact-file-row small {
   font-size: max(9px, calc(var(--pane-font-size, var(--file-pane-font-size)) - 1px));
 }
@@ -5900,4 +5881,3 @@ a:focus-visible {
   z-index: var(--z-focus-pane);
   box-shadow: 0 24px 64px var(--shadow);
 }
-

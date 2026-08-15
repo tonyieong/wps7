@@ -1314,7 +1314,7 @@ test('file columns resize and the list owns the remaining pane height', () => {
   assert.match(appSource, /data-file-column-resize="modified"/);
   assert.match(appSource, /data-file-column-resize="size"/);
   assert.match(appSource, /handle\.setPointerCapture\(event\.pointerId\)/);
-  assert.match(styles, /\.files-pane \.file-list\s*\{[^}]*grid-row:\s*3/s);
+  assert.match(styles, /\.files-pane \.file-list\s*\{[^}]*grid-row:\s*2/s);
   assert.match(styles, /\.file-column-resizer\s*\{[^}]*cursor:\s*col-resize/s);
   assert.match(styles, /\.compact-file-row \.file-modified,\s*\.compact-file-row \.file-size\s*\{[^}]*min-width:\s*0[^}]*overflow:\s*hidden[^}]*text-overflow:\s*ellipsis[^}]*white-space:\s*nowrap/s);
 });
@@ -1858,7 +1858,10 @@ test('files pane clears stale entries and shows a friendly empty error state', (
   assert.match(appSource, /ENOENT\|no such file/);
   assert.match(appSource, /class="file-empty-state" role="note"/);
   assert.match(appSource, /paneData\.error \|\| \(paneData\.filter \? 'No files match your search\.' : 'This folder is empty\.'\)/);
+  assert.doesNotMatch(appSource, /class="file-error"/);
   assert.match(styles, /\.file-empty-state\s*\{[^}]*flex-direction:\s*column/s);
+  assert.match(styles, /\.files-pane \{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\)/s);
+  assert.match(styles, /\.files-pane \.file-list\s*\{[^}]*grid-row:\s*2/s);
 });
 
 test('upload controls are keyboard reachable buttons', () => {
@@ -2074,11 +2077,8 @@ test('images are streamed inline without letting an SVG run scripts', () => {
   assert.match(mainSource, /app\.get\('\/api\/files\/image-siblings'/);
 });
 
-test('the file error message carries the theme danger token, not a fixed red', () => {
-  // A hardcoded #ff8b8b sat at 2.25:1 on the light panel, below the 4.5:1 floor.
-  const rules = styles.slice(styles.indexOf('.file-error {'), styles.indexOf('.file-list {'));
-  assert.match(rules, /color:\s*var\(--danger\)/);
-  assert.doesNotMatch(rules, /#[0-9a-f]{3,6}\b/i);
+test('files pane has no inline error strip above the list', () => {
+  assert.doesNotMatch(styles, /\.file-error/);
 });
 
 test('light mode muted and accent text clears the 4.5:1 contrast floor', () => {

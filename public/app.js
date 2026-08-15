@@ -951,7 +951,6 @@
             <button class="file-command-button" type="button" data-file-filter-clear aria-label="Clear filter" title="Clear filter">×</button>
           </div>
         </form>
-        <div class="file-error">${escapeHtml(paneData.error)}</div>
         <div class="file-list" role="listbox" aria-label="Files" aria-multiselectable="true">
           ${showingDrives ? paneData.drives.map((drive) => `
             <button class="file-row file-row-button" role="option" aria-selected="false" data-file-open="${escapeAttr(drive.path)}">
