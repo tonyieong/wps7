@@ -9,12 +9,111 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A "Usage pane" section in both READMEs and an entry in `SECURITY.md` stating
+  that the pane reads the Codex and Claude Code OAuth tokens on the host, that it
+  ships enabled, and that it falls back to searching the user profiles beside its
+  own. The behaviour is unchanged; it was previously only implied by one line
+  about running at logon.
+- Screenshots in both READMEs.
+
+### Changed
+
+- Wording that still described wps7 as a Windows service running under
+  LocalSystem. `shell.extra_path` is documented against the real reason a folder
+  goes missing — the PATH is the one inherited at logon — and the usage pane
+  reports a CLI it cannot run as unavailable to "the account running wps7"
+  instead of to a service account that no longer exists.
+
+## [0.1.1] - 2026-08-15
+
+### Added
+
+- An image viewer pane.
+- Notepad gains Notepad++-style editing, search, and document controls.
+- The usage pane shows quota countdowns, threshold colours, and alerts, plus the
+  Codex banked reset-credit count and its expiry.
+- Workspace titles are ordered left to right and can be dragged to reorder.
+- The PowerShell key toolbar takes chained keys, Alt/Shift, and lockable
+  modifiers.
+- `server.allowed_hosts` is editable from the Server section of Settings.
+- `server.port` falls back to the next free port when the configured one is
+  taken, instead of exiting. A port held by this same data directory's own
+  running process still opens a browser tab at that instance and exits.
+- Regression coverage for the Express and WebSocket layer (`http-routes.test.js`,
+  against a real spawned server) and for the browser pane.
+
+### Changed
+
+- wps7 starts at logon instead of running as a Windows service. `npm run
+  startup:install` now writes a `Startup\wps7.lnk` shortcut and needs no
+  Administrator, no service account and no stored Windows password; it removes a
+  service left by an earlier version, which is the one step that elevates. A
+  service runs in session 0, where it has no interactive desktop and no access
+  to the signed-in user's profile: GUI programs launched from a terminal pane
+  were invisible, and the usage pane could not see the Codex or Claude Code
+  logins. Running as the logged-in user removes all of that.
+- The Codex and Claude Code home folders are found without configuration. The
+  CLIs write their credentials under the profile of whoever signed in, so when
+  wps7 runs as another account it now searches the profiles beside its own and
+  takes the most recent login. `usage.codex_home` and `usage.claude_home` still
+  pin a folder, but leaving them blank is the normal case.
+- Packaging rewrites the PE subsystem of `dist/wps7.exe` from `console` to
+  `windows`. pkg builds on a console-subsystem Node binary, so Explorer opened a
+  console window that stayed for the life of the server.
+- A tray that exits while the server is still running is relaunched after two
+  seconds. The icon is the only way into a process with no console, so losing it
+  left wps7 running and unreachable. Shutdown is exempt, and a tray that keeps
+  dying immediately is given up on after five attempts rather than respawned
+  forever; every step is in `data/runtime.log`.
+- Tray diagnostics go to `data/runtime.log` instead of `console.error`. The
+  packaged exe is on the windows subsystem and has no console, so a tray that
+  died left no trace at all; its start, stderr, spawn failure and every exit are
+  now recorded. A failed spawn also has an `error` handler, which previously
+  reached the fatal handler and took the server down with it.
+- The Settings dialog is rebuilt as compact, right-aligned setting rows.
+- Light theme contrast and keyboard accessibility across pane controls and
+  workspace tabs.
+
+### Fixed
+
+- Notepad pane settings reverted after Save/Apply.
+- A brace in a typed command was read as key syntax by the PowerShell toolbar.
+- The usage pane stayed readable when a provider rate limits the lookup.
+- Sidebar pane tab labels, and the launcher's messages for a missing `wps7.exe`
+  and a dismissed SmartScreen prompt.
+
+### Removed
+
+- The NSSM service stack: `scripts/install-nssm.ps1`,
+  `scripts/control-wps7-service.ps1`, `scripts/wps7-tray-companion.ps1`, the
+  `wps7-service-start` / `-restart` / `-stop` elevated tasks, the
+  `npm run nssm:install` command, and the `WPS7_SERVICE_MANAGED` mode. The tray
+  companion existed only because the service could not draw its own icon from
+  session 0; `src/tray.js` shows it directly now. `npm run startup:uninstall`
+  removes an existing service installation.
+- `start-wps7.vbs`. Hiding the console window was the only thing it did, and the
+  packaged exe no longer opens one. Double click `wps7.exe` instead.
+- The `tools/` resource directory, which only ever held the downloaded
+  `nssm.exe`. Packaging no longer copies it or embeds `tools/**/*`.
+- `WPS7_HEADLESS`. NSSM set it because a service in session 0 cannot show a tray
+  icon; with wps7 running at logon the tray always applies, so the server no
+  longer reads the variable and `startTray()` is unconditional.
+- The terminal backend and resize debounce settings, and both scrollback
+  settings. Terminal history is no longer trimmed.
+
+## [0.1.0] - 2026-08-08
+
+First public release.
+
+### Added
+
 - MIT `LICENSE`, and `THIRD-PARTY-LICENSES.md` generated by
   `npm run licenses:generate` covering every production dependency embedded in
   `wps7.exe` plus the vendored front-end code and fonts.
 - Per-directory license files under `public/vendor/`.
 - `SECURITY.md` with a private vulnerability reporting channel and a list of
   known design limitations, `CONTRIBUTING.md`, and this changelog.
+- A Traditional Chinese README.
 - SHA256 pinning for the NSSM download in `scripts/install-nssm.ps1`.
 - Origin validation on WebSocket upgrades, which closes a DNS rebinding path that
   let any web page reach a `127.0.0.1` instance running without a password.
@@ -40,36 +139,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   upgrade path, because its rewritten path-to-regexp is the usual breaking
   change and the unit suite does not exercise routing. node-pty was verified by
   driving a real ConPTY session in the packaged executable.
-- A tray that exits while the server is still running is relaunched after two
-  seconds. The icon is the only way into a process with no console, so losing it
-  left wps7 running and unreachable. Shutdown is exempt, and a tray that keeps
-  dying immediately is given up on after five attempts rather than respawned
-  forever; every step is in `data/runtime.log`.
-- Tray diagnostics go to `data/runtime.log` instead of `console.error`. The
-  packaged exe is on the windows subsystem and has no console, so a tray that
-  died left no trace at all; its start, stderr, spawn failure and every exit are
-  now recorded. A failed spawn also has an `error` handler, which previously
-  reached the fatal handler and took the server down with it.
-- Packaging rewrites the PE subsystem of `dist/wps7.exe` from `console` to
-  `windows`. pkg builds on a console-subsystem Node binary, so Explorer opened a
-  console window that stayed for the life of the server. Redirected stdout and
-  stderr still reach the log files a service manager points them at.
-- wps7 starts at logon instead of running as a Windows service. `npm run
-  startup:install` now writes a `Startup\wps7.lnk` shortcut and needs no
-  Administrator, no service account and no stored Windows password; it removes a
-  service left by an earlier version, which is the one step that elevates. A
-  service runs in session 0, where it has no interactive desktop and no access
-  to the signed-in user's profile: GUI programs launched from a terminal pane
-  were invisible, and the usage pane could not see the Codex or Claude Code
-  logins. Running as the logged-in user removes all of that.
-- The Codex and Claude Code home folders are found without configuration. The
-  CLIs write their credentials under the profile of whoever signed in, so when
-  wps7 runs as another account it now searches the profiles beside its own and
-  takes the most recent login. `usage.codex_home` and `usage.claude_home` still
-  pin a folder, but leaving them blank is the normal case.
 - The release notes and both READMEs name the asset to download. The
   GitHub-generated "Source code" archives contain no `wps7.exe`, and extracting
   the release zip is required before running anything from it.
+- `.gitattributes` pins line endings, and the workflow actions moved to v7.
 
 ### Security
 
@@ -84,17 +157,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `nssm.exe` and a stray `tray_windows_release.exe` from version control. NSSM is
   now downloaded and hash-verified at install time.
-- `start-wps7.vbs`. Hiding the console window was the only thing it did, and the
-  packaged exe no longer opens one. Double click `wps7.exe` instead.
-- The NSSM service stack: `scripts/install-nssm.ps1`,
-  `scripts/control-wps7-service.ps1`, `scripts/wps7-tray-companion.ps1`, the
-  `wps7-service-start` / `-restart` / `-stop` elevated tasks, the
-  `npm run nssm:install` command, and the `WPS7_SERVICE_MANAGED` mode. The tray
-  companion existed only because the service could not draw its own icon from
-  session 0; `src/tray.js` shows it directly now. `npm run startup:uninstall`
-  removes an existing service installation.
-- The `tools/` resource directory, which only ever held the downloaded
-  `nssm.exe`. Packaging no longer copies it or embeds `tools/**/*`.
-- `WPS7_HEADLESS`. NSSM set it because a service in session 0 cannot show a tray
-  icon; with wps7 running at logon the tray always applies, so the server no
-  longer reads the variable and `startTray()` is unconditional.
+
+[Unreleased]: https://github.com/tonyieong/wps7/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/tonyieong/wps7/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/tonyieong/wps7/releases/tag/v0.1.0
+</content>
+</invoke>

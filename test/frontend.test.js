@@ -66,6 +66,12 @@ test('settings sits above the theme toggle in a shorter sidebar footer', () => {
   assert.match(styles, /\.sidebar-footer\s*\{\s*padding:\s*6px 10px 8px/);
 });
 
+test('appearance settings persist the selected interface language locally', () => {
+  assert.match(appSource, /<label>Language<select data-language-select>/);
+  assert.match(appSource, /value="zh-HK"[^>]*>繁體中文（香港）<\/option>/);
+  assert.match(appSource, /window\.Wps7I18n\.setLocale\(event\.currentTarget\.value\)/);
+});
+
 test('terminal scrollback is a fixed internal limit, not a setting', () => {
   assert.match(appSource, /const TERMINAL_SCROLLBACK_LINES = 100000;/);
   assert.match(appSource, /scrollback:\s*TERMINAL_SCROLLBACK_LINES/);
@@ -695,7 +701,7 @@ test('usage settings configure the MiniMax key and the visible quota windows', (
   assert.match(mainSource, /fetchClaudeUsage\(\{ claudeHome: config\.usage\.claude_home \|\| undefined, log: usageLog \}\)/);
 });
 
-test('usage settings allow overriding the Codex/Claude Code CLI home folder for service accounts', () => {
+test('usage settings allow pinning the Codex/Claude Code CLI home folder', () => {
   assert.match(appSource, /name="usage\.codex_home"/);
   assert.match(appSource, /name="usage\.claude_home"/);
   assert.match(appSource, /codex_home: String\(form\.get\('usage\.codex_home'\) \|\| ''\)\.trim\(\)/);

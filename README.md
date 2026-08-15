@@ -20,6 +20,14 @@ to any browser on your machine, and rebuilds the layout after a reboot.
 > output travel unencrypted. For anything beyond a trusted network, put wps7
 > behind a reverse proxy that terminates TLS. See [SECURITY.md](SECURITY.md).
 
+![A wps7 workspace: a PowerShell pane, the file manager, the notepad, and the usage pane tiled on the board](docs/screenshots/workspace.png)
+
+Panes tile on a grid, keep their working directory, and come back where you left
+them. The same workspace from a phone browser shows one pane at a time, with a
+key bar for the keys a touch keyboard does not have:
+
+<img src="docs/screenshots/mobile.png" alt="The same workspace on a phone: the PowerShell pane full screen above a key bar with Esc, Tab, Ctrl, Alt and Shift" width="280">
+
 ## Download
 
 Take `wps7-<version>-windows-x64.zip` from the [releases page](../../releases).
@@ -91,6 +99,28 @@ Windows cannot resume arbitrary process memory after reboot. wps7 saves sessions
 ## PowerShell
 
 wps7 prefers `pwsh.exe` and falls back to `powershell.exe`. If fallback is used, the web UI shows a PowerShell 7 install warning.
+
+## Usage pane
+
+The usage pane shows how much of your Codex, Claude Code, and MiniMax quota is
+left. It reads those figures on the machine running wps7, from credentials those
+tools have already written there:
+
+- `%USERPROFILE%\.codex\auth.json` — the Codex OAuth access token.
+- `%USERPROFILE%\.claude\.credentials.json` — the Claude Code OAuth access token.
+- `usage.minimax_api_key` in `config.toml`, or `MINIMAX_CODING_API_KEY` /
+  `MINIMAX_API_KEY` from the environment.
+
+Each token is sent only to the provider it belongs to, and only to read quota.
+None of them is stored in `data/state.json`; `data/runtime.log` records a token's
+length, never the token.
+
+When wps7's own profile has no such credentials, the lookup **searches the other
+user profiles beside it** and takes the most recent login. On a shared machine
+that means wps7 can report another account's quota, if the account running wps7
+is allowed to read that profile. Pin one folder with `usage.codex_home` and
+`usage.claude_home`, or turn a provider off with `usage.show_codex`,
+`show_claude`, or `show_minimax`. All three ship enabled.
 
 ## Contributing
 

@@ -34,6 +34,16 @@ only if you have a concrete exploitation path beyond what is described here.
   of them at once; there is no per-session logout across devices.
 - **`127.0.0.1` with an empty `auth.password_hash` requires no login.** This is the
   default for a fresh install and is intended for single-user desktop use.
+- **The usage pane reads the AI CLI credentials on the host.** It loads the OAuth
+  access tokens from `.codex\auth.json` and `.claude\.credentials.json` to read
+  plan quota, and it is enabled by default. When wps7's own profile holds neither
+  file, the lookup searches the user profiles beside it and takes the most recent
+  login, so on a multi-user machine wps7 may read another account's credentials
+  if the account running wps7 has permission to. The tokens go only to their own
+  provider and are never persisted or logged, but anyone with access to the web UI
+  learns that those accounts exist and what quota they have left. Set
+  `usage.show_codex` and `usage.show_claude` to `false`, or pin `usage.codex_home`
+  and `usage.claude_home`, to prevent the search.
 
 ## Supported versions
 

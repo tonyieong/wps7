@@ -154,12 +154,12 @@ password_hash = ""
 preferred = "pwsh.exe"
 fallback = "powershell.exe"
 ${defaultShellArgsLine}
-# Folders appended to PATH for new panes. Installed as a Windows service, wps7
-# runs as LocalSystem and inherits only the machine PATH, so user-scoped tools
-# go missing: npm's global folder, where claude and codex land, is one of them.
+# Folders appended to PATH for new panes. wps7 inherits the PATH it had at
+# logon, so a tool installed after that goes missing until wps7 restarts: npm's
+# global folder, where claude and codex land, is the usual one.
 # extra_path = ["C:\\\\Users\\\\yourname\\\\AppData\\\\Roaming\\\\npm"]
-# The service account runs whatever those folders hold, so it is editable here
-# only, never through the web UI.
+# Panes run whatever those folders hold, so it is editable here only, never
+# through the web UI.
 extra_path = []
 
 [persistence]

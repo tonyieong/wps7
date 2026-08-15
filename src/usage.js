@@ -197,7 +197,7 @@ function fetchCodexCliUsage({ codexHome, spawnImpl = spawn }) {
         windowsHide: true
       });
     } catch (error) {
-      reject(new Error('Codex CLI is unavailable to the WPS7 service account.'));
+      reject(new Error('Codex CLI could not be started by the account running wps7.'));
       return;
     }
 
@@ -220,7 +220,7 @@ function fetchCodexCliUsage({ codexHome, spawnImpl = spawn }) {
       else resolve(value);
     };
 
-    child.on('error', () => finish(new Error('Codex CLI is unavailable to the WPS7 service account.')));
+    child.on('error', () => finish(new Error('Codex CLI could not be started by the account running wps7.')));
     child.on('exit', (code) => {
       if (!settled) {
         const detail = stderr.trim() ? ` ${stderr.trim().slice(0, 240)}` : '';
@@ -247,7 +247,7 @@ function fetchCodexCliUsage({ codexHome, spawnImpl = spawn }) {
       } else if (message.id === 2) {
         account = message.result?.account || null;
         if (!account || account.type !== 'chatgpt') {
-          finish(new Error('Codex subscription login is unavailable to the WPS7 service account.'));
+          finish(new Error('Codex subscription login is not available to the account running wps7.'));
           return;
         }
         send({ method: 'account/rateLimits/read', id: 3 });
@@ -487,7 +487,7 @@ function refreshClaudeLogin({ claudeHome, credentialsPath, previousAccessToken, 
       });
     } catch (error) {
       log(`claude cli spawn failed: ${error.message}`);
-      finish(new Error('Claude Code CLI is unavailable to the WPS7 service account.'));
+      finish(new Error('Claude Code CLI could not be started by the account running wps7.'));
       return;
     }
     proc.onData((chunk) => {
@@ -548,7 +548,7 @@ async function fetchClaudeUsage({ claudeHome, fetchImpl = defaultFetch, ptyImpl 
         });
         log(`claude refreshed tokenLength=${tokenLength(accessToken)}`);
       } catch (refreshError) {
-        throw new Error(`${refreshError.message} Run /login in Claude Code as the WPS7 service account.`);
+        throw new Error(`${refreshError.message} Run /login in Claude Code as the account running wps7.`);
       }
       payload = await fetchUsage(accessToken);
     } else {

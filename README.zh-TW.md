@@ -18,6 +18,13 @@
 > 若要用在信任網路以外的環境，請把 wps7 放在能終結 TLS 的反向代理後面。
 > 詳見 [SECURITY.md](SECURITY.md)。
 
+![一個 wps7 工作區：PowerShell 窗格、檔案管理員、記事本與用量窗格並排在版面上](docs/screenshots/workspace.png)
+
+窗格會依格線排列、記住各自的工作目錄，並在你回來時停在原處。同一個工作區在手機
+瀏覽器上一次顯示一個窗格，並附上一排觸控鍵盤沒有的按鍵：
+
+<img src="docs/screenshots/mobile.png" alt="同一個工作區在手機上的樣子：PowerShell 窗格全螢幕顯示，下方是 Esc、Tab、Ctrl、Alt、Shift 按鍵列" width="280">
+
 ## 下載
 
 請到[發行頁面](../../releases)下載 `wps7-<版本>-windows-x64.zip`。GitHub 一併產生的
@@ -97,6 +104,25 @@ Windows 在重新開機後無法還原任意行程的記憶體內容。wps7 會�
 
 wps7 優先使用 `pwsh.exe`，找不到時才退回 `powershell.exe`。若使用了退回選項，網頁介面
 會顯示建議安裝 PowerShell 7 的提示。
+
+## 用量窗格
+
+用量窗格顯示你的 Codex、Claude Code 與 MiniMax 方案還剩多少額度。這些數字是在執行
+wps7 的機器上讀取的，來源是那些工具本來就寫在該機器上的憑證：
+
+- `%USERPROFILE%\.codex\auth.json` —— Codex 的 OAuth 存取權杖。
+- `%USERPROFILE%\.claude\.credentials.json` —— Claude Code 的 OAuth 存取權杖。
+- `config.toml` 中的 `usage.minimax_api_key`，或環境變數 `MINIMAX_CODING_API_KEY`
+  / `MINIMAX_API_KEY`。
+
+每一個權杖只會送往它所屬的供應商，而且只用於讀取額度。這些權杖都不會存進
+`data/state.json`；`data/runtime.log` 只記錄權杖的長度，不會記錄權杖本身。
+
+當 wps7 自己的 profile 裡沒有這些憑證時，查找程序**會搜尋旁邊其他使用者的 profile**，
+並採用最近一次登入的那一組。在共用電腦上，這代表只要執行 wps7 的帳戶有權讀取該
+profile，wps7 就可能顯示另一個帳戶的額度。你可以用 `usage.codex_home` 與
+`usage.claude_home` 指定固定資料夾，或用 `usage.show_codex`、`show_claude`、
+`show_minimax` 關閉個別供應商。這三項預設都是開啟的。
 
 ## 參與開發
 
