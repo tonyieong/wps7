@@ -60,6 +60,12 @@ test('settings sits above the theme toggle in a shorter sidebar footer', () => {
   assert.match(styles, /\.sidebar-footer\s*\{\s*padding:\s*6px 10px 8px/);
 });
 
+test('appearance settings persist the selected interface language locally', () => {
+  assert.match(appSource, /<label>Language<select data-language-select>/);
+  assert.match(appSource, /value="zh-HK"[^>]*>繁體中文（香港）<\/option>/);
+  assert.match(appSource, /window\.Wps7I18n\.setLocale\(event\.currentTarget\.value\)/);
+});
+
 test('terminal scrollback is a fixed internal limit, not a setting', () => {
   assert.match(appSource, /const TERMINAL_SCROLLBACK_LINES = 100000;/);
   assert.match(appSource, /scrollback:\s*TERMINAL_SCROLLBACK_LINES/);

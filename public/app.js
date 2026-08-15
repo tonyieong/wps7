@@ -8826,6 +8826,10 @@
               </div>
               <div class="settings-grid appearance-font-setting">
                 <label>System font size<input name="ui.system_font_size" type="number" min="10" max="24" value="${escapeAttr(settings.ui.system_font_size ?? 13)}"></label>
+                <label>Language<select data-language-select>
+                  <option value="en" ${window.Wps7I18n.getLocale() === 'en' ? 'selected' : ''}>English</option>
+                  <option value="zh-HK" ${window.Wps7I18n.getLocale() === 'zh-HK' ? 'selected' : ''}>繁體中文（香港）</option>
+                </select></label>
               </div>
             </section>
             <section class="settings-section" id="settings-terminal">
@@ -9015,6 +9019,10 @@
     });
     overlay.querySelector('[data-settings-close]').onclick = closeSettings;
     overlay.querySelector('[data-settings-cancel]').onclick = closeSettings;
+    overlay.querySelector('[data-language-select]').onchange = (event) => {
+      window.Wps7I18n.setLocale(event.currentTarget.value);
+      window.location.reload();
+    };
     const syncSegmented = (group, activeButton) => {
       group.querySelectorAll('.segmented-option').forEach((option) => {
         const active = option === activeButton;
