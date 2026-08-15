@@ -19,6 +19,9 @@
     { label: 'Esc', action: 'shortcut', value: 'Escape', enabled: true },
     { label: 'Tab', action: 'shortcut', value: 'Tab', enabled: true },
     { label: 'Ctrl', action: 'modifier', value: 'Control', enabled: true },
+    { label: 'Alt', action: 'modifier', value: 'Alt', enabled: true },
+    { label: 'Shift', action: 'modifier', value: 'Shift', enabled: true },
+    { label: '⏎', action: 'shortcut', value: 'Enter', enabled: true },
     { label: '←', action: 'shortcut', value: 'ArrowLeft', enabled: true },
     { label: '↓', action: 'shortcut', value: 'ArrowDown', enabled: true },
     { label: '↑', action: 'shortcut', value: 'ArrowUp', enabled: true },
@@ -624,9 +627,19 @@
     return `<button class="paged-toolbar-button" type="button" data-toolbar-page="${direction}" aria-label="${label}" title="${label}" hidden>${previous ? '&lt;&lt;' : '&gt;&gt;'}</button>`;
   }
 
+  function mobileKeybarButtonName(button) {
+    if (button.action === 'text') {
+      return `Type ${button.value}`;
+    }
+    if (button.action === 'modifier') {
+      return `${button.value}, double-click to lock`;
+    }
+    return button.value;
+  }
+
   function renderMobileKeybar() {
     return `<div class="mobile-keybar" data-paged-toolbar aria-label="Terminal keys">${renderToolbarPageButton('previous')}${mobileKeybarButtons().map((button) => `
-      <button type="button" data-toolbar-item data-terminal-action="${escapeAttr(button.action)}" data-terminal-value="${escapeAttr(button.value)}" aria-label="${escapeAttr(button.action === 'text' ? `Type ${button.label}` : button.value)}" ${button.action === 'modifier' ? 'aria-pressed="false"' : ''}>${escapeHtml(button.label)}</button>
+      <button type="button" data-toolbar-item data-terminal-action="${escapeAttr(button.action)}" data-terminal-value="${escapeAttr(button.value)}" aria-label="${escapeAttr(mobileKeybarButtonName(button))}" title="${escapeAttr(mobileKeybarButtonName(button))}" ${button.action === 'modifier' ? 'aria-pressed="false" data-modifier-state=""' : ''}>${escapeHtml(button.label)}</button>
     `).join('')}${renderToolbarPageButton('next')}</div>`;
   }
 
@@ -2585,6 +2598,14 @@
     });
     root.querySelectorAll('[data-terminal-action]').forEach((button) => {
       button.onclick = () => sendMobileTerminalKey(button);
+    });
+    root.querySelectorAll('[data-terminal-action="modifier"]').forEach((button) => {
+      // The two clicks of the double-click already ran, so this lands last and
+      // leaves the modifier locked whatever state they cycled it through.
+      button.ondblclick = () => {
+        setKeybarModifierState(button, 'locked');
+        paneTerminal(button.closest('[data-pane]')?.dataset.pane)?.term.focus();
+      };
     });
   }
 
@@ -6864,19 +6885,15 @@
     const action = button.dataset.terminalAction;
     const value = button.dataset.terminalValue || '';
     if (action === 'modifier') {
-      const active = button.getAttribute('aria-pressed') !== 'true';
-      button.setAttribute('aria-pressed', String(active));
+      setKeybarModifierState(button, button.dataset.modifierState ? '' : 'armed');
       terminal.term.focus();
       return;
     }
-    const modifierButtons = Array.from(keybar.querySelectorAll('[data-terminal-action="modifier"]'));
-    const prefix = modifierButtons
-      .filter((modifier) => modifier.getAttribute('aria-pressed') === 'true')
-      .map((modifier) => modifierShortcutToken(modifier.dataset.terminalValue))
+    const prefix = Array.from(consumeKeybarModifiers(keybar))
+      .map(modifierShortcutToken)
       .filter(Boolean);
-    modifierButtons.forEach((modifier) => modifier.setAttribute('aria-pressed', 'false'));
     const input = action === 'text'
-      ? value
+      ? terminalTextSequence(value)
       : terminalShortcutSequence([...prefix, value].join('+'));
     terminal.term.input(input, true);
     terminal.term.focus();
@@ -6886,50 +6903,110 @@
     return { Control: 'Ctrl', Alt: 'Alt', Shift: 'Shift' }[value] || '';
   }
 
+  // Modifiers cycle off -> armed (one shot, cleared by the next key) and a
+  // double-click locks them on so a run of Ctrl+X presses needs one toggle.
+  function setKeybarModifierState(button, modifierState) {
+    button.dataset.modifierState = modifierState;
+    button.setAttribute('aria-pressed', String(Boolean(modifierState)));
+    const name = button.dataset.terminalValue || 'Modifier';
+    button.title = modifierState === 'locked'
+      ? `${name} locked, click to release`
+      : modifierState === 'armed'
+        ? `${name} held for the next key, double-click to lock`
+        : `${name}, double-click to lock`;
+  }
+
+  function consumeKeybarModifiers(keybar) {
+    const active = new Set();
+    keybar?.querySelectorAll('[data-terminal-action="modifier"]').forEach((button) => {
+      if (!button.dataset.modifierState) {
+        return;
+      }
+      active.add(button.dataset.terminalValue);
+      if (button.dataset.modifierState === 'armed') {
+        setKeybarModifierState(button, '');
+      }
+    });
+    return active;
+  }
+
+  // Keys whose escape sequence ends in a letter: CSI D, or CSI 1;<modifier> D.
+  const csiLetterKeys = { ArrowLeft: 'D', ArrowDown: 'B', ArrowUp: 'A', ArrowRight: 'C', Home: 'H', End: 'F' };
+  // Keys encoded by number: CSI 3 ~, or CSI 3;<modifier> ~.
+  const csiNumberKeys = { Delete: '3', PageUp: '5', PageDown: '6' };
+  const functionKeySequences = {
+    F1: '\x1bOP', F2: '\x1bOQ', F3: '\x1bOR', F4: '\x1bOS',
+    F5: '\x1b[15~', F6: '\x1b[17~', F7: '\x1b[18~', F8: '\x1b[19~',
+    F9: '\x1b[20~', F10: '\x1b[21~', F11: '\x1b[23~', F12: '\x1b[24~'
+  };
+  const namedKeySequences = { Escape: '\x1b', Tab: '\t', Enter: '\r', Backspace: '\x7f' };
+
   function terminalShortcutSequence(shortcut) {
     const parts = String(shortcut || '').split('+').map((part) => part.trim()).filter(Boolean);
     const key = parts.pop() || '';
     const modifiers = new Set(parts.map((part) => part.toLowerCase()));
-    const named = {
-      Escape: '\x1b',
-      Tab: '\t',
-      Enter: '\r',
-      Backspace: '\x7f',
-      ArrowLeft: '\x1b[D',
-      ArrowDown: '\x1b[B',
-      ArrowUp: '\x1b[A',
-      ArrowRight: '\x1b[C'
-    };
-    const arrows = { ArrowLeft: 'D', ArrowDown: 'B', ArrowUp: 'A', ArrowRight: 'C' };
-    if (arrows[key] && modifiers.size) {
-      const modifier = 1 + (modifiers.has('shift') ? 1 : 0) + (modifiers.has('alt') ? 2 : 0) + (modifiers.has('ctrl') || modifiers.has('control') ? 4 : 0);
-      return `\x1b[1;${modifier}${arrows[key]}`;
+    const shift = modifiers.has('shift');
+    const alt = modifiers.has('alt');
+    const ctrl = modifiers.has('ctrl') || modifiers.has('control');
+    // xterm's modifier parameter: 1 plus a bit per held modifier.
+    const modifier = 1 + (shift ? 1 : 0) + (alt ? 2 : 0) + (ctrl ? 4 : 0);
+    if (csiLetterKeys[key]) {
+      return modifier > 1 ? `\x1b[1;${modifier}${csiLetterKeys[key]}` : `\x1b[${csiLetterKeys[key]}`;
     }
-    if ((modifiers.has('ctrl') || modifiers.has('control')) && key.length === 1) {
+    if (csiNumberKeys[key]) {
+      return modifier > 1 ? `\x1b[${csiNumberKeys[key]};${modifier}~` : `\x1b[${csiNumberKeys[key]}~`;
+    }
+    if (functionKeySequences[key]) {
+      return functionKeySequences[key];
+    }
+    // Back-tab has its own sequence; without it Shift+Tab reads as a plain Tab.
+    if (key === 'Tab' && shift) {
+      return '\x1b[Z';
+    }
+    if (ctrl && key.length === 1) {
       const code = key.toUpperCase().charCodeAt(0);
       return code >= 64 && code <= 95 ? String.fromCharCode(code & 31) : key;
     }
-    let value = named[key] || (modifiers.has('shift') ? key.toUpperCase() : key);
-    if (modifiers.has('alt')) {
+    let value = namedKeySequences[key] || (shift ? key.toUpperCase() : key);
+    if (alt) {
       value = `\x1b${value}`;
     }
     return value;
   }
 
-  function applyMobileControlModifier(element, data) {
-    const control = element.closest('[data-pane]')?.querySelector('[data-terminal-action="modifier"][data-terminal-value="Control"]');
-    if (!control || control.getAttribute('aria-pressed') !== 'true' || !data) {
+  // A typed-text button may chain keys with braces, so one button can send
+  // `claude{Enter}`. `{{` types a literal brace.
+  function terminalTextSequence(text) {
+    return String(text || '').replace(/\{\{|\{([^{}]+)\}/g, (match, token) => (
+      token ? terminalShortcutSequence(token) : '{'
+    ));
+  }
+
+  function applyMobileModifiers(element, data) {
+    const keybar = element.closest('[data-pane]')?.querySelector('.mobile-keybar');
+    // Only a typed character spends a modifier. xterm also reports focus and
+    // paste through onData, and those escape sequences used to swallow a held
+    // Ctrl before the key it was armed for ever arrived.
+    if (!keybar || data.length !== 1) {
       return data;
     }
-    control.setAttribute('aria-pressed', 'false');
-    if (data.length !== 1) {
+    const active = consumeKeybarModifiers(keybar);
+    if (!active.size) {
       return data;
     }
-    if (data === '?') {
-      return '\x7f';
+    let value = data;
+    if (active.has('Shift')) {
+      value = value.toUpperCase();
     }
-    const code = data.toUpperCase().charCodeAt(0);
-    return code >= 64 && code <= 95 ? String.fromCharCode(code & 31) : data;
+    if (active.has('Control')) {
+      const code = value.toUpperCase().charCodeAt(0);
+      value = value === '?' ? '\x7f'
+        : code >= 64 && code <= 95 ? String.fromCharCode(code & 31) : value;
+    }
+    if (active.has('Alt')) {
+      value = `\x1b${value}`;
+    }
+    return value;
   }
 
   function closeFloatingSidebarFromOutside(event) {
@@ -7575,7 +7652,7 @@
     };
     connect();
     term.onData((data) => {
-      const input = applyMobileControlModifier(element, data);
+      const input = applyMobileModifiers(element, data);
       if (ws?.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'input', data: input }));
       }
@@ -8262,7 +8339,11 @@
   }
 
   const mobileKeybarModifierOptions = ['Control', 'Alt', 'Shift'];
-  const namedShortcutKeys = new Set(['Escape', 'Tab', 'Enter', 'Backspace', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']);
+  const namedShortcutKeys = new Set([
+    'Escape', 'Tab', 'Enter', 'Backspace', 'Delete', 'Home', 'End', 'PageUp', 'PageDown',
+    'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
+    'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'
+  ]);
 
   function isSupportedShortcut(value) {
     const parts = String(value || '').split('+').map((part) => part.trim()).filter(Boolean);
@@ -8277,10 +8358,27 @@
     return namedShortcutKeys.has(key) || key.length === 1;
   }
 
+  function unsupportedTextTokens(value) {
+    const unsupported = [];
+    String(value || '').replace(/\{\{|\{([^{}]+)\}/g, (match, token) => {
+      if (token && !isSupportedShortcut(token)) {
+        unsupported.push(token);
+      }
+      return match;
+    });
+    return unsupported;
+  }
+
   function mobileKeybarRowValidity(action, value) {
     const trimmed = String(value || '').trim();
     if (action === 'text') {
-      return { valid: trimmed.length > 0, hint: trimmed ? '' : 'Enter the text to type.' };
+      if (!trimmed) {
+        return { valid: false, hint: 'Enter the text to type.' };
+      }
+      const unsupported = unsupportedTextTokens(trimmed);
+      return unsupported.length
+        ? { valid: false, hint: `{${unsupported[0]}} is not a key this terminal can send.` }
+        : { valid: true, hint: '' };
     }
     if (action === 'modifier') {
       const valid = mobileKeybarModifierOptions.includes(value);
@@ -8323,7 +8421,7 @@
         </select></label>
         <label class="mobile-keybar-value"><span>Shortcut or text</span>
           <div class="mobile-keybar-value-field" ${isModifier ? 'hidden' : ''}>
-            <input data-mobile-keybar-value maxlength="256" value="${escapeAttr(isModifier ? '' : button.value)}" placeholder="${action === 'text' ? 'npm test' : 'Ctrl+C, Escape, ArrowUp'}">
+            <input data-mobile-keybar-value maxlength="256" value="${escapeAttr(isModifier ? '' : button.value)}" placeholder="${action === 'text' ? 'claude{Enter}' : 'Ctrl+C, Escape, Home, F5'}">
             <button type="button" class="secondary mobile-keybar-record" data-mobile-keybar-record ${action === 'text' ? 'hidden' : ''} title="Record a key combination">Rec</button>
           </div>
           <select class="mobile-keybar-modifier" data-mobile-keybar-modifier ${isModifier ? '' : 'hidden'}>
@@ -8417,7 +8515,7 @@
     if (field) field.hidden = action === 'modifier';
     if (modifier) modifier.hidden = action !== 'modifier';
     if (record) record.hidden = action === 'text';
-    if (input) input.placeholder = action === 'text' ? 'npm test' : 'Ctrl+C, Escape, ArrowUp';
+    if (input) input.placeholder = action === 'text' ? 'claude{Enter}' : 'Ctrl+C, Escape, Home, F5';
   }
 
   function startMobileKeybarRecording(recordButton, row, refresh) {
@@ -8728,7 +8826,7 @@
                 </div>
               </div>
               <div class="mobile-keybar-setting">
-                <div class="mobile-keybar-setting-heading"><div><h3>PowerShell shortcut buttons</h3><p>Choose buttons shown below PowerShell on desktop and mobile, arrange their order, or add a shortcut or text command. Ctrl stays active for the next software-keyboard key.</p></div><div class="mobile-keybar-setting-actions"><button class="secondary" type="button" data-mobile-keybar-reset>Reset to defaults</button><button class="secondary" type="button" data-mobile-keybar-add>${fileActionIcon('add')}<span>Add button</span></button></div></div>
+                <div class="mobile-keybar-setting-heading"><div><h3>PowerShell shortcut buttons</h3><p>Choose buttons shown below PowerShell on desktop and mobile, arrange their order, or add a shortcut or text command. A modifier stays active for the next key; double-click it on the toolbar to lock it on. Typed text can chain keys with braces, so <code>claude{Enter}</code> types the word and runs it, and <code>{{</code> types a literal brace.</p></div><div class="mobile-keybar-setting-actions"><button class="secondary" type="button" data-mobile-keybar-reset>Reset to defaults</button><button class="secondary" type="button" data-mobile-keybar-add>${fileActionIcon('add')}<span>Add button</span></button></div></div>
                 ${renderMobileKeybarEditor(settings.terminal?.mobile_keybar_buttons)}
               </div>
             </section>
