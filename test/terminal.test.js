@@ -28,7 +28,7 @@ function createHeadlessRuntime() {
 
 test('terminal manager rejects files panes', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'));
-  const store = new StateStore(root, 10);
+  const store = new StateStore(root);
   store.load();
   const paneId = store.state.sessions[0].tabs[0].panes[0].id;
   const filesPane = store.createFilesPane(paneId, 'C:\\');
@@ -44,7 +44,7 @@ test('terminal manager rejects files panes', () => {
 
 test('terminal manager resolves runtimes by terminal tab id', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'));
-  const store = new StateStore(root, 10);
+  const store = new StateStore(root);
   store.load();
   const pane = store.state.sessions[0].tabs[0].panes[0];
   const secondTab = store.createTerminalTab(pane.id);
@@ -58,30 +58,15 @@ test('terminal manager resolves runtimes by terminal tab id', () => {
   const target = manager.findTarget(secondTab.id);
   assert.equal(target.pane.id, pane.id);
   assert.equal(target.cwd, pane.cwd);
-  assert.deepEqual(target.scrollback, []);
-
-  store.appendScrollback(secondTab.id, 'tab output');
-  assert.deepEqual(store.findTerminalTab(secondTab.id).terminalTab.scrollback, ['tab output']);
-  assert.deepEqual(pane.terminalTabs[0].scrollback, []);
-});
-
-test('clearing a terminal drops the stored replay scrollback', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'));
-  const store = new StateStore(root, 10);
-  store.load();
-  const pane = store.state.sessions[0].tabs[0].panes[0];
-  const tabId = pane.activeTerminalTabId;
-
-  store.appendScrollback(tabId, 'old output');
-  assert.deepEqual(store.findTerminalTab(tabId).terminalTab.scrollback, ['old output']);
-
-  store.clearScrollback(tabId);
-  assert.deepEqual(store.findTerminalTab(tabId).terminalTab.scrollback, []);
+  // A target carries only what spawning needs; output lives in the headless
+  // terminal, never on the stored tab.
+  assert.equal(target.scrollback, undefined);
+  assert.equal(pane.terminalTabs[0].scrollback, undefined);
 });
 
 test('terminal manager clears the headless replay buffer for a live runtime', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'));
-  const store = new StateStore(root, 10);
+  const store = new StateStore(root);
   store.load();
   const tabId = store.state.sessions[0].tabs[0].panes[0].activeTerminalTabId;
   const manager = new TerminalManager({
@@ -93,7 +78,6 @@ test('terminal manager clears the headless replay buffer for a live runtime', as
 
   const runtime = createHeadlessRuntime();
   manager.processes.set(tabId, runtime);
-  store.appendScrollback(tabId, 'old output');
   runtime.writeChain = runtime.writeChain.then(() => new Promise((resolve) => {
     runtime.headless.write('old output\r\n', resolve);
   }));
@@ -103,14 +87,13 @@ test('terminal manager clears the headless replay buffer for a live runtime', as
   manager.clearTerminal(tabId);
   await runtime.writeChain;
   assert.doesNotMatch(runtime.serializer.serialize(), /old output/);
-  assert.deepEqual(store.findTerminalTab(tabId).terminalTab.scrollback, []);
 
   manager.shutdown();
 });
 
 test('clearing a terminal clears the ConPTY screen buffer through the shell', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'));
-  const store = new StateStore(root, 10);
+  const store = new StateStore(root);
   store.load();
   const tabId = store.state.sessions[0].tabs[0].panes[0].activeTerminalTabId;
   const manager = new TerminalManager({
@@ -175,7 +158,7 @@ test('output sender coalesces terminal chunks', async () => {
 
 test('a pane with no live shell reports nothing running', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'));
-  const store = new StateStore(root, 10);
+  const store = new StateStore(root);
   store.load();
   const pane = store.state.sessions[0].tabs[0].panes[0];
   const filesPane = store.createFilesPane(pane.id, 'C:\\');
@@ -194,7 +177,7 @@ test('a pane with no live shell reports nothing running', async () => {
 
 test('an exited runtime is never reported as running', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'));
-  const store = new StateStore(root, 10);
+  const store = new StateStore(root);
   store.load();
   const pane = store.state.sessions[0].tabs[0].panes[0];
   const manager = new TerminalManager({
@@ -220,7 +203,7 @@ test('a console with no such shell reports no foreground process', async () => {
 
 test('a shell tells an idle prompt from a running command', windowsOnly, async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'));
-  const store = new StateStore(root, 10);
+  const store = new StateStore(root);
   store.load();
   const pane = store.state.sessions[0].tabs[0].panes[0];
   const manager = new TerminalManager({
@@ -247,11 +230,11 @@ test('a shell tells an idle prompt from a running command', windowsOnly, async (
 
 test('terminal status does not expose a separate history API', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'));
-  const store = new StateStore(root, 10);
+  const store = new StateStore(root);
   store.load();
   const paneId = store.state.sessions[0].tabs[0].panes[0].id;
   const manager = new TerminalManager({
-    config: { terminal: { reconnect_scrollback_lines: 2 } },
+    config: { terminal: {} },
     root,
     store,
     shell: { command: 'powershell.exe', args: [] }

@@ -29,6 +29,10 @@
     { label: '^L', action: 'shortcut', value: 'Ctrl+L', enabled: true },
     { label: '^R', action: 'shortcut', value: 'Ctrl+R', enabled: true }
   ];
+  const TERMINAL_SCROLLBACK_LINES = 100000;
+  // Long enough to coalesce a drag-resize, short enough that the reflow still
+  // feels attached to the drag. Never worth a setting.
+  const RESIZE_DEBOUNCE_MS = 100;
   const savedSidebarOpen = localStorage.getItem('wps7.sidebarOpen');
   const savedSidebarPinned = localStorage.getItem('wps7.sidebarPinned');
   const state = {
@@ -7455,7 +7459,9 @@
       cursorBlink: state.config.terminal?.cursor_blink !== false,
       fontFamily: state.config.ui?.terminal_font_family || 'Consolas, "Cascadia Mono", monospace',
       fontSize: paneFontSize(findPaneState(paneId)?.pane),
-      scrollback: Number(state.config.persistence?.scrollback_lines) || 10000,
+      // Not a setting: xterm pre-allocates this buffer and rejects Infinity, so
+      // 100k lines stands in for unlimited at well under a megabyte per pane.
+      scrollback: TERMINAL_SCROLLBACK_LINES,
       windowsPty: { backend: 'conpty' },
       theme: terminalTheme()
     });
@@ -7524,7 +7530,7 @@
       resizeTimer = window.setTimeout(() => {
         resizeTimer = 0;
         scheduleResizeNow();
-      }, Number(state.config.terminal?.resize_debounce_ms) || 100);
+      }, RESIZE_DEBOUNCE_MS);
     };
     const scheduleResizeNow = () => {
       if (resizeFrame) {
@@ -8708,18 +8714,13 @@
               </div>
             </section>
             <section class="settings-section" id="settings-terminal">
-              <div class="section-heading"><div><h2>Terminal</h2><p>Typography, rendering and resize behavior.</p></div></div>
+              <div class="section-heading"><div><h2>Terminal</h2><p>Typography, cursor and resize behavior.</p></div></div>
               <div class="settings-grid">
                 <label>Terminal font<select name="ui.terminal_font_family">
                   ${fontOptions.map((font) => `<option value="${escapeAttr(font.value)}" ${font.value === settings.ui.terminal_font_family ? 'selected' : ''}>${escapeHtml(font.label)}</option>`).join('')}
                 </select></label>
                 <label>PowerShell font size<input name="ui.terminal_font_size" type="number" min="8" max="32" value="${escapeAttr(settings.ui.terminal_font_size)}"></label>
                 <label>PowerShell mobile font size<input name="ui.mobile_terminal_font_size" type="number" min="8" max="24" value="${escapeAttr(settings.ui.mobile_terminal_font_size ?? 12)}"></label>
-                <label>Terminal backend<select name="terminal.backend">
-                  ${['conpty_screen', 'xterm_pty'].map((backend) => `<option value="${backend}" ${backend === settings.terminal?.backend ? 'selected' : ''}>${backend}</option>`).join('')}
-                </select></label>
-                <label>Reconnect scrollback<input name="terminal.reconnect_scrollback_lines" type="number" min="0" value="${escapeAttr(settings.terminal?.reconnect_scrollback_lines ?? 2000)}"></label>
-                <label>Resize debounce ms<input name="terminal.resize_debounce_ms" type="number" min="0" value="${escapeAttr(settings.terminal?.resize_debounce_ms ?? 100)}"></label>
                 <label class="settings-check"><input name="terminal.auto_scroll_on_resize" type="checkbox" ${settings.terminal?.auto_scroll_on_resize ? 'checked' : ''}> Auto scroll on resize</label>
                 <label class="settings-check"><input name="terminal.cursor_blink" type="checkbox" ${settings.terminal?.cursor_blink !== false ? 'checked' : ''}> Cursor blink</label>
                 <div class="notification-setting settings-wide">
@@ -8742,10 +8743,9 @@
               </div>
             </section>
             <section class="settings-section" id="settings-persistence">
-              <div class="section-heading"><div><h2>Persistence</h2><p>Autosave timing and retained terminal output.</p></div></div>
+              <div class="section-heading"><div><h2>Persistence</h2><p>How often the workspace is written to disk.</p></div></div>
               <div class="settings-grid">
                 <label>Autosave minutes<input name="persistence.autosave_minutes" type="number" min="1" value="${escapeAttr(settings.persistence.autosave_minutes)}"></label>
-                <label>Scrollback limit<input name="persistence.scrollback_lines" type="number" min="0" value="${escapeAttr(settings.persistence.scrollback_lines)}"></label>
               </div>
             </section>
             <section class="settings-section" id="settings-shell">
@@ -9063,13 +9063,9 @@
         args: lines(form.get('shell.args'))
       },
       persistence: {
-        autosave_minutes: numberOrUndefined(form.get('persistence.autosave_minutes')),
-        scrollback_lines: numberOrUndefined(form.get('persistence.scrollback_lines'))
+        autosave_minutes: numberOrUndefined(form.get('persistence.autosave_minutes'))
       },
       terminal: {
-        backend: form.get('terminal.backend'),
-        reconnect_scrollback_lines: numberOrUndefined(form.get('terminal.reconnect_scrollback_lines')),
-        resize_debounce_ms: numberOrUndefined(form.get('terminal.resize_debounce_ms')),
         auto_scroll_on_resize: form.get('terminal.auto_scroll_on_resize') === 'on',
         cursor_blink: form.get('terminal.cursor_blink') === 'on',
         browser_notifications: notificationInput?.disabled

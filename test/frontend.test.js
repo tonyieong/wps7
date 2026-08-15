@@ -60,8 +60,11 @@ test('settings sits above the theme toggle in a shorter sidebar footer', () => {
   assert.match(styles, /\.sidebar-footer\s*\{\s*padding:\s*6px 10px 8px/);
 });
 
-test('browser terminal scrollback follows the configured workspace limit', () => {
-  assert.match(appSource, /scrollback:\s*Number\(state\.config\.persistence\?\.scrollback_lines\)/);
+test('terminal scrollback is a fixed internal limit, not a setting', () => {
+  assert.match(appSource, /const TERMINAL_SCROLLBACK_LINES = 100000;/);
+  assert.match(appSource, /scrollback:\s*TERMINAL_SCROLLBACK_LINES/);
+  // Neither scrollback limit may come back as a form field.
+  assert.doesNotMatch(appSource, /persistence\.scrollback_lines|terminal\.reconnect_scrollback_lines/);
 });
 
 test('workspace header keeps shortcut controls in the sidebar only', () => {

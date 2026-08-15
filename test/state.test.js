@@ -5,26 +5,26 @@ const os = require('node:os');
 const path = require('node:path');
 const { StateStore } = require('../src/state');
 
-test('public state omits pane scrollback payloads', () => {
+// Terminal output is never collected here any more: the headless terminal the
+// server keeps per runtime is what a reconnecting client replays from.
+test('the store holds no terminal output at all', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100);
+  const store = new StateStore(root);
   store.load();
   const paneId = store.state.sessions[0].tabs[0].panes[0].id;
 
-  store.appendScrollback(paneId, 'large terminal output');
-
-  const publicState = store.getPublicState();
-  assert.equal(publicState.sessions[0].tabs[0].panes[0].scrollback, undefined);
-  assert.equal(store.findPane(paneId).pane.scrollback.length, 1);
+  assert.equal(typeof store.appendScrollback, 'undefined');
+  assert.equal(typeof store.clearScrollback, 'undefined');
+  assert.equal(store.findPane(paneId).pane.scrollback, undefined);
+  assert.equal(store.getPublicState().sessions[0].tabs[0].panes[0].scrollback, undefined);
 });
 
 test('saved state keeps layout only', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100);
+  const store = new StateStore(root);
   store.load();
   const paneId = store.state.sessions[0].tabs[0].panes[0].id;
 
-  store.appendScrollback(paneId, 'runtime output');
   store.findPane(paneId).pane.lastProgram = 'codex';
   store.save();
 
@@ -38,7 +38,7 @@ test('saved state keeps layout only', () => {
 
 test('pane font size is validated and persisted per pane', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100);
+  const store = new StateStore(root);
   store.load();
   const paneId = store.state.sessions[0].tabs[0].panes[0].id;
 
@@ -46,7 +46,7 @@ test('pane font size is validated and persisted per pane', () => {
   assert.equal(store.findPane(paneId).pane.fontSize, 18);
   assert.equal(store.setPaneFontSize(paneId, 40), false);
 
-  const reloaded = new StateStore(root, 100);
+  const reloaded = new StateStore(root);
   reloaded.load();
   assert.equal(reloaded.findPane(paneId).pane.fontSize, 18);
   assert.equal(reloaded.getPublicState().sessions[0].tabs[0].panes[0].fontSize, 18);
@@ -79,17 +79,19 @@ test('loading old state strips non-layout terminal data', () => {
     }]
   }));
 
-  const store = new StateStore(root, 100);
+  const store = new StateStore(root);
   store.load();
   const pane = store.findPane('pane-1').pane;
-  assert.deepEqual(pane.scrollback, []);
+  // A state.json written before terminal output stopped being collected still
+  // carries it; hydration drops it instead of loading it back into memory.
+  assert.equal(pane.scrollback, undefined);
   assert.equal(pane.lastProgram, undefined);
   assert.deepEqual(pane.layout, { x: 0, y: 0, w: 6, h: 12 });
 });
 
 test('new sessions and panes use unique default names', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100);
+  const store = new StateStore(root);
   store.load();
 
   const secondSession = store.createSession();
@@ -109,7 +111,7 @@ test('new sessions and panes use unique default names', () => {
 // Dragging a workspace title to a new slot in the strip.
 test('moveSession reorders the workspaces and keeps the index in range', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100);
+  const store = new StateStore(root);
   store.load();
   store.createSession();
   store.createSession();
@@ -137,14 +139,14 @@ test('moveSession reorders the workspaces and keeps the index in range', () => {
   assert.deepEqual(names(), ['Workspace 2', 'Workspace 1', 'Workspace 3']);
 
   // The new order survives a reload.
-  const reopened = new StateStore(root, 100);
+  const reopened = new StateStore(root);
   reopened.load();
   assert.deepEqual(reopened.state.sessions.map((session) => session.name), ['Workspace 2', 'Workspace 1', 'Workspace 3']);
 });
 
 test('placePane refuses a position that would overlap another pane', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100);
+  const store = new StateStore(root);
   store.load();
   const paneId = store.state.sessions[0].tabs[0].panes[0].id;
   const secondPane = store.splitPane(paneId, 'horizontal');
@@ -162,7 +164,7 @@ test('placePane refuses a position that would overlap another pane', () => {
   assert.equal(store.placePane(secondPane.id, { x: 6, y: 6, w: 6, h: 6 }), true);
   assert.deepEqual(store.findPane(secondPane.id).pane.layout, { x: 6, y: 6, w: 6, h: 6 });
 
-  const reloaded = new StateStore(root, 100);
+  const reloaded = new StateStore(root);
   reloaded.load();
   assert.deepEqual(reloaded.findPane(secondPane.id).pane.layout, { x: 6, y: 6, w: 6, h: 6 });
 });
@@ -190,7 +192,7 @@ test('overlaps left by older layouts are pushed apart on load', () => {
     }]
   }));
 
-  const store = new StateStore(root, 100);
+  const store = new StateStore(root);
   store.load();
   const layouts = store.state.sessions[0].tabs[0].panes.map((pane) => pane.layout);
   // the leftmost pane keeps its place; the other slides right until it is clear
@@ -200,7 +202,7 @@ test('overlaps left by older layouts are pushed apart on load', () => {
 
 test('changing vertical slots rescales every pane and keeps them apart', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100, { verticalSlots: 12 });
+  const store = new StateStore(root, { verticalSlots: 12 });
   store.load();
   const tab = store.state.sessions[0].tabs[0];
   const first = tab.panes[0].id;
@@ -221,7 +223,7 @@ test('changing vertical slots rescales every pane and keeps them apart', () => {
 
 test('a configured default pane width sizes the first pane and every new pane', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100, { defaultPaneWidth: 4 });
+  const store = new StateStore(root, { defaultPaneWidth: 4 });
   store.load();
   const firstPane = store.state.sessions[0].tabs[0].panes[0];
   assert.deepEqual(firstPane.layout, { x: 0, y: 0, w: 4, h: 12 });
@@ -238,14 +240,14 @@ test('a configured default pane width sizes the first pane and every new pane', 
 
 test('out-of-range default pane widths clamp instead of breaking the board', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100, { defaultPaneWidth: 0 });
+  const store = new StateStore(root, { defaultPaneWidth: 0 });
   store.load();
   assert.deepEqual(store.state.sessions[0].tabs[0].panes[0].layout, { x: 0, y: 0, w: 1, h: 12 });
 });
 
 test('a configured default pane height sizes the first pane and every new pane', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100, { verticalSlots: 12, defaultPaneHeight: 4 });
+  const store = new StateStore(root, { verticalSlots: 12, defaultPaneHeight: 4 });
   store.load();
   const firstPane = store.state.sessions[0].tabs[0].panes[0];
   assert.deepEqual(firstPane.layout, { x: 0, y: 0, w: 6, h: 4 });
@@ -264,7 +266,7 @@ test('a configured default pane height sizes the first pane and every new pane',
 
 test('a default pane height above rows per screen clamps to the row count', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100, { verticalSlots: 8, defaultPaneHeight: 99 });
+  const store = new StateStore(root, { verticalSlots: 8, defaultPaneHeight: 99 });
   store.load();
   assert.equal(store.defaultPaneHeight, 8);
   assert.deepEqual(store.state.sessions[0].tabs[0].panes[0].layout, { x: 0, y: 0, w: 6, h: 8 });
@@ -272,7 +274,7 @@ test('a default pane height above rows per screen clamps to the row count', () =
 
 test('applyGrid re-clamps the default pane height when rows per screen shrinks', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100, { verticalSlots: 12, defaultPaneHeight: 10 });
+  const store = new StateStore(root, { verticalSlots: 12, defaultPaneHeight: 10 });
   store.load();
 
   store.applyGrid(store.gridSize, 6, store.defaultPaneWidth, 10);
@@ -281,7 +283,7 @@ test('applyGrid re-clamps the default pane height when rows per screen shrinks',
 
 test('applyGrid updates the default pane width without resizing existing panes', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100, { defaultPaneWidth: 6 });
+  const store = new StateStore(root, { defaultPaneWidth: 6 });
   store.load();
   const firstPane = store.state.sessions[0].tabs[0].panes[0];
 
@@ -296,7 +298,7 @@ test('applyGrid updates the default pane width without resizing existing panes',
 test('new panes open past the rightmost edge at full height', () => {
   for (const type of ['terminal', 'files']) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-    const store = new StateStore(root, 100);
+    const store = new StateStore(root);
     store.load();
     const firstPane = store.state.sessions[0].tabs[0].panes[0];
     const firstLayout = { ...firstPane.layout };
@@ -314,7 +316,7 @@ test('new panes open past the rightmost edge at full height', () => {
 
 test('a new pane fills the leftmost free space before clearing the rightmost edge', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100);
+  const store = new StateStore(root);
   store.load();
   const paneId = store.state.sessions[0].tabs[0].panes[0].id;
 
@@ -352,7 +354,7 @@ test('loading legacy cell layouts migrates them to grid cells', () => {
     }]
   }));
 
-  const store = new StateStore(root, 100);
+  const store = new StateStore(root);
   store.load();
   const tab = store.state.sessions[0].tabs[0];
   // A legacy cell was 720x480 world pixels, so at a 120px grid it spans 6
@@ -393,7 +395,7 @@ test('loading freeform canvas layouts migrates them to grid cells', () => {
     }]
   }));
 
-  const store = new StateStore(root, 100);
+  const store = new StateStore(root);
   store.load();
   const tab = store.state.sessions[0].tabs[0];
   // World pixels divide by the 120px grid. The old canvas had no vertical
@@ -410,7 +412,7 @@ test('loading freeform canvas layouts migrates them to grid cells', () => {
 
 test('grid size and vertical slots are configurable and clamp pane sizes', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100, { gridSize: 60, verticalSlots: 8 });
+  const store = new StateStore(root, { gridSize: 60, verticalSlots: 8 });
   store.load();
   const paneId = store.state.sessions[0].tabs[0].panes[0].id;
 
@@ -430,7 +432,7 @@ test('grid size and vertical slots are configurable and clamp pane sizes', () =>
 
 test('pane move reorders panes inside its tab', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100);
+  const store = new StateStore(root);
   store.load();
   const paneId = store.state.sessions[0].tabs[0].panes[0].id;
   const secondPane = store.splitPane(paneId, 'horizontal');
@@ -445,11 +447,10 @@ test('pane move reorders panes inside its tab', () => {
 
 test('files panes persist type and path without scrollback', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'));
-  const store = new StateStore(root, 10);
+  const store = new StateStore(root);
   store.load();
   const paneId = store.state.sessions[0].tabs[0].panes[0].id;
   const filesPane = store.createFilesPane(paneId, 'C:\\');
-  store.appendScrollback(filesPane.id, 'ignored');
   store.save();
 
   const saved = JSON.parse(fs.readFileSync(path.join(root, 'data', 'state.json'), 'utf8'));
@@ -465,7 +466,7 @@ test('files panes persist type and path without scrollback', () => {
 
 test('allows more than one files pane in the same tab', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'));
-  const store = new StateStore(root, 10, 4, 3);
+  const store = new StateStore(root);
   store.load();
   const paneId = store.state.sessions[0].tabs[0].panes[0].id;
 
@@ -478,7 +479,7 @@ test('allows more than one files pane in the same tab', () => {
 
 test('usage panes persist as workspace panes', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100);
+  const store = new StateStore(root);
   store.load();
   const firstPane = store.state.sessions[0].tabs[0].panes[0];
   const usagePane = store.createUsagePane(firstPane.id);
@@ -487,7 +488,7 @@ test('usage panes persist as workspace panes', () => {
   assert.equal(usagePane.title, 'Usage 1');
   store.save();
 
-  const restored = new StateStore(root, 100);
+  const restored = new StateStore(root);
   restored.load();
   const restoredPane = restored.findPane(usagePane.id).pane;
   assert.equal(restoredPane.type, 'usage');
@@ -496,7 +497,7 @@ test('usage panes persist as workspace panes', () => {
 
 test('browser and notepad panes persist their URL and file path', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100, 4, 4);
+  const store = new StateStore(root);
   store.load();
   const firstPane = store.state.sessions[0].tabs[0].panes[0];
   const browser = store.createBrowserPane(firstPane.id, 'https://example.com');
@@ -508,7 +509,7 @@ test('browser and notepad panes persist their URL and file path', () => {
   assert.equal(store.updateNotepadTab(notepad.id, notepad.activeNotepadTabId, { path: 'C:\\updated.txt' }), true);
   store.save();
 
-  const restored = new StateStore(root, 100, 4, 4);
+  const restored = new StateStore(root);
   restored.load();
   const panes = restored.getPublicState().sessions[0].tabs[0].panes;
   assert.equal(panes.find((pane) => pane.id === browser.id).url, 'https://openai.com');
@@ -517,7 +518,7 @@ test('browser and notepad panes persist their URL and file path', () => {
 
 test('terminal panes persist multiple tabs and their active tab', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100);
+  const store = new StateStore(root);
   store.load();
   const pane = store.state.sessions[0].tabs[0].panes[0];
 
@@ -535,13 +536,12 @@ test('terminal panes persist multiple tabs and their active tab', () => {
   assert.equal(store.activateTerminalTab(pane.id, pane.terminalTabs[0].id), true);
   store.save();
 
-  const restored = new StateStore(root, 100);
+  const restored = new StateStore(root);
   restored.load();
   const restoredPane = restored.findPane(pane.id).pane;
   assert.equal(restoredPane.terminalTabs.length, 2);
   assert.equal(restoredPane.terminalTabs[1].title, 'Build');
   assert.equal(restoredPane.activeTerminalTabId, restoredPane.terminalTabs[0].id);
-  assert.deepEqual(restoredPane.terminalTabs[0].scrollback, []);
 
   assert.equal(restored.closeTerminalTab(pane.id, restoredPane.terminalTabs[1].id).replacement, null);
   assert.equal(restoredPane.terminalTabs.length, 1);
@@ -557,7 +557,7 @@ test('terminal panes persist multiple tabs and their active tab', () => {
 
 test('a renamed terminal tab keeps its name while the shell keeps announcing titles', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100);
+  const store = new StateStore(root);
   store.load();
   const pane = store.state.sessions[0].tabs[0].panes[0];
   const tab = pane.terminalTabs[0];
@@ -579,7 +579,7 @@ test('a renamed terminal tab keeps its name while the shell keeps announcing tit
   assert.equal(replacement.titlePinned, true);
 
   store.save();
-  const restored = new StateStore(root, 100);
+  const restored = new StateStore(root);
   restored.load();
   const restoredTab = restored.findPane(pane.id).pane.terminalTabs[0];
   assert.equal(restoredTab.title, 'Build');
@@ -592,7 +592,7 @@ test('a renamed terminal tab keeps its name while the shell keeps announcing tit
 
 test('files panes persist multiple tabs and follow the active tab path', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100);
+  const store = new StateStore(root);
   store.load();
   const firstPane = store.state.sessions[0].tabs[0].panes[0];
   const filesPane = store.createFilesPane(firstPane.id, 'C:\\');
@@ -611,7 +611,7 @@ test('files panes persist multiple tabs and follow the active tab path', () => {
   assert.equal(filesPane.path, 'C:\\');
   store.save();
 
-  const restored = new StateStore(root, 100);
+  const restored = new StateStore(root);
   restored.load();
   const restoredPane = restored.findPane(filesPane.id).pane;
   assert.equal(restoredPane.filesTabs.length, 2);
@@ -625,7 +625,7 @@ test('files panes persist multiple tabs and follow the active tab path', () => {
 
 test('browser panes persist multiple tabs and their active tab', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100, 4, 4);
+  const store = new StateStore(root);
   store.load();
   const firstPane = store.state.sessions[0].tabs[0].panes[0];
   const browser = store.createBrowserPane(firstPane.id, 'https://example.com', 'mobile');
@@ -640,7 +640,7 @@ test('browser panes persist multiple tabs and their active tab', () => {
   assert.equal(store.closeBrowserTab(browser.id, secondTab.id), true);
   store.save();
 
-  const restored = new StateStore(root, 100, 4, 4);
+  const restored = new StateStore(root);
   restored.load();
   const restoredBrowser = restored.findPane(browser.id).pane;
   assert.equal(restoredBrowser.browserTabs.length, 1);
@@ -651,7 +651,7 @@ test('browser panes persist multiple tabs and their active tab', () => {
 
 test('new notepad panes and tabs adopt the configured editor defaults', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100, 4, 4);
+  const store = new StateStore(root);
   store.load();
   const firstPane = store.state.sessions[0].tabs[0].panes[0];
   const defaults = { wrap: true, indentGuides: true, autosave: true };
@@ -673,7 +673,7 @@ test('new notepad panes and tabs adopt the configured editor defaults', () => {
 
 test('notepad panes persist multiple tabs and their active tab', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100, 4, 4);
+  const store = new StateStore(root);
   store.load();
   const firstPane = store.state.sessions[0].tabs[0].panes[0];
   const notepad = store.createNotepadPane(firstPane.id, 'C:\\notes.txt');
@@ -686,7 +686,7 @@ test('notepad panes persist multiple tabs and their active tab', () => {
   assert.equal(store.closeNotepadTab(notepad.id, secondTab.id), true);
   store.save();
 
-  const restored = new StateStore(root, 100, 4, 4);
+  const restored = new StateStore(root);
   restored.load();
   const restoredNotepad = restored.findPane(notepad.id).pane;
   assert.equal(restoredNotepad.notepadTabs.length, 1);
@@ -696,7 +696,7 @@ test('notepad panes persist multiple tabs and their active tab', () => {
 
 test('notepad autosave drafts and editor preferences persist without a file path', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100, 4, 4);
+  const store = new StateStore(root);
   store.load();
   const firstPane = store.state.sessions[0].tabs[0].panes[0];
   const notepad = store.createNotepadPane(firstPane.id);
@@ -711,7 +711,7 @@ test('notepad autosave drafts and editor preferences persist without a file path
     fontFamily: '"Cascadia Mono", Consolas, monospace'
   }), true);
 
-  const restored = new StateStore(root, 100, 4, 4);
+  const restored = new StateStore(root);
   restored.load();
   const restoredTab = restored.findPane(notepad.id).pane.notepadTabs[0];
   assert.equal(restoredTab.path, '');
@@ -730,7 +730,7 @@ test('notepad autosave drafts and editor preferences persist without a file path
 
 test('notepad tabs persist their line ending, language override, and read-only lock', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100, 4, 4);
+  const store = new StateStore(root);
   store.load();
   const firstPane = store.state.sessions[0].tabs[0].panes[0];
   const notepad = store.createNotepadPane(firstPane.id, 'C:\\notes.md');
@@ -746,7 +746,7 @@ test('notepad tabs persist their line ending, language override, and read-only l
   // An unsupported line ending is ignored rather than corrupting the saved file.
   assert.equal(store.updateNotepadTab(notepad.id, tabId, { eol: 'nel' }), true);
 
-  const restored = new StateStore(root, 100, 4, 4);
+  const restored = new StateStore(root);
   restored.load();
   const restoredTab = restored.findPane(notepad.id).pane.notepadTabs[0];
   assert.equal(restoredTab.eol, 'lf');
@@ -772,7 +772,7 @@ test('legacy terminal pane mode is discarded', () => {
       }]
     }]
   }));
-  const store = new StateStore(root, 100);
+  const store = new StateStore(root);
   store.load();
   assert.equal(store.state.sessions[0].tabs[0].panes[0].mode, undefined);
   assert.equal(store.getPublicState().sessions[0].tabs[0].panes[0].mode, undefined);
@@ -802,7 +802,7 @@ test('loading state with a deleted or moved pane cwd falls back to the app root'
     }]
   }));
 
-  const store = new StateStore(root, 100);
+  const store = new StateStore(root);
   store.load();
   assert.equal(store.findPane('pane-1').pane.cwd, root);
 });
@@ -825,14 +825,14 @@ test('loading legacy panes marks them as terminal', () => {
       }]
     }]
   }));
-  const store = new StateStore(root, 10);
+  const store = new StateStore(root);
   store.load();
   assert.equal(store.state.sessions[0].tabs[0].panes[0].type, 'terminal');
 });
 
 test('whiteboard panes store their Excalidraw scene as bounded JSON', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100);
+  const store = new StateStore(root);
   store.load();
   const terminalPaneId = store.state.sessions[0].tabs[0].panes[0].id;
   const pane = store.createWhiteboardPane(terminalPaneId);
@@ -843,7 +843,7 @@ test('whiteboard panes store their Excalidraw scene as bounded JSON', () => {
   const scene = JSON.stringify({ elements: [{ id: 'a', type: 'rectangle' }], appState: { gridSize: 20 } });
   assert.equal(store.setWhiteboard(pane.id, scene), true);
 
-  const reloaded = new StateStore(root, 100);
+  const reloaded = new StateStore(root);
   reloaded.load();
   assert.equal(reloaded.findPane(pane.id).pane.whiteboard, scene);
 
@@ -856,7 +856,7 @@ test('whiteboard panes store their Excalidraw scene as bounded JSON', () => {
 
 test('saving keeps the previous file as a backup and leaves no temp file behind', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100);
+  const store = new StateStore(root);
   store.load();
   // renameSession persists on its own, so these are two consecutive writes.
   store.renameSession(store.state.activeSessionId, 'First');
@@ -872,7 +872,7 @@ test('saving keeps the previous file as a backup and leaves no temp file behind'
 
 test('loading recovers from the backup when state.json is truncated', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100);
+  const store = new StateStore(root);
   store.load();
   store.renameSession(store.state.activeSessionId, 'Survivor');
   store.renameSession(store.state.activeSessionId, 'Doomed');
@@ -881,14 +881,14 @@ test('loading recovers from the backup when state.json is truncated', () => {
   const statePath = path.join(root, 'data', 'state.json');
   fs.writeFileSync(statePath, '{"sessions":[{"na');
 
-  const reloaded = new StateStore(root, 100);
+  const reloaded = new StateStore(root);
   reloaded.load();
   assert.equal(reloaded.state.sessions[0].name, 'Survivor');
 });
 
 test('loading falls back to a fresh workspace when both copies are unreadable', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100);
+  const store = new StateStore(root);
   store.load();
   store.save();
   store.save();
@@ -897,7 +897,7 @@ test('loading falls back to a fresh workspace when both copies are unreadable', 
   fs.writeFileSync(path.join(dataDir, 'state.json'), 'not json');
   fs.writeFileSync(path.join(dataDir, 'state.json.bak'), 'also not json');
 
-  const reloaded = new StateStore(root, 100);
+  const reloaded = new StateStore(root);
   reloaded.load();
   assert.equal(reloaded.state.sessions.length, 1);
   assert.equal(reloaded.state.sessions[0].tabs[0].panes.length, 1);
@@ -905,7 +905,7 @@ test('loading falls back to a fresh workspace when both copies are unreadable', 
 
 test('image panes persist only their current picture path', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-state-'));
-  const store = new StateStore(root, 100);
+  const store = new StateStore(root);
   store.load();
   const basePaneId = store.state.sessions[0].tabs[0].panes[0].id;
 
@@ -919,7 +919,7 @@ test('image panes persist only their current picture path', () => {
   const persisted = store.getPersistedState().sessions[0].tabs[0].panes.find((item) => item.id === pane.id);
   assert.equal(persisted.path, 'C:\\pictures\\b.png');
 
-  const reloaded = new StateStore(root, 100);
+  const reloaded = new StateStore(root);
   reloaded.load();
   const restored = reloaded.findPane(pane.id).pane;
   assert.equal(restored.type, 'image');

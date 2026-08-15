@@ -203,13 +203,9 @@ function settingsConfig(config, runtimeConfig) {
     },
     shell: config.shell,
     persistence: {
-      autosave_minutes: positiveInteger(config.persistence.autosave_minutes, runtimeConfig.persistence.autosave_minutes),
-      scrollback_lines: nonNegativeInteger(config.persistence.scrollback_lines, runtimeConfig.persistence.scrollback_lines)
+      autosave_minutes: positiveInteger(config.persistence.autosave_minutes, runtimeConfig.persistence.autosave_minutes)
     },
     terminal: {
-      backend: typeof config.terminal.backend === 'string' ? config.terminal.backend : runtimeConfig.terminal.backend,
-      reconnect_scrollback_lines: nonNegativeInteger(config.terminal.reconnect_scrollback_lines, runtimeConfig.terminal.reconnect_scrollback_lines),
-      resize_debounce_ms: positiveInteger(config.terminal.resize_debounce_ms, runtimeConfig.terminal.resize_debounce_ms),
       auto_scroll_on_resize: Boolean(config.terminal.auto_scroll_on_resize),
       cursor_blink: Boolean(config.terminal.cursor_blink),
       browser_notifications: Boolean(config.terminal.browser_notifications),
@@ -366,21 +362,9 @@ function sanitizeSettingsUpdates(updates) {
     if (positiveInteger(updates.persistence.autosave_minutes, 0)) {
       next.persistence.autosave_minutes = Number(updates.persistence.autosave_minutes);
     }
-    if (nonNegativeInteger(updates.persistence.scrollback_lines, -1) >= 0) {
-      next.persistence.scrollback_lines = Number(updates.persistence.scrollback_lines);
-    }
   }
   if (updates.terminal) {
     next.terminal = {};
-    if (updates.terminal.backend === 'conpty_screen' || updates.terminal.backend === 'xterm_pty') {
-      next.terminal.backend = updates.terminal.backend;
-    }
-    if (nonNegativeInteger(updates.terminal.reconnect_scrollback_lines, -1) >= 0) {
-      next.terminal.reconnect_scrollback_lines = Number(updates.terminal.reconnect_scrollback_lines);
-    }
-    if (positiveInteger(updates.terminal.resize_debounce_ms, 0)) {
-      next.terminal.resize_debounce_ms = Number(updates.terminal.resize_debounce_ms);
-    }
     if (typeof updates.terminal.auto_scroll_on_resize === 'boolean') {
       next.terminal.auto_scroll_on_resize = updates.terminal.auto_scroll_on_resize;
     }
@@ -629,7 +613,7 @@ function main() {
   let shell = resolveShell(config);
   let configReloadError = '';
   let restartRequired = false;
-  const store = new StateStore(root, config.persistence.scrollback_lines, {
+  const store = new StateStore(root, {
     gridSize: config.ui.grid_size,
     verticalSlots: config.ui.vertical_slots,
     defaultPaneWidth: config.ui.default_pane_width,
@@ -689,7 +673,6 @@ function main() {
     }
     replaceObject(config, nextConfig);
     shell = resolveShell(config);
-    store.scrollbackLimit = config.persistence.scrollback_lines;
     // A new slot count rescales every pane, so the client is told to take the
     // fresh layout rather than repaint the one it already has.
     const layoutChanged = store.applyGrid(config.ui.grid_size, config.ui.vertical_slots, config.ui.default_pane_width, config.ui.default_pane_height);

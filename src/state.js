@@ -151,8 +151,7 @@ function defaultSession(name = 'Workspace 1', paneTitle = 'PowerShell 1', vertic
             cwd: process.cwd(),
             split: null,
             layout: { x: 0, y: 0, w: clampPaneWidth(paneWidth), h: clampPaneHeight(paneHeight, verticalSlots) },
-            scrollback: [],
-            terminalTabs: [{ ...firstTerminalTab, scrollback: [] }],
+            terminalTabs: [firstTerminalTab],
             activeTerminalTabId: firstTerminalTab.id
           }
         ]
@@ -162,12 +161,11 @@ function defaultSession(name = 'Workspace 1', paneTitle = 'PowerShell 1', vertic
 }
 
 class StateStore {
-  constructor(root, scrollbackLimit, options = {}) {
+  constructor(root, options = {}) {
     this.root = root;
     this.dataDir = path.join(root, 'data');
     this.statePath = path.join(this.dataDir, 'state.json');
     this.backupPath = `${this.statePath}.bak`;
-    this.scrollbackLimit = scrollbackLimit;
     this.gridSize = clampGridSize(options.gridSize);
     this.verticalSlots = clampVerticalSlots(options.verticalSlots);
     this.defaultPaneWidth = clampPaneWidth(options.defaultPaneWidth);
@@ -215,9 +213,9 @@ class StateStore {
     this.state.updatedAt = new Date().toISOString();
     const payload = JSON.stringify(this.getPersistedState(), null, 2);
     const tempPath = `${this.statePath}.tmp`;
-    // Scrollback makes this file large enough that losing power mid-write is a
-    // real risk, so the replacement is complete and flushed to disk before it
-    // takes the place of the previous copy.
+    // Notepad buffers and whiteboard payloads make this file large enough that
+    // losing power mid-write is a real risk, so the replacement is complete and
+    // flushed to disk before it takes the place of the previous copy.
     const handle = fs.openSync(tempPath, 'w');
     try {
       fs.writeFileSync(handle, payload);
@@ -253,15 +251,13 @@ class StateStore {
         url: pane.url || '',
         fontSize: validPaneFontSize(pane.fontSize) ? Number(pane.fontSize) : undefined,
         split: pane.split || null,
-        layout: pane.layout,
-        scrollback: []
+        layout: pane.layout
       };
       if (nextPane.type === 'terminal') {
         const terminalState = terminalTabsForPane(pane, { title: nextPane.title, cwd: nextPane.cwd });
         nextPane.terminalTabs = terminalState.tabs.map((tab) => ({
           ...tab,
-          cwd: normalizeCwd(tab.cwd, this.root),
-          scrollback: []
+          cwd: normalizeCwd(tab.cwd, this.root)
         }));
         nextPane.activeTerminalTabId = terminalState.activeTerminalTabId;
       }
@@ -392,25 +388,6 @@ class StateStore {
     return null;
   }
 
-  appendScrollback(id, text) {
-    const target = this.findTerminalTab(id)?.terminalTab || this.findPane(id)?.pane;
-    if (!target) {
-      return;
-    }
-
-    target.scrollback.push(text);
-    if (target.scrollback.length > this.scrollbackLimit) {
-      target.scrollback = target.scrollback.slice(-this.scrollbackLimit);
-    }
-  }
-
-  clearScrollback(id) {
-    const target = this.findTerminalTab(id)?.terminalTab || this.findPane(id)?.pane;
-    if (target) {
-      target.scrollback = [];
-    }
-  }
-
   createSession(name) {
     const sessionName = String(name || '').trim() ||
       nextNumberedName('Workspace', this.state.sessions.map((session) => session.name));
@@ -489,7 +466,7 @@ class StateStore {
 
     const layout = appendLayout(found.tab.panes, this.verticalSlots, this.defaultPaneWidth, this.defaultPaneHeight);
     const title = nextNumberedName('PowerShell', found.tab.panes.map((candidate) => candidate.title));
-    const firstTab = { ...terminalTab({ title, cwd: found.pane.cwd }), scrollback: [] };
+    const firstTab = terminalTab({ title, cwd: found.pane.cwd });
     const pane = {
       id: crypto.randomUUID(),
       type: 'terminal',
@@ -497,7 +474,6 @@ class StateStore {
       cwd: found.pane.cwd,
       split: direction === 'vertical' ? 'vertical' : 'horizontal',
       layout,
-      scrollback: [],
       terminalTabs: [firstTab],
       activeTerminalTabId: firstTab.id
     };
@@ -526,7 +502,6 @@ class StateStore {
       path: pathValue || '',
       split: 'files',
       layout,
-      scrollback: [],
       filesTabs: [firstTab],
       activeFilesTabId: firstTab.id
     };
@@ -601,8 +576,7 @@ class StateStore {
       ...terminalTab({
         title: nextNumberedName('PowerShell', found.pane.terminalTabs.map((candidate) => candidate.title)),
         cwd: found.pane.cwd
-      }),
-      scrollback: []
+      })
     };
     found.pane.terminalTabs.push(tab);
     found.pane.activeTerminalTabId = tab.id;
@@ -662,8 +636,7 @@ class StateStore {
           title: found.pane.terminalTabs[0].title,
           titlePinned: found.pane.terminalTabs[0].titlePinned,
           cwd: found.pane.cwd
-        }),
-        scrollback: []
+        })
       };
       found.pane.terminalTabs[0] = replacement;
     } else {
@@ -885,8 +858,7 @@ class StateStore {
       title: nextNumberedName(title, found.tab.panes.map((candidate) => candidate.title)),
       cwd: found.pane.cwd,
       split: type,
-      layout,
-      scrollback: []
+      layout
     };
     if (property) {
       pane[property] = String(value || '');

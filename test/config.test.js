@@ -26,13 +26,15 @@ test('creates default config with localhost port 5000', () => {
   assert.equal(config.file_manager.root_mode, 'drives');
   assert.equal(config.file_manager.max_upload_bytes, 0);
   assert.equal(config.file_manager.show_hidden, false);
-  assert.equal(config.persistence.scrollback_lines, 10000);
-  assert.equal(config.terminal.resize_debounce_ms, 100);
+  // Terminal history is not configurable: both scrollback limits are internal.
+  assert.equal('scrollback_lines' in config.persistence, false);
   assert.equal(config.terminal.auto_scroll_on_resize, false);
   assert.equal(config.terminal.cursor_blink, true);
   assert.equal(config.terminal.browser_notifications, false);
-  assert.equal(config.terminal.backend, 'conpty_screen');
-  assert.equal(config.terminal.reconnect_scrollback_lines, 2000);
+  assert.equal('reconnect_scrollback_lines' in config.terminal, false);
+  // Backend and resize debounce are internal too: one shell path, one delay.
+  assert.equal('backend' in config.terminal, false);
+  assert.equal('resize_debounce_ms' in config.terminal, false);
   assert.deepEqual(config.terminal.mobile_keybar_buttons.slice(0, 3), [
     { label: 'Esc', action: 'shortcut', value: 'Escape', enabled: true },
     { label: 'Tab', action: 'shortcut', value: 'Tab', enabled: true },
@@ -274,11 +276,13 @@ test('updates known config values while preserving loadability', () => {
   assert.equal(config.file_manager.max_upload_bytes, 0);
   assert.equal(config.file_manager.show_hidden, true);
   assert.deepEqual(config.file_manager.bookmarks, [{ name: 'Root', path: 'C:\\' }]);
-  assert.equal(config.terminal.resize_debounce_ms, 120);
   assert.equal(config.terminal.cursor_blink, false);
   assert.equal(config.terminal.browser_notifications, true);
-  assert.equal(config.terminal.backend, 'xterm_pty');
-  assert.equal(config.terminal.reconnect_scrollback_lines, 1200);
+  // An update still carrying a retired key is dropped rather than written back,
+  // so an old client cannot resurrect the setting.
+  for (const retired of ['reconnect_scrollback_lines', 'backend', 'resize_debounce_ms']) {
+    assert.equal(retired in config.terminal, false);
+  }
   assert.deepEqual(config.terminal.mobile_keybar_buttons, [
     { label: '^C', action: 'shortcut', value: 'Ctrl+C', enabled: true },
     { label: 'Build', action: 'text', value: 'npm run build', enabled: false }
