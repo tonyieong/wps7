@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { Terminal: HeadlessTerminal } = require('@xterm/headless');
 const { SerializeAddon } = require('@xterm/addon-serialize');
+const { EventEmitter } = require('node:events');
 const { StateStore } = require('../src/state');
 const { buildPtySpawnOptions, createOutputSender, foregroundProcessIds, TerminalManager } = require('../src/terminal');
 
@@ -134,6 +135,44 @@ test('terminal spawn options use the Windows system ConPTY', () => {
   } else {
     assert.equal(Object.prototype.hasOwnProperty.call(options, 'useConptyDll'), false);
   }
+});
+
+test('terminal height-only resizes stay in the browser after the initial PTY size', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-'));
+  const store = new StateStore(root);
+  store.load();
+  const tabId = store.state.sessions[0].tabs[0].panes[0].activeTerminalTabId;
+  const manager = new TerminalManager({
+    config: {},
+    root,
+    store,
+    shell: { command: 'powershell.exe', args: [] }
+  });
+  const resizes = [];
+  const runtime = createHeadlessRuntime();
+  runtime.cols = 100;
+  runtime.rows = 30;
+  runtime.createdAt = 0;
+  runtime.hasOutput = true;
+  runtime.hasPtySize = false;
+  runtime.status = 'running';
+  runtime.proc.resize = (...size) => resizes.push(size);
+  runtime.proc.onData = () => ({ dispose() {} });
+  manager.processes.set(tabId, runtime);
+
+  const ws = new EventEmitter();
+  ws.OPEN = 1;
+  ws.readyState = 1;
+  ws.send = () => {};
+  manager.attach(tabId, ws);
+
+  ws.emit('message', Buffer.from(JSON.stringify({ type: 'resize', cols: 100, rows: 40 })));
+  ws.emit('message', Buffer.from(JSON.stringify({ type: 'resize', cols: 100, rows: 50 })));
+  ws.emit('message', Buffer.from(JSON.stringify({ type: 'resize', cols: 120, rows: 60 })));
+
+  assert.deepEqual(resizes, [[100, 40], [120, 60]]);
+  ws.emit('close');
+  manager.shutdown();
 });
 
 test('output sender coalesces terminal chunks', async () => {
