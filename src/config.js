@@ -44,12 +44,10 @@ const defaultConfig = {
     extra_path: []
   },
   persistence: {
-    autosave_minutes: 15,
-    scrollback_lines: 10000
+    autosave_minutes: 15
   },
   terminal: {
     backend: 'conpty_screen',
-    reconnect_scrollback_lines: 2000,
     resize_debounce_ms: 100,
     auto_scroll_on_resize: false,
     cursor_blink: true,
@@ -166,12 +164,10 @@ extra_path = []
 [persistence]
 # Hot reload.
 autosave_minutes = 15
-scrollback_lines = 10000
 
 [terminal]
 # Hot reload.
 backend = "conpty_screen"
-reconnect_scrollback_lines = 2000
 resize_debounce_ms = 100
 auto_scroll_on_resize = false
 cursor_blink = true
@@ -317,7 +313,6 @@ function loadConfig(root = appRoot()) {
 function normalizeConfigText(configText) {
   let nextText = configText
     .replace(/^port\s*=\s*5_000\s*$/m, 'port = 5000')
-    .replace(/^scrollback_lines\s*=\s*100_000\s*$/m, 'scrollback_lines = 100000')
     .replace(/^allowlist\s*=\s*\[\s*"codex"\s*\]\s*$/m, 'allowlist = []')
     .replace(/^args\s*=\s*\["-NoLogo",\s*"-NoProfile",\s*"-NoExit",\s*"-Command",\s*"try \{ Set-PSReadLineOption -PredictionSource None \} catch \{\}; Clear-Host"\]\s*$/m, defaultShellArgsLine)
     .replace(/^args\s*=\s*\["-NoLogo",\s*"-NoExit",\s*"-Command",\s*"try \{ Set-PSReadLineOption -PredictionSource None \} catch \{\}; Clear-Host"\]\s*$/m, defaultShellArgsLine)
@@ -396,7 +391,6 @@ bookmarks = []
 
 [terminal]
 backend = "conpty_screen"
-reconnect_scrollback_lines = 2000
 resize_debounce_ms = 100
 auto_scroll_on_resize = false
 cursor_blink = true
@@ -406,7 +400,6 @@ mobile_keybar_buttons = ${formatTomlValue(defaultMobileKeybarButtons)}
   }
   if (/^\[terminal\]\s*$/m.test(nextText)) {
     nextText = ensureTomlKey(nextText, 'terminal', 'backend', defaultConfig.terminal.backend);
-    nextText = ensureTomlKey(nextText, 'terminal', 'reconnect_scrollback_lines', defaultConfig.terminal.reconnect_scrollback_lines);
     nextText = ensureTomlKey(nextText, 'terminal', 'resize_debounce_ms', defaultConfig.terminal.resize_debounce_ms);
     nextText = ensureTomlKey(nextText, 'terminal', 'auto_scroll_on_resize', defaultConfig.terminal.auto_scroll_on_resize);
     nextText = ensureTomlKey(nextText, 'terminal', 'cursor_blink', defaultConfig.terminal.cursor_blink);
@@ -480,8 +473,8 @@ function updateConfigFile(root, updates) {
     server: ['host', 'port', 'open_browser', 'allowed_hosts'],
     auth: ['password_hash'],
     shell: ['preferred', 'fallback', 'args'],
-    persistence: ['autosave_minutes', 'scrollback_lines'],
-    terminal: ['backend', 'reconnect_scrollback_lines', 'resize_debounce_ms', 'auto_scroll_on_resize', 'cursor_blink', 'browser_notifications', 'mobile_keybar_buttons'],
+    persistence: ['autosave_minutes'],
+    terminal: ['backend', 'resize_debounce_ms', 'auto_scroll_on_resize', 'cursor_blink', 'browser_notifications', 'mobile_keybar_buttons'],
     ui: ['sidebar_width', 'grid_size', 'vertical_slots', 'default_pane_width', 'default_pane_height', 'terminal_font_family', 'terminal_font_size', 'mobile_terminal_font_size', 'file_pane_font_size', 'system_font_size', 'notepad_word_wrap', 'notepad_indent_guides', 'notepad_autosave'],
     file_manager: ['enabled', 'root_mode', 'max_upload_bytes', 'show_hidden', 'bookmarks'],
     browser: ['bookmarks', 'history'],

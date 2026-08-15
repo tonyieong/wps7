@@ -251,7 +251,7 @@ test('terminal status does not expose a separate history API', () => {
   store.load();
   const paneId = store.state.sessions[0].tabs[0].panes[0].id;
   const manager = new TerminalManager({
-    config: { terminal: { reconnect_scrollback_lines: 2 } },
+    config: { terminal: {} },
     root,
     store,
     shell: { command: 'powershell.exe', args: [] }

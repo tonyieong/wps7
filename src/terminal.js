@@ -8,6 +8,10 @@ const { normalizeCwd, shellEnv } = require('./shell');
 const OUTPUT_FLUSH_MS = 16;
 const DEFAULT_COLS = 100;
 const DEFAULT_ROWS = 30;
+// Replay history is no longer a user setting. xterm buffers are pre-allocated
+// and reject Infinity, so this is as close to unlimited as the library gets:
+// 100k lines costs under a megabyte per terminal and no session reaches it.
+const SCROLLBACK_LINES = 100000;
 const CONSOLE_LIST_AGENT = path.join(__dirname, 'console-process-list.js');
 const CONSOLE_LIST_TIMEOUT_MS = 3000;
 
@@ -142,12 +146,11 @@ class TerminalManager {
   }
 
   createRuntime(terminalId, target) {
-    const scrollback = Math.max(0, Number(this.config.terminal?.reconnect_scrollback_lines) || 2000);
     const headless = new HeadlessTerminal({
       allowProposedApi: true,
       cols: DEFAULT_COLS,
       rows: DEFAULT_ROWS,
-      scrollback
+      scrollback: SCROLLBACK_LINES
     });
     const serializer = new SerializeAddon();
     headless.loadAddon(serializer);

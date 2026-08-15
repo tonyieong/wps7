@@ -36,12 +36,10 @@ extra_path = []
 [persistence]
 # Hot reload.
 autosave_minutes = 15
-scrollback_lines = 10000
 
 [terminal]
 # Hot reload.
 backend = "conpty_screen"
-reconnect_scrollback_lines = 2000
 resize_debounce_ms = 100
 auto_scroll_on_resize = false
 cursor_blink = true

@@ -3,6 +3,10 @@ const path = require('path');
 const crypto = require('crypto');
 const { normalizeCwd } = require('./shell');
 
+// Saved scrollback is no longer a user setting: terminals keep their history
+// until the process ends, and this only stops one runaway command from growing
+// state.json without bound, since the whole file is rewritten on every autosave.
+const SCROLLBACK_LIMIT = 50000;
 const DEFAULT_GRID_SIZE = 120;
 const MIN_GRID_SIZE = 20;
 const MAX_GRID_SIZE = 400;
@@ -162,7 +166,7 @@ function defaultSession(name = 'Workspace 1', paneTitle = 'PowerShell 1', vertic
 }
 
 class StateStore {
-  constructor(root, scrollbackLimit, options = {}) {
+  constructor(root, scrollbackLimit = SCROLLBACK_LIMIT, options = {}) {
     this.root = root;
     this.dataDir = path.join(root, 'data');
     this.statePath = path.join(this.dataDir, 'state.json');
@@ -1034,6 +1038,7 @@ class StateStore {
 }
 
 module.exports = {
+  SCROLLBACK_LIMIT,
   StateStore,
   defaultSession,
   nextNumberedName
