@@ -46,6 +46,9 @@ test('i18n falls back to English and translates known interface copy', () => {
   assert.equal(i18n.getLocale(), 'en');
   i18n.setLocale('zh-HK');
   assert.equal(i18n.t('Settings'), '設定');
+  assert.equal(i18n.t('Workspace preferences'), '工作區偏好設定');
+  assert.equal(i18n.t('Upload files'), '上傳檔案');
+  assert.equal(i18n.t('Discard unsaved changes and reload from disk?'), '捨棄未儲存的變更並從磁碟重新載入嗎？');
   assert.equal(i18n.t('Workspace 2'), '工作區 2');
   assert.equal(i18n.t('A string that has no translation'), 'A string that has no translation');
 });
