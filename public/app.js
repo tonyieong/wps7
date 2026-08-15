@@ -475,9 +475,14 @@
     return activePaneTabId(pane) === tabId;
   }
 
+  function sidebarPaneIcon(pane) {
+    return pane.type === 'whiteboard' ? 'line' : pane.type === 'files' ? 'file' : pane.type || 'terminal';
+  }
+
   function renderSidebarPaneItem({ session, pane, tabId, tabKind, label }) {
     return `
       <button class="session-item ${sidebarPaneRowActive(pane, tabId) ? 'active' : ''}" data-pane-link="${pane.id}" data-session="${session.id}" data-sidebar-pane-tab="${tabId}" data-sidebar-pane-tab-kind="${tabKind}">
+        ${fileActionIcon(sidebarPaneIcon(pane))}
         <span data-pane-label>${escapeHtml(label)}</span>
       </button>
     `;

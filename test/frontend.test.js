@@ -660,6 +660,13 @@ test('a long workspace/pane name truncates instead of pushing the pin control of
   assert.match(styles, /\.session-item span\s*\{[^}]*min-width:\s*0[^}]*overflow:\s*hidden[^}]*text-overflow:\s*ellipsis[^}]*white-space:\s*nowrap/s);
 });
 
+test('sidebar pane rows display the matching pane icon before their workspace and pane names', () => {
+  const sidebarItemSource = appSource.slice(appSource.indexOf('function renderSidebarPaneItem'), appSource.indexOf('function renderSidebarPaneList'));
+  assert.match(sidebarItemSource, /fileActionIcon\(sidebarPaneIcon\(pane\)\)/);
+  assert.match(appSource, /function sidebarPaneIcon\(pane\)/);
+  assert.match(styles, /\.session-item \.file-action-icon\s*\{[^}]*flex:\s*0 0 15px[^}]*margin-right:\s*8px/s);
+});
+
 test('sidebar creates a persistent usage pane with configurable providers', () => {
   assert.match(mainSource, /app\.get\('\/api\/usage', requireAuth\(config\)/);
   assert.match(mainSource, /app\.post\('\/api\/panes\/:paneId\/usage'/);
