@@ -5898,6 +5898,7 @@ a:focus-visible {
   transform: translate(-50%, -50%);
   width: var(--pane-focus-width, 85vw);
   height: var(--pane-focus-height, 85vh);
+  zoom: var(--pane-focus-scale, 1);
   z-index: var(--z-focus-pane);
   box-shadow: 0 24px 64px var(--shadow);
 }

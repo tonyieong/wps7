@@ -3101,12 +3101,25 @@
     input.select();
   }
 
+  // Focus mode zooms a pane: its painted box grows while its layout box stays
+  // put. Viewport pixels therefore have to be divided by this factor before
+  // they mean anything inside the pane.
+  function paneZoomFactor(element) {
+    return element.getBoundingClientRect().width / (element.offsetWidth || 1) || 1;
+  }
+
+  // Sized from the layout box, so a zoomed pane scales the remote page up
+  // instead of handing it more room. The zoom rides on the scale factor
+  // instead, which keeps the stream sharp at its painted size.
   function browserViewportSize(viewport) {
-    const rect = viewport.getBoundingClientRect();
     return {
-      width: Math.max(320, Math.min(3840, Math.round(rect.width || 1280))),
-      height: Math.max(240, Math.min(2160, Math.round(rect.height || 720)))
+      width: Math.max(320, Math.min(3840, viewport.offsetWidth || 1280)),
+      height: Math.max(240, Math.min(2160, viewport.offsetHeight || 720))
     };
+  }
+
+  function browserScaleFactor(viewport) {
+    return Math.max(1, Math.min(2, (window.devicePixelRatio || 1) * paneZoomFactor(viewport)));
   }
 
   function wireBrowserFind(paneElement, paneId) {
@@ -3221,6 +3234,11 @@
       setAudio(enabled) {
         updateAudio(enabled);
       },
+      // Zooming a pane leaves its layout box alone, so the remote browser only
+      // hears about focus mode when something asks for a resize.
+      refreshViewport() {
+        sendResize();
+      },
       dispose() {
         disposed = true;
         clearTimeout(reconnectTimer);
@@ -3256,7 +3274,7 @@
           type: 'resize',
           width: size.width,
           height: size.height,
-          deviceScaleFactor: Math.max(1, Math.min(2, window.devicePixelRatio || 1))
+          deviceScaleFactor: browserScaleFactor(viewport)
         });
       });
     };
@@ -3277,7 +3295,7 @@
           deviceMode: isMobileLayout() ? 'mobile' : 'desktop',
           width: size.width,
           height: size.height,
-          deviceScaleFactor: Math.max(1, Math.min(2, window.devicePixelRatio || 1))
+          deviceScaleFactor: browserScaleFactor(viewport)
         });
         if (pendingNavigation) {
           connection.send({ type: 'navigate', url: pendingNavigation });
@@ -3515,8 +3533,11 @@
       event.preventDefault();
       if (!contextMenu) return;
       const rect = viewport.getBoundingClientRect();
-      contextMenu.style.left = `${Math.max(4, Math.min(event.clientX - rect.left, rect.width - 120))}px`;
-      contextMenu.style.top = `${Math.max(4, Math.min(event.clientY - rect.top, rect.height - 104))}px`;
+      // The menu is positioned inside the pane, so pointer pixels have to come
+      // back out of the pane's zoom first.
+      const zoom = paneZoomFactor(viewport);
+      contextMenu.style.left = `${Math.max(4, Math.min((event.clientX - rect.left) / zoom, viewport.offsetWidth - 120))}px`;
+      contextMenu.style.top = `${Math.max(4, Math.min((event.clientY - rect.top) / zoom, viewport.offsetHeight - 104))}px`;
       contextMenu.hidden = false;
     };
     inputSurface.onwheel = (event) => {
@@ -6463,15 +6484,23 @@
       focusHeight = maxHeight;
       focusWidth = focusHeight * ratio;
     }
+    // Zooming the pane grows everything inside it by the same factor instead of
+    // only handing the contents more room, so a focused terminal keeps its
+    // column count in larger type. The layout size therefore stays as it was
+    // and the zoom does the growing. Zoom never shrinks: a pane already larger
+    // than the target still gets pulled back to it, at its own scale.
+    const scale = Math.max(1, focusWidth / rect.width || 1);
     state.focusedPaneId = paneId;
-    paneElement.style.setProperty('--pane-focus-width', `${Math.round(focusWidth)}px`);
-    paneElement.style.setProperty('--pane-focus-height', `${Math.round(focusHeight)}px`);
+    paneElement.style.setProperty('--pane-focus-scale', String(Math.round(scale * 1000) / 1000));
+    paneElement.style.setProperty('--pane-focus-width', `${Math.round(focusWidth / scale)}px`);
+    paneElement.style.setProperty('--pane-focus-height', `${Math.round(focusHeight / scale)}px`);
     paneElement.classList.add('pane-focused');
     const backdrop = document.createElement('div');
     backdrop.className = 'pane-focus-backdrop';
     backdrop.setAttribute('data-pane-focus-backdrop', '');
     app.querySelector('.app')?.appendChild(backdrop);
     state.paneFocusEscapeAt = 0;
+    state.browserConnections.get(paneId)?.refreshViewport();
     document.addEventListener('keydown', paneFocusKeydown, true);
     setActivePane(paneId, paneElement.dataset.paneType !== 'files');
   }
@@ -6510,6 +6539,8 @@
     paneElement?.classList.remove('pane-focused');
     paneElement?.style.removeProperty('--pane-focus-width');
     paneElement?.style.removeProperty('--pane-focus-height');
+    paneElement?.style.removeProperty('--pane-focus-scale');
+    state.browserConnections.get(state.focusedPaneId)?.refreshViewport();
     state.focusedPaneId = '';
     app.querySelector('[data-pane-focus-backdrop]')?.remove();
     document.removeEventListener('keydown', paneFocusKeydown, true);

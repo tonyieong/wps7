@@ -1241,6 +1241,34 @@ test('Escape leaves focus mode from every pane type, but a terminal keeps its Es
   assert.match(handler, /event\.stopPropagation\(\);\s*exitPaneFocus\(\)/);
 });
 
+test('focus mode zooms the pane so its contents grow with it', () => {
+  const enter = appSource.slice(appSource.indexOf('function enterPaneFocus'), appSource.indexOf('function paneFocusKeydown'));
+  // Growing the pane alone only fits more, smaller content in. The layout size
+  // stays as it was and CSS zoom does the growing, so a focused terminal keeps
+  // its column count in larger type.
+  assert.match(enter, /const scale = Math\.max\(1, focusWidth \/ rect\.width \|\| 1\);/);
+  assert.match(enter, /setProperty\('--pane-focus-scale'/);
+  assert.match(enter, /setProperty\('--pane-focus-width', `\$\{Math\.round\(focusWidth \/ scale\)\}px`\)/);
+  assert.match(enter, /setProperty\('--pane-focus-height', `\$\{Math\.round\(focusHeight \/ scale\)\}px`\)/);
+  assert.match(styles, /\.pane-grid \.pane\.pane-focused \{[^}]*zoom: var\(--pane-focus-scale, 1\)/);
+  const exit = appSource.slice(appSource.indexOf('function exitPaneFocus'), appSource.indexOf('function closePaneFocusFromOutside'));
+  assert.match(exit, /removeProperty\('--pane-focus-scale'\)/);
+});
+
+test('a zoomed pane scales the remote browser instead of handing it more room', () => {
+  // Sizing the remote page from the painted box would keep its text at the same
+  // size in focus mode and just show more of the page.
+  assert.match(appSource, /function browserViewportSize\(viewport\)[\s\S]*?viewport\.offsetWidth[\s\S]*?viewport\.offsetHeight/);
+  assert.match(appSource, /function browserScaleFactor\(viewport\)[\s\S]*?\(window\.devicePixelRatio \|\| 1\) \* paneZoomFactor\(viewport\)/);
+  assert.match(appSource, /function paneZoomFactor\(element\)[\s\S]*?getBoundingClientRect\(\)\.width \/ \(element\.offsetWidth \|\| 1\)/);
+  // Zoom leaves the layout box alone, so nothing else tells the remote browser
+  // that focus mode came or went.
+  assert.match(appSource, /function enterPaneFocus[\s\S]*?state\.browserConnections\.get\(paneId\)\?\.refreshViewport\(\)/);
+  assert.match(appSource, /function exitPaneFocus[\s\S]*?state\.browserConnections\.get\(state\.focusedPaneId\)\?\.refreshViewport\(\)/);
+  // The context menu sits inside the pane, so pointer pixels come back out of the zoom.
+  assert.match(appSource, /\(event\.clientX - rect\.left\) \/ zoom, viewport\.offsetWidth - 120/);
+});
+
 test('the whiteboard pane lazy-loads a fully offline Excalidraw', () => {
   // Without EXCALIDRAW_ASSET_PATH the bundle silently falls back to unpkg.com,
   // which would break a portable, offline install.
