@@ -1033,6 +1033,21 @@ test('mobile PowerShell toolbar stays compact at the bottom without hiding the k
   assert.match(styles, /@media \(max-width:\s*760px\)[\s\S]*?\.app\.mode-auto \.mobile-keybar\s*\{[^}]*display:\s*flex/s);
 });
 
+test('the floating mobile sidebar keeps its footer inside the visual viewport', () => {
+  // `bottom: 0` on a phone resolves against the layout viewport, which spans
+  // the collapsible URL bar, so the Settings button in .sidebar-footer fell
+  // below the visible area.
+  for (const selector of [
+    /\.app\.mode-mobile:not\(\.sidebar-closed\) \.sidebar\s*\{[^}]*height:\s*var\(--app-height, 100dvh\)/s,
+    /\.app\.mode-auto:not\(\.sidebar-closed\) \.sidebar\s*\{[^}]*height:\s*var\(--app-height, 100dvh\)/s,
+    /\.app\.mobile-device:not\(\.sidebar-closed\) \.sidebar\s*\{[^}]*height:\s*var\(--app-height, 100dvh\)/s
+  ]) {
+    assert.match(styles, selector);
+  }
+  // The list between the rail and the footer has to absorb the lost height.
+  assert.match(styles, /\.sidebar\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\) auto/s);
+});
+
 test('mobile detection and soft keyboard follow the actual visual viewport', () => {
   assert.match(appSource, /matchMedia\('\(pointer: coarse\)'\)/);
   assert.match(appSource, /navigator\.maxTouchPoints/);
@@ -1194,6 +1209,19 @@ test('the pane kind icon drags the pane and still toggles focus mode on double c
   assert.match(source, /dragSurface\.addEventListener\('pointermove', onMove\)/);
   assert.match(source, /dragSurface\.addEventListener\('pointerup', onUp\)/);
   assert.match(appSource, /function wirePaneKindIcon\(root\)[\s\S]*?togglePaneFocus\(icon\.closest\('\[data-pane\]'\)\?\.dataset\.pane\)/);
+});
+
+test('focus mode is desktop only and releases a pane narrowed into mobile', () => {
+  // Mobile shows one pane at a time, so there is nothing for focus mode to do,
+  // and it sized itself from window.innerHeight into the area behind the URL bar.
+  assert.match(appSource, /function togglePaneFocus\(paneId\) \{[\s\S]*?if \(!paneId \|\| isMobileLayout\(\)\) \{\s*return;/);
+  // Nothing on mobile can leave focus mode, so narrowing a focused desktop
+  // window has to release the pane itself.
+  const viewportUpdate = appSource.slice(
+    appSource.indexOf('function updateVisualViewport()'),
+    appSource.indexOf('const terminal = paneTerminal(state.activePaneId);', appSource.indexOf('function updateVisualViewport()'))
+  );
+  assert.match(viewportUpdate, /if \(!isMobileLayout\(\)\) \{\s*return;\s*\}[\s\S]*?exitPaneFocus\(\);/);
 });
 
 test('Escape leaves focus mode from every pane type, but a terminal keeps its Escape key', () => {
@@ -1901,6 +1929,16 @@ test('file create, rename and delete use an app modal with live validation inste
   assert.match(styles, /\.app-modal-danger\s*\{[^}]*border:\s*1px solid var\(--danger\)/s);
 });
 
+test('app modals stay above the software keyboard and scroll their body instead', () => {
+  // Every app modal holds a text field, so the keyboard always opens on it.
+  // Centred on the layout viewport, the field and the footer sat behind it.
+  assert.match(styles, /\.app-modal-overlay\s*\{[^}]*height:\s*var\(--app-height, 100dvh\)/s);
+  assert.match(styles, /\.app-modal\s*\{[^}]*max-height:\s*100%/s);
+  assert.match(styles, /\.app-modal-body\s*\{[^}]*min-height:\s*0[^}]*overflow:\s*auto/s);
+  // The save dialog's folder list sized itself against vh for the same reason.
+  assert.match(styles, /\.notepad-save-directory-list\s*\{[^}]*max-height:\s*min\(320px, calc\(var\(--app-height, 100dvh\) \* \.45\)\)/s);
+});
+
 test('bulk download zips server-side and bulk delete uses a single reporting endpoint', () => {
   assert.match(mainSource, /app\.post\('\/api\/files\/download-archive'/);
   assert.match(mainSource, /app\.post\('\/api\/files\/delete-bulk'/);
@@ -1940,6 +1978,17 @@ test('terminal pane exposes copy, paste, select all and clear without copy-on-se
   assert.match(appSource, /function clearTerminal\(terminalTabId\)[\s\S]*?term\.clear\(\)/);
   assert.match(styles, /\.terminal-context-menu\s*\{[^}]*position:\s*fixed/s);
   assert.doesNotMatch(appSource, /copyOnSelect|onSelectionChange/);
+});
+
+test('context menus clamp against the visible viewport, not the layout viewport', () => {
+  // Clamping to window.innerHeight put a menu opened near the bottom of a
+  // phone screen behind the URL bar, where its lower items could not be tapped.
+  assert.match(appSource, /function viewportHeight\(\) \{\s*return window\.visualViewport\?\.height \|\| window\.innerHeight;/s);
+  const clamps = [...appSource.matchAll(/menu\.style\.top = `\$\{Math\.min\(clientY, ([\w.?()]+) -/g)].map((match) => match[1]);
+  assert.equal(clamps.length, 2);
+  for (const clamp of clamps) {
+    assert.equal(clamp, 'viewportHeight()', `menu still clamps to ${clamp}`);
+  }
 });
 
 // The copy helpers only read an xterm buffer, so they can run against a headless
