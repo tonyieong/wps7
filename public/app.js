@@ -7901,7 +7901,7 @@
     const items = [
       { label: 'Copy', shortcut: 'Ctrl+Shift+C', disabled: !term.hasSelection(), action: () => copyTerminalSelection(terminalTabId) },
       { label: 'Paste', shortcut: 'Ctrl+Shift+V', action: () => pasteTerminalText(terminalTabId) },
-      { label: 'Select All', shortcut: 'Ctrl+Shift+A', action: () => selectAllTerminal(terminalTabId) },
+      { label: 'Select all', shortcut: 'Ctrl+Shift+A', action: () => selectAllTerminal(terminalTabId) },
       { label: 'Clear', shortcut: 'Ctrl+Shift+L', action: () => clearTerminal(terminalTabId) }
     ];
     const menu = document.createElement('div');
