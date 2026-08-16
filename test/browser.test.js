@@ -425,6 +425,42 @@ test('input aimed at a closed socket is dropped rather than thrown', async () =>
   await assert.doesNotReject(page.handle({ type: 'mouse', event: 'mouseMoved', x: 1, y: 1, buttons: 0 }, client));
 });
 
+test('mobile keyboard only opens when the remote page focused a text field', async () => {
+  const page = Object.create(RemoteBrowserPage.prototype);
+  const messages = [];
+  let focusedTextField = true;
+  page.send = async (method, params) => {
+    assert.equal(method, 'Runtime.evaluate');
+    assert.match(params.expression, /input\[type="text"\]/);
+    return { result: { value: focusedTextField } };
+  };
+  const client = { readyState: WebSocket.OPEN, send: (payload) => messages.push(JSON.parse(payload)) };
+
+  await page.handle({ type: 'keyboardFocus' }, client);
+  focusedTextField = false;
+  await page.handle({ type: 'keyboardFocus' }, client);
+
+  assert.deepEqual(messages, [
+    { type: 'keyboardFocus', visible: true },
+    { type: 'keyboardFocus', visible: false }
+  ]);
+});
+
+test('JPEG fallback preserves text detail at high quality', async () => {
+  const page = Object.create(RemoteBrowserPage.prototype);
+  page.screencasting = false;
+  page.viewport = { width: 390, height: 844 };
+  const calls = [];
+  page.send = async (method, params) => { calls.push({ method, params }); return {}; };
+
+  await page.startScreencast();
+
+  assert.deepEqual(calls, [{
+    method: 'Page.startScreencast',
+    params: { format: 'jpeg', quality: 90, maxWidth: 390, maxHeight: 844, everyNthFrame: 1 }
+  }]);
+});
+
 test('only the latest controlling browser client can resize a shared tab', async () => {
   const first = { readyState: WebSocket.OPEN, send() {} };
   const second = { readyState: WebSocket.OPEN, send() {} };

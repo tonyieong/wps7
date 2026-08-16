@@ -107,6 +107,7 @@ function userAgentMetadata(emulationMode) {
 }
 
 const DEFAULT_BACKGROUND_COLOR = '#06111b';
+const JPEG_QUALITY = 90;
 
 // Chromium draws a <select> dropdown in a native popup widget that lives outside
 // the page's own compositing surface, so neither Page.startScreencast nor the
@@ -839,7 +840,7 @@ class RemoteBrowserPage {
     if (this.screencasting) return;
     await this.send('Page.startScreencast', {
       format: 'jpeg',
-      quality: 72,
+      quality: JPEG_QUALITY,
       maxWidth: this.viewport.width,
       maxHeight: this.viewport.height,
       everyNthFrame: 1
@@ -859,7 +860,7 @@ class RemoteBrowserPage {
     this.clientStreamModes.set(client, 'jpeg');
     await this.startScreencast();
     const viewport = { ...this.viewport };
-    const screenshot = await this.send('Page.captureScreenshot', { format: 'jpeg', quality: 72 }).catch(() => null);
+    const screenshot = await this.send('Page.captureScreenshot', { format: 'jpeg', quality: JPEG_QUALITY }).catch(() => null);
     if (screenshot?.data) {
       this.sendClient(client, {
         type: 'frame',
@@ -937,6 +938,17 @@ class RemoteBrowserPage {
       returnByValue: true
     });
     return String(result.result?.value || '');
+  }
+
+  async hasFocusedTextInput() {
+    const result = await this.send('Runtime.evaluate', {
+      expression: `(() => {
+        const active = document.activeElement;
+        return Boolean(active?.matches?.('textarea, input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="password"], input[type="tel"], input[type="url"], input[type="number"], [contenteditable=""], [contenteditable="true"], [role="textbox"]'));
+      })()`,
+      returnByValue: true
+    }).catch(() => null);
+    return Boolean(result?.result?.value);
   }
 
   async selectAll() {
@@ -1073,6 +1085,10 @@ class RemoteBrowserPage {
     if (message.type === 'text') {
       await this.claimViewport(client);
       return this.dispatch('Input.insertText', { text: String(message.text || '') });
+    }
+    if (message.type === 'keyboardFocus') {
+      this.sendClient(client, { type: 'keyboardFocus', visible: await this.hasFocusedTextInput() });
+      return;
     }
     if (message.type === 'selection' || message.type === 'copy') {
       const text = await this.selectedText();

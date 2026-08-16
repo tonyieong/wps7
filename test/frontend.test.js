@@ -372,6 +372,9 @@ test('workspace exposes browser panes with URL history, bookmarks and an embedde
   assert.match(appSource, /type: 'mouse'/);
   assert.match(appSource, /type: 'key'/);
   assert.match(appSource, /type: 'touch'/);
+  assert.match(appSource, /type: 'keyboardFocus'/);
+  assert.match(appSource, /message\.type === 'keyboardFocus'/);
+  assert.doesNotMatch(appSource, /if \(isMobileLayout\(\)\) keyboard\.focus/);
   assert.match(appSource, /new RTCPeerConnection/);
   assert.match(appSource, /type: 'rtcAnswer'/);
   assert.match(appSource, /type: 'rtcIceCandidate'/);
