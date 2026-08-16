@@ -1033,6 +1033,21 @@ test('mobile PowerShell toolbar stays compact at the bottom without hiding the k
   assert.match(styles, /@media \(max-width:\s*760px\)[\s\S]*?\.app\.mode-auto \.mobile-keybar\s*\{[^}]*display:\s*flex/s);
 });
 
+test('the floating mobile sidebar keeps its footer inside the visual viewport', () => {
+  // `bottom: 0` on a phone resolves against the layout viewport, which spans
+  // the collapsible URL bar, so the Settings button in .sidebar-footer fell
+  // below the visible area.
+  for (const selector of [
+    /\.app\.mode-mobile:not\(\.sidebar-closed\) \.sidebar\s*\{[^}]*height:\s*var\(--app-height, 100dvh\)/s,
+    /\.app\.mode-auto:not\(\.sidebar-closed\) \.sidebar\s*\{[^}]*height:\s*var\(--app-height, 100dvh\)/s,
+    /\.app\.mobile-device:not\(\.sidebar-closed\) \.sidebar\s*\{[^}]*height:\s*var\(--app-height, 100dvh\)/s
+  ]) {
+    assert.match(styles, selector);
+  }
+  // The list between the rail and the footer has to absorb the lost height.
+  assert.match(styles, /\.sidebar\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\) auto/s);
+});
+
 test('mobile detection and soft keyboard follow the actual visual viewport', () => {
   assert.match(appSource, /matchMedia\('\(pointer: coarse\)'\)/);
   assert.match(appSource, /navigator\.maxTouchPoints/);
