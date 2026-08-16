@@ -3,6 +3,7 @@
 // travel with the copies we distribute.
 const fs = require('fs');
 const path = require('path');
+const { LICENSE_SOURCES, sourcePath, verifyLicenseSources } = require('./sync-third-party-license-sources');
 
 const root = path.join(__dirname, '..');
 const LICENSE_FILE_PATTERN = /^LICEN[CS]E(?:[._-].*)?$/i;
@@ -11,6 +12,7 @@ const LICENSE_SOURCE_OVERRIDES = {
   '@xterm/addon-serialize': path.join(root, 'node_modules', '@xterm', 'xterm', 'LICENSE'),
   '@xterm/headless': path.join(root, 'node_modules', '@xterm', 'xterm', 'LICENSE')
 };
+const sourceById = new Map(LICENSE_SOURCES.map((source) => [source.id, source]));
 
 // Front-end code we vendored by hand, so it has no package.json to read.
 const VENDORED = [
@@ -136,6 +138,11 @@ function collectProductionPackages() {
 }
 
 function render(packages) {
+  const nodeRuntime = sourceById.get('node-runtime');
+  const fontLicense = sourceById.get('ofl-1.1');
+  const excalidrawNotice = sourceById.get('excalidraw-webpack-notice');
+  const excalidrawLicense = fs.readFileSync(path.join(root, 'public', 'vendor', 'excalidraw', 'LICENSE'), 'utf8').trim();
+  const xtermLicense = fs.readFileSync(path.join(root, 'public', 'vendor', 'xterm', 'LICENSE'), 'utf8').trim();
   const lines = [
     '# Third-Party Licenses',
     '',
@@ -145,6 +152,17 @@ function render(packages) {
     '`wps7.exe` embeds the Node.js runtime and every production dependency listed',
     'below, and `public/vendor/` ships pre-built front-end code. Their notices are',
     'reproduced here as those licenses require.',
+    '',
+    '## Embedded Node.js runtime',
+    '',
+    `### Node.js v${nodeRuntime.version}`,
+    '',
+    `- Upstream license: ${nodeRuntime.url}`,
+    `- Pinned SHA256: \`${nodeRuntime.sha256}\``,
+    '',
+    '```',
+    fs.readFileSync(sourcePath(nodeRuntime), 'utf8').trim(),
+    '```',
     '',
     '## Vendored front-end components and fonts',
     ''
@@ -160,10 +178,35 @@ function render(packages) {
   }
 
   lines.push(
-    'The SIL Open Font License 1.1 full text is available at',
-    '<https://openfontlicense.org/>. Upstream Excalidraw ships these font binaries',
-    'without per-font license files; the attributions above trace each face back to',
-    'its original foundry.',
+    '## Vendored license texts',
+    '',
+    '### Excalidraw, React, ReactDOM, and bundled font attributions',
+    '',
+    '```',
+    excalidrawLicense,
+    '```',
+    '',
+    '### xterm.js and addon-fit',
+    '',
+    '```',
+    xtermLicense,
+    '```',
+    '',
+    '### SIL Open Font License 1.1',
+    '',
+    `Source: ${fontLicense.url}`,
+    '',
+    '```',
+    fs.readFileSync(sourcePath(fontLicense), 'utf8').trim(),
+    '```',
+    '',
+    '### Excalidraw 0.17.1 webpack notices',
+    '',
+    `Source: ${excalidrawNotice.url}`,
+    '',
+    '```',
+    fs.readFileSync(sourcePath(excalidrawNotice), 'utf8').trim(),
+    '```',
     '',
     `## Bundled npm dependencies (${packages.length})`,
     ''
@@ -184,6 +227,10 @@ function render(packages) {
   return `${lines.join('\n').trimEnd()}\n`;
 }
 
+const sourceProblems = verifyLicenseSources();
+if (sourceProblems.length) {
+  throw new Error(`${sourceProblems.join('; ')}. Run "npm run licenses:sync".`);
+}
 const packages = collectProductionPackages();
 const output = path.join(root, 'THIRD-PARTY-LICENSES.md');
 fs.writeFileSync(output, render(packages));

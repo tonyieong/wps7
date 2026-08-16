@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Exact, pinned license texts for the embedded Node.js 22.23.2 runtime, the
+  vendored fonts under the SIL Open Font License 1.1, and Excalidraw's generated
+  webpack notice.
+- README examples showing independently resizable panes and the horizontally
+  unbounded desktop board.
+
+### Fixed
+
+- Broken design-document images, the bug form's security-report link, and stray
+  generation markers at the end of this changelog.
+
+## [0.1.2] - 2026-08-16
+
+### Added
+
 - A "Usage pane" section in both READMEs and an entry in `SECURITY.md` stating
   that the pane reads the Codex and Claude Code OAuth tokens on the host, that it
   ships enabled, and that it falls back to searching the user profiles beside its
@@ -167,8 +182,7 @@ First public release.
 - `nssm.exe` and a stray `tray_windows_release.exe` from version control. NSSM is
   now downloaded and hash-verified at install time.
 
-[Unreleased]: https://github.com/tonyieong/wps7/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/tonyieong/wps7/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/tonyieong/wps7/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/tonyieong/wps7/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/tonyieong/wps7/releases/tag/v0.1.0
-</content>
-</invoke>

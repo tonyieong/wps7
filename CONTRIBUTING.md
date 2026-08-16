@@ -102,5 +102,9 @@ Pushing to `main` runs CI on Windows: lint, the test suite, and a check that
 packaged executable embeds every production dependency, so that file is how
 their license notices reach the people who download a release.
 
+If you update the embedded Node.js runtime or a pinned vendored asset, run
+`npm run licenses:sync` first. It downloads the matching upstream license files
+and verifies their SHA256 hashes before `licenses:generate` includes them.
+
 The published history was rewritten once before this repository went public. Do
 not rewrite it again; anything already pushed gets corrected with a new commit.

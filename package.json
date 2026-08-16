@@ -34,6 +34,7 @@
     "test": "node --test",
     "lint": "eslint .",
     "verify:mobile-scroll": "node scripts/verify-mobile-scroll.js",
+    "licenses:sync": "node scripts\\sync-third-party-license-sources.js",
     "licenses:generate": "node scripts\\generate-third-party-notices.js",
     "package:win": "pkg . --targets node22-win-x64 --output dist/wps7.exe && node scripts\\set-windows-subsystem.js dist\\wps7.exe && powershell -NoProfile -ExecutionPolicy Bypass -Command \"Remove-Item 'dist\\scripts\\scripts','dist\\assets\\assets' -Recurse -Force -ErrorAction SilentlyContinue; New-Item -ItemType Directory dist\\scripts,dist\\assets -Force | Out-Null; Copy-Item scripts\\* dist\\scripts -Recurse -Force; Copy-Item assets\\* dist\\assets -Recurse -Force\"",
     "startup:install": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\\install-wps7-startup.ps1",

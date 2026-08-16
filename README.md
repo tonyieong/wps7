@@ -22,9 +22,22 @@ to any browser on your machine, and rebuilds the layout after a reboot.
 
 ![A wps7 workspace: a PowerShell pane, the file manager, the notepad, and the usage pane tiled on the board](docs/screenshots/workspace.png)
 
-Panes tile on a grid, keep their working directory, and come back where you left
-them. The same workspace from a phone browser shows one pane at a time, with a
-key bar for the keys a touch keyboard does not have:
+## A workspace that fits the task
+
+Every pane can be moved and resized independently on a configurable grid. Make
+a terminal wide, stack a file manager above your notes, or give the whiteboard
+the whole height; wps7 preserves the layout and each pane's working directory.
+
+![Terminal, file manager, notepad, and whiteboard panes arranged at different widths and heights](docs/screenshots/resizable-panes.png)
+
+The desktop board has no fixed right edge. Add or move panes farther right and
+the workspace keeps extending horizontally; the bottom scrollbar takes you
+between groups without shrinking the panes you already arranged.
+
+![The same workspace scrolled horizontally to panes farther to the right](docs/screenshots/horizontal-workspace.png)
+
+On a phone, the same workspace shows one pane at a time, with a key bar for the
+keys a touch keyboard does not have:
 
 <img src="docs/screenshots/mobile.png" alt="The same workspace on a phone: the PowerShell pane full screen above a key bar with Esc, Tab, Ctrl, Alt and Shift" width="280">
 
@@ -136,7 +149,8 @@ wps7 redistributes third-party code: the packaged executable embeds every
 production dependency, and `public/vendor/` ships pre-built Excalidraw, React,
 and xterm.js along with their fonts. Their notices are collected in
 [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md), regenerated with
-`npm run licenses:generate`.
+`npm run licenses:generate`. Pinned upstream license files can be refreshed and
+hash-verified first with `npm run licenses:sync`.
 
 ## Acknowledgements
 

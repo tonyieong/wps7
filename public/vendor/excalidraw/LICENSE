@@ -67,12 +67,14 @@ Assistant-Regular.woff2, Assistant-Medium.woff2, Assistant-SemiBold.woff2,
 Assistant-Bold.woff2
   Copyright (c) 2016 The Assistant Project Authors
   https://fonts.google.com/specimen/Assistant
-  SIL Open Font License, Version 1.1 - https://openfontlicense.org/
+  SIL Open Font License, Version 1.1. The complete license text is included in
+  `../../../licenses/OFL-1.1.txt` and in `THIRD-PARTY-LICENSES.md`.
 
 Cascadia.woff2
   Copyright (c) Microsoft Corporation
   https://github.com/microsoft/cascadia-code
-  SIL Open Font License, Version 1.1 - https://openfontlicense.org/
+  SIL Open Font License, Version 1.1. The complete license text is included in
+  `../../../licenses/OFL-1.1.txt` and in `THIRD-PARTY-LICENSES.md`.
 
 Upstream Excalidraw ships these font binaries inside its build output without
 per-font license files. The attributions above trace each face back to its
@@ -84,7 +86,6 @@ Note on the upstream webpack notice file
 
 excalidraw.js begins with a banner pointing at
 "excalidraw-with-preact.production.min.js.LICENSE.txt", the file webpack uses to
-collect notices for the libraries compiled into that bundle. That file is not
-part of the upstream dist copy we vendored. The notices above cover the
-components we can positively identify; regenerate this directory from the
-@excalidraw/excalidraw npm package to pick up the upstream notice file verbatim.
+collect notices for the libraries compiled into that bundle. That upstream file
+is included beside the bundle as
+`excalidraw-with-preact.production.min.js.LICENSE.txt`.
