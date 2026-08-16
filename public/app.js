@@ -597,6 +597,9 @@
     if (!isMobileLayout()) {
       return;
     }
+    // Narrowing a focused desktop window would otherwise strand the pane in a
+    // mode mobile cannot enter or leave.
+    exitPaneFocus();
     const terminal = paneTerminal(state.activePaneId);
     if (!terminal) {
       return;
@@ -6420,7 +6423,9 @@
   const PANE_FOCUS_ESCAPE_MS = 500;
 
   function togglePaneFocus(paneId) {
-    if (!paneId) {
+    // Mobile shows one pane at a time, so blowing it up to 85% of the screen
+    // behind a backdrop achieves nothing and sizes itself off screen.
+    if (!paneId || isMobileLayout()) {
       return;
     }
     if (state.focusedPaneId === paneId) {

@@ -1211,6 +1211,19 @@ test('the pane kind icon drags the pane and still toggles focus mode on double c
   assert.match(appSource, /function wirePaneKindIcon\(root\)[\s\S]*?togglePaneFocus\(icon\.closest\('\[data-pane\]'\)\?\.dataset\.pane\)/);
 });
 
+test('focus mode is desktop only and releases a pane narrowed into mobile', () => {
+  // Mobile shows one pane at a time, so there is nothing for focus mode to do,
+  // and it sized itself from window.innerHeight into the area behind the URL bar.
+  assert.match(appSource, /function togglePaneFocus\(paneId\) \{[\s\S]*?if \(!paneId \|\| isMobileLayout\(\)\) \{\s*return;/);
+  // Nothing on mobile can leave focus mode, so narrowing a focused desktop
+  // window has to release the pane itself.
+  const viewportUpdate = appSource.slice(
+    appSource.indexOf('function updateVisualViewport()'),
+    appSource.indexOf('const terminal = paneTerminal(state.activePaneId);', appSource.indexOf('function updateVisualViewport()'))
+  );
+  assert.match(viewportUpdate, /if \(!isMobileLayout\(\)\) \{\s*return;\s*\}[\s\S]*?exitPaneFocus\(\);/);
+});
+
 test('Escape leaves focus mode from every pane type, but a terminal keeps its Escape key', () => {
   // Capture phase, or xterm and the whiteboard canvas eat the key first.
   assert.match(appSource, /function enterPaneFocus\(paneId\)[\s\S]*?document\.addEventListener\('keydown', paneFocusKeydown, true\)/);
