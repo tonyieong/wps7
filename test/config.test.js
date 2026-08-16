@@ -22,7 +22,10 @@ test('creates default config with localhost port 5000', () => {
   assert.equal(config.ui.notepad_word_wrap, false);
   assert.equal(config.ui.notepad_indent_guides, false);
   assert.equal(config.ui.notepad_autosave, false);
-  assert.equal(config.file_manager.enabled, true);
+  // The file manager has no on/off switch: it never removed a capability the
+  // terminal pane does not already hand out.
+  assert.equal('enabled' in config.file_manager, false);
+  assert.doesNotMatch(fs.readFileSync(path.join(root, 'config.toml'), 'utf8'), /^enabled = /m);
   assert.equal(config.file_manager.root_mode, 'drives');
   assert.equal(config.file_manager.max_upload_bytes, 0);
   assert.equal(config.file_manager.show_hidden, false);
@@ -272,7 +275,7 @@ test('updates known config values while preserving loadability', () => {
   assert.equal(config.ui.notepad_indent_guides, true);
   assert.equal(config.ui.notepad_autosave, true);
   assert.deepEqual(config.shell.args, ['-NoLogo', '-NoExit']);
-  assert.equal(config.file_manager.enabled, false);
+  assert.equal('enabled' in config.file_manager, false);
   assert.equal(config.file_manager.max_upload_bytes, 0);
   assert.equal(config.file_manager.show_hidden, true);
   assert.deepEqual(config.file_manager.bookmarks, [{ name: 'Root', path: 'C:\\' }]);

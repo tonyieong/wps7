@@ -9434,7 +9434,6 @@
         notepad_autosave: form.get('ui.notepad_autosave') === 'on'
       },
       file_manager: {
-        enabled: state.config.file_manager?.enabled !== false,
         root_mode: 'drives',
         max_upload_bytes: numberOrUndefined(form.get('file_manager.max_upload_bytes')) || 0
       },

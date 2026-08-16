@@ -199,6 +199,12 @@ before(async () => {
     '',
     '[auth]',
     'password_hash = ""',
+    '',
+    // As an older build would have written it. file_manager.enabled is retired,
+    // so every file-manager test below doubles as proof that the leftover key
+    // no longer turns those routes into 404s.
+    '[file_manager]',
+    'enabled = false',
     ''
   ].join('\n'));
 
@@ -271,11 +277,11 @@ test('the default workspace state is reachable with no password set', async () =
 });
 
 test('file and notepad panes open with no password set', async () => {
-  // Regression: requireFileAuth answered 403 for every file-manager route while
-  // auth.password_hash was empty, so the default local install could not open a
-  // file or notepad pane at all -- even though the same install hands out an
-  // unauthenticated PowerShell session, and config.js already refuses to bind
-  // 0.0.0.0 without a password.
+  // Regression: the file-manager routes used to sit behind their own guard,
+  // which answered 403 while auth.password_hash was empty, so the default local
+  // install could not open a file or notepad pane at all -- even though the same
+  // install hands out an unauthenticated PowerShell session, and config.js
+  // already refuses to bind 0.0.0.0 without a password.
   const loaded = await request('/api/state');
   const basePaneId = loaded.json.sessions[0].tabs[0].panes[0].id;
 

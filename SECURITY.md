@@ -34,11 +34,9 @@ only if you have a concrete exploitation path beyond what is described here.
   of them at once; there is no per-session logout across devices.
 - **`127.0.0.1` with an empty `auth.password_hash` requires no login.** This is the
   default for a fresh install and is intended for single-user desktop use. The
-  file manager and notepad routes are reachable in that state too.
-- **`file_manager.enabled = false` is not a security boundary.** It answers 404
-  on the file, notepad and image routes, but the terminal pane reads and writes
-  the same files with the same account, and the sidebar still offers the panes
-  it turns off.
+  file manager and notepad routes are reachable in that state too, and there is
+  no switch that turns them off: the terminal pane reads and writes the same
+  files with the same account either way.
 - **The usage pane reads the AI CLI credentials on the host.** It loads the OAuth
   access tokens from `.codex\auth.json` and `.claude\.credentials.json` to read
   plan quota, and it is enabled by default. When wps7's own profile holds neither

@@ -21,6 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to bind anything but `127.0.0.1`, where it hands out an unauthenticated
   PowerShell session with the same filesystem access.
 
+### Removed
+
+- `file_manager.enabled`. It answered 404 on the file, notepad and image routes
+  while the sidebar still offered those panes, the Settings dialog never exposed
+  it, and every terminal pane kept full read/write access to the same files — so
+  it took away no capability and only broke three buttons. An `enabled` key left
+  in `config.toml` by an older build is ignored.
+
 ## [0.1.3] - 2026-08-16
 
 ### Added

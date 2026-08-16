@@ -66,8 +66,6 @@ notepad_indent_guides = false
 notepad_autosave = false
 
 [file_manager]
-# Set to false to disable every file manager route.
-enabled = true
 root_mode = "drives"
 # 0 means no app-level upload limit.
 max_upload_bytes = 0

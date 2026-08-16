@@ -71,7 +71,6 @@ const defaultConfig = {
     notepad_autosave: false
   },
   file_manager: {
-    enabled: true,
     root_mode: 'drives',
     max_upload_bytes: 0,
     show_hidden: false,
@@ -195,8 +194,6 @@ notepad_indent_guides = false
 notepad_autosave = false
 
 [file_manager]
-# Set to false to disable every file manager route.
-enabled = true
 root_mode = "drives"
 # 0 means no app-level upload limit.
 max_upload_bytes = 0
@@ -360,7 +357,6 @@ notepad_autosave = ${defaultConfig.ui.notepad_autosave}
     nextText = `${nextText.trimEnd()}
 
 [file_manager]
-enabled = true
 root_mode = "drives"
 max_upload_bytes = 0
 show_hidden = false
@@ -368,7 +364,6 @@ bookmarks = []
 `;
   }
   if (/^\[file_manager\]\s*$/m.test(nextText)) {
-    nextText = ensureTomlKey(nextText, 'file_manager', 'enabled', defaultConfig.file_manager.enabled);
     nextText = ensureTomlKey(nextText, 'file_manager', 'root_mode', defaultConfig.file_manager.root_mode);
     nextText = ensureTomlKey(nextText, 'file_manager', 'max_upload_bytes', defaultConfig.file_manager.max_upload_bytes);
     nextText = ensureTomlKey(nextText, 'file_manager', 'show_hidden', defaultConfig.file_manager.show_hidden);
@@ -471,7 +466,7 @@ function updateConfigFile(root, updates) {
     persistence: ['autosave_minutes'],
     terminal: ['auto_scroll_on_resize', 'cursor_blink', 'browser_notifications', 'mobile_keybar_buttons'],
     ui: ['sidebar_width', 'grid_size', 'vertical_slots', 'default_pane_width', 'default_pane_height', 'terminal_font_family', 'terminal_font_size', 'mobile_terminal_font_size', 'file_pane_font_size', 'system_font_size', 'notepad_word_wrap', 'notepad_indent_guides', 'notepad_autosave'],
-    file_manager: ['enabled', 'root_mode', 'max_upload_bytes', 'show_hidden', 'bookmarks'],
+    file_manager: ['root_mode', 'max_upload_bytes', 'show_hidden', 'bookmarks'],
     browser: ['bookmarks', 'history'],
     usage: Object.keys(defaultConfig.usage),
     custom_theme: ['selected_light', 'selected_dark', 'mode', 'ink', 'panel', 'rail', 'surface', 'line', 'text', 'muted', 'accent', 'warn', 'danger', 'terminal_bg', 'terminal_fg', 'light_ink', 'light_panel', 'light_rail', 'light_surface', 'light_line', 'light_text', 'light_muted', 'light_accent', 'light_warn', 'light_danger', 'light_terminal_bg', 'light_terminal_fg']
