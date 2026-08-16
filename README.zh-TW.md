@@ -20,8 +20,19 @@
 
 ![一個 wps7 工作區：PowerShell 窗格、檔案管理員、記事本與用量窗格並排在版面上](docs/screenshots/workspace.png)
 
-窗格會依格線排列、記住各自的工作目錄，並在你回來時停在原處。同一個工作區在手機
-瀏覽器上一次顯示一個窗格，並附上一排觸控鍵盤沒有的按鍵：
+## 配合任務調整的工作區
+
+每個窗格都可以在可自訂的格線上獨立移動和調整大小。你可以拉闊終端、把檔案管理員
+疊在記事本上方，或讓白板佔滿整個高度；wps7 會保留版面和每個窗格的工作目錄。
+
+![終端、檔案管理員、記事本與白板以不同闊度和高度排列](docs/screenshots/resizable-panes.png)
+
+桌面工作區的右邊沒有固定界線。新增窗格或把窗格移到更右的位置時，畫布會繼續橫向
+延伸；底部捲動列讓你在不同窗格群組之間移動，不需要縮窄已經排好的窗格。
+
+![同一個工作區橫向捲動至右方較遠的窗格](docs/screenshots/horizontal-workspace.png)
+
+同一個工作區在手機瀏覽器上一次顯示一個窗格，並附上一排觸控鍵盤沒有的按鍵：
 
 <img src="docs/screenshots/mobile.png" alt="同一個工作區在手機上的樣子：PowerShell 窗格全螢幕顯示，下方是 Esc、Tab、Ctrl、Alt、Shift 按鍵列" width="280">
 
@@ -136,7 +147,8 @@ MIT —— 詳見 [LICENSE](LICENSE)。
 wps7 會重新散布第三方程式碼：打包後的執行檔內嵌了所有正式相依套件，而 `public/vendor/`
 則附帶預先建置的 Excalidraw、React、xterm.js 以及它們使用的字型。這些元件的授權聲明
 彙整在 [THIRD-PARTY-LICENSES.md](THIRD-PARTY-LICENSES.md)，可用
-`npm run licenses:generate` 重新產生。
+`npm run licenses:generate` 重新產生。固定版本的上游授權檔可以先用
+`npm run licenses:sync` 重新下載並核對雜湊。
 
 ## 致謝
 

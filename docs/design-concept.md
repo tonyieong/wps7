@@ -84,7 +84,7 @@ Amber 只用於警告、需要重新啟動或受保護存取，避免同一般�
 
 ## 4. 工作區設計
 
-![WPS7 工作區深淺色設計](./wps7-workspace-dark-light.png)
+![WPS7 可調整大小及橫向延伸的工作區](./screenshots/resizable-panes.png)
 
 工作區由以下部分組成：
 
@@ -169,7 +169,7 @@ Resize Handle 及分隔線需要有清楚嘅 Hover／Active 回饋。活動 Pane
 
 ## 6. 設定界面
 
-![WPS7 設定界面](./wps7-settings-light.png)
+![WPS7 設定界面](./screenshots/settings.png)
 
 設定介面採用固定分類導覽、中央表單及右側即時預覽，解決大量設定全部放喺單一長表單嘅問題。
 
@@ -201,7 +201,7 @@ Host、Port 或部分後端設定需要清楚標示「Requires restart」。儲�
 
 ## 7. 登入界面
 
-![WPS7 登入界面深淺色設計](./wps7-login-dark-light.png)
+![WPS7 登入界面](./screenshots/login.png)
 
 登入畫面需要明確表達 WPS7 係受保護嘅本機終端入口，而唔係一般雲端 SaaS 產品。
 
@@ -325,4 +325,3 @@ Host、Port 或部分後端設定需要清楚標示「Requires restart」。儲�
 - 設定容易搜尋，並清楚區分即時生效與需要重啟。
 - 登入畫面清楚表達本機服務、安全保護及工作階段還原。
 - 桌面、平板及手機都可以完成核心操作。
-

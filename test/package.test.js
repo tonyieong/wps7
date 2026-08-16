@@ -217,4 +217,21 @@ test('the redistributable ships its license notices', () => {
     const section = notices.slice(start, end === -1 ? undefined : end);
     assert.match(section, /```/, `${dependency} must include its license text`);
   }
+
+  const runtimeLicense = path.join(root, 'licenses', 'node-v22.23.2-LICENSE');
+  const fontLicense = path.join(root, 'licenses', 'OFL-1.1.txt');
+  const excalidrawNotice = path.join(
+    root,
+    'public',
+    'vendor',
+    'excalidraw',
+    'excalidraw-with-preact.production.min.js.LICENSE.txt'
+  );
+  for (const file of [runtimeLicense, fontLicense, excalidrawNotice]) {
+    assert.ok(fs.existsSync(file), `${path.relative(root, file)} must exist`);
+  }
+  assert.match(notices, /## Embedded Node\.js runtime[\s\S]*### Node\.js v22\.23\.2/);
+  assert.match(notices, /Node\.js is licensed for use as follows:/);
+  assert.match(notices, /SIL OPEN FONT LICENSE\s+Version 1\.1/);
+  assert.match(notices, /regenerator-runtime -- Copyright \(c\) 2014-present/);
 });
