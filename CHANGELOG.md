@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-08-17
+
 ### Added
 
 - A "New image" entry in the sidebar. The pane it opens browses for a picture on
@@ -206,7 +208,8 @@ First public release.
 - `nssm.exe` and a stray `tray_windows_release.exe` from version control. NSSM is
   now downloaded and hash-verified at install time.
 
-[Unreleased]: https://github.com/tonyieong/wps7/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/tonyieong/wps7/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/tonyieong/wps7/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/tonyieong/wps7/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/tonyieong/wps7/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/tonyieong/wps7/compare/v0.1.0...v0.1.1
