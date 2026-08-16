@@ -129,10 +129,9 @@ function requireFileAuth(config) {
       res.status(404).json({ error: 'File manager is disabled.' });
       return;
     }
-    if (!config.auth.password_hash) {
-      res.status(403).json({ error: 'Set a strong password before using file manager.' });
-      return;
-    }
+    // No extra password gate here: without auth.password_hash config.js refuses
+    // to bind anything but 127.0.0.1, and that same install already hands out an
+    // unauthenticated PowerShell session with full filesystem access.
     requireAuth(config)(req, res, next);
   };
 }

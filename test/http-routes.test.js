@@ -270,6 +270,34 @@ test('the default workspace state is reachable with no password set', async () =
   assert.ok(res.json.sessions[0].tabs[0].panes[0].id);
 });
 
+test('file and notepad panes open with no password set', async () => {
+  // Regression: requireFileAuth answered 403 for every file-manager route while
+  // auth.password_hash was empty, so the default local install could not open a
+  // file or notepad pane at all -- even though the same install hands out an
+  // unauthenticated PowerShell session, and config.js already refuses to bind
+  // 0.0.0.0 without a password.
+  const loaded = await request('/api/state');
+  const basePaneId = loaded.json.sessions[0].tabs[0].panes[0].id;
+
+  const filesPane = await request(`/api/panes/${basePaneId}/files`, { method: 'POST', body: { path: '' } });
+  assert.equal(filesPane.status, 201);
+  assert.equal(filesPane.json.type, 'files');
+
+  const notepadPane = await request(`/api/panes/${basePaneId}/notepad`, { method: 'POST', body: { path: '' } });
+  assert.equal(notepadPane.status, 201);
+  assert.equal(notepadPane.json.type, 'notepad');
+
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-no-password-test-'));
+  const listed = await request(`/api/files?path=${encodeURIComponent(folder)}`);
+  assert.equal(listed.status, 200);
+  fs.rmSync(folder, { recursive: true, force: true });
+
+  for (const paneId of [filesPane.json.id, notepadPane.json.id]) {
+    const closed = await request(`/api/panes/${paneId}`, { method: 'DELETE' });
+    assert.equal(closed.status, 200);
+  }
+});
+
 test('setting a password through /api/settings gates every authenticated route after it', async () => {
   const weak = await request('/api/settings', { method: 'POST', body: { auth: { password: 'short' } } });
   assert.equal(weak.status, 400);
