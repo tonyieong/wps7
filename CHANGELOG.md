@@ -19,8 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The file manager and notepad routes no longer refuse to run while
   `auth.password_hash` is empty. Without a password the server already refuses
   to bind anything but `127.0.0.1`, where it hands out an unauthenticated
-  PowerShell session with the same filesystem access. Set
-  `file_manager.enabled = false` to turn those routes off.
+  PowerShell session with the same filesystem access.
 
 ## [0.1.3] - 2026-08-16
 
