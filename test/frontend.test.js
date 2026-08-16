@@ -1916,6 +1916,16 @@ test('file create, rename and delete use an app modal with live validation inste
   assert.match(styles, /\.app-modal-danger\s*\{[^}]*border:\s*1px solid var\(--danger\)/s);
 });
 
+test('app modals stay above the software keyboard and scroll their body instead', () => {
+  // Every app modal holds a text field, so the keyboard always opens on it.
+  // Centred on the layout viewport, the field and the footer sat behind it.
+  assert.match(styles, /\.app-modal-overlay\s*\{[^}]*height:\s*var\(--app-height, 100dvh\)/s);
+  assert.match(styles, /\.app-modal\s*\{[^}]*max-height:\s*100%/s);
+  assert.match(styles, /\.app-modal-body\s*\{[^}]*min-height:\s*0[^}]*overflow:\s*auto/s);
+  // The save dialog's folder list sized itself against vh for the same reason.
+  assert.match(styles, /\.notepad-save-directory-list\s*\{[^}]*max-height:\s*min\(320px, calc\(var\(--app-height, 100dvh\) \* \.45\)\)/s);
+});
+
 test('bulk download zips server-side and bulk delete uses a single reporting endpoint', () => {
   assert.match(mainSource, /app\.post\('\/api\/files\/download-archive'/);
   assert.match(mainSource, /app\.post\('\/api\/files\/delete-bulk'/);
