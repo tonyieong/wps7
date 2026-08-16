@@ -565,6 +565,12 @@
     return state.displayMode === 'mobile' || (state.displayMode === 'auto' && (narrow || (touchDevice && viewportWidth <= 1024)));
   }
 
+  // window.innerHeight covers the collapsible URL bar on a phone, so anything
+  // clamped to it can land off screen. visualViewport reports what is visible.
+  function viewportHeight() {
+    return window.visualViewport?.height || window.innerHeight;
+  }
+
   function terminalFontSize() {
     if (!isMobileLayout()) {
       return Number(state.config.ui?.terminal_font_size) || 13;
@@ -6149,7 +6155,7 @@
     const width = menu.offsetWidth;
     const height = menu.offsetHeight;
     menu.style.left = `${Math.min(clientX, window.innerWidth - width - 6)}px`;
-    menu.style.top = `${Math.min(clientY, window.innerHeight - height - 6)}px`;
+    menu.style.top = `${Math.min(clientY, viewportHeight() - height - 6)}px`;
     menu.querySelectorAll('[data-context-index]').forEach((button) => {
       button.onclick = () => {
         const item = items[Number(button.dataset.contextIndex)];
@@ -7906,7 +7912,7 @@
     `).join('');
     document.body.appendChild(menu);
     menu.style.left = `${Math.min(clientX, window.innerWidth - menu.offsetWidth - 6)}px`;
-    menu.style.top = `${Math.min(clientY, window.innerHeight - menu.offsetHeight - 6)}px`;
+    menu.style.top = `${Math.min(clientY, viewportHeight() - menu.offsetHeight - 6)}px`;
     menu.querySelectorAll('[data-terminal-context-index]').forEach((button) => {
       button.onclick = () => {
         const item = items[Number(button.dataset.terminalContextIndex)];

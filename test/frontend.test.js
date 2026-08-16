@@ -1957,6 +1957,17 @@ test('terminal pane exposes copy, paste, select all and clear without copy-on-se
   assert.doesNotMatch(appSource, /copyOnSelect|onSelectionChange/);
 });
 
+test('context menus clamp against the visible viewport, not the layout viewport', () => {
+  // Clamping to window.innerHeight put a menu opened near the bottom of a
+  // phone screen behind the URL bar, where its lower items could not be tapped.
+  assert.match(appSource, /function viewportHeight\(\) \{\s*return window\.visualViewport\?\.height \|\| window\.innerHeight;/s);
+  const clamps = [...appSource.matchAll(/menu\.style\.top = `\$\{Math\.min\(clientY, ([\w.?()]+) -/g)].map((match) => match[1]);
+  assert.equal(clamps.length, 2);
+  for (const clamp of clamps) {
+    assert.equal(clamp, 'viewportHeight()', `menu still clamps to ${clamp}`);
+  }
+});
+
 // The copy helpers only read an xterm buffer, so they can run against a headless
 // terminal instead of a browser.
 function loadTerminalSelectionText() {
