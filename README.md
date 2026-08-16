@@ -42,6 +42,29 @@ keys a touch keyboard does not have:
 
 <img src="docs/screenshots/mobile.png" alt="The same workspace on a phone: the PowerShell pane full screen above a key bar with Esc, Tab, Ctrl, Alt and Shift" width="280">
 
+## Where to run it
+
+**On your own machine.** Leave the default `127.0.0.1` and use wps7 as a local
+workbench: terminals, files, notes, and the whiteboard in a browser tab, with
+the layout restored after every reboot. Nothing leaves the machine.
+
+**On an always-on machine, reached over a VPN.** Run wps7 on the box that holds
+your projects and your CLI logins — a home server, a spare desktop, a Windows
+VM — and join that box to a private network (WireGuard, Tailscale, a company
+VPN). Every other device then opens the same workspace in a browser: a laptop,
+a tablet, or a phone can drive the Codex and Claude Code sessions running there,
+watch a long build finish, and browse the file system, with nothing to install
+on the client.
+
+The VPN supplies what wps7 does not. There is no TLS, so the tunnel is what
+encrypts the traffic, and the private network is what decides who can reach the
+port at all. Set `server.host = "0.0.0.0"` so the VPN interface is covered —
+`127.0.0.1` and `0.0.0.0` are the only values wps7 accepts — **set a strong
+password**, and keep the port closed on every interface facing the internet.
+Reaching the machine by its VPN address works as is; a hostname, such as a
+Tailscale MagicDNS name, has to be listed in `server.allowed_hosts` or the
+`Host` check rejects it.
+
 ## Download
 
 Take `wps7-<version>-windows-x64.zip` from the [releases page](../../releases).
