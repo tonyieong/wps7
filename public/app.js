@@ -3377,6 +3377,10 @@
           status.textContent = message.message;
         } else if (message.type === 'selection') {
           selectedText = message.text || '';
+        } else if (message.type === 'keyboardFocus') {
+          if (!isMobileLayout()) return;
+          if (message.visible) keyboard.focus({ preventScroll: true });
+          else keyboard.blur();
         } else if (message.type === 'copy') {
           selectedText = message.text || '';
           copyBrowserText(selectedText);
@@ -3484,7 +3488,7 @@
       if (event.pointerType === 'touch') {
         activeTouches.delete(event.pointerId);
         connection.send({ type: 'touch', event: 'touchEnd', touchPoints: touchPoints(), modifiers: browserModifiers(event) });
-        if (isMobileLayout()) keyboard.focus({ preventScroll: true });
+        if (isMobileLayout()) connection.send({ type: 'keyboardFocus' });
         return;
       }
       if (event.button !== 2) {
@@ -3492,7 +3496,6 @@
         sendMouse('mouseReleased', event, { button: event.button === 1 ? 'middle' : 'left', buttons: 0, clickCount: event.detail || 1 });
         connection.send({ type: 'selection' });
       }
-      if (isMobileLayout()) keyboard.focus({ preventScroll: true });
     };
     inputSurface.onpointercancel = (event) => {
       if (event.pointerType !== 'touch') return;
