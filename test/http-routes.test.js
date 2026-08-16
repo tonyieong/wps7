@@ -199,6 +199,12 @@ before(async () => {
     '',
     '[auth]',
     'password_hash = ""',
+    '',
+    // As an older build would have written it. file_manager.enabled is retired,
+    // so every file-manager test below doubles as proof that the leftover key
+    // no longer turns those routes into 404s.
+    '[file_manager]',
+    'enabled = false',
     ''
   ].join('\n'));
 
@@ -268,6 +274,34 @@ test('the default workspace state is reachable with no password set', async () =
   const res = await request('/api/state');
   assert.equal(res.status, 200);
   assert.ok(res.json.sessions[0].tabs[0].panes[0].id);
+});
+
+test('file and notepad panes open with no password set', async () => {
+  // Regression: the file-manager routes used to sit behind their own guard,
+  // which answered 403 while auth.password_hash was empty, so the default local
+  // install could not open a file or notepad pane at all -- even though the same
+  // install hands out an unauthenticated PowerShell session, and config.js
+  // already refuses to bind 0.0.0.0 without a password.
+  const loaded = await request('/api/state');
+  const basePaneId = loaded.json.sessions[0].tabs[0].panes[0].id;
+
+  const filesPane = await request(`/api/panes/${basePaneId}/files`, { method: 'POST', body: { path: '' } });
+  assert.equal(filesPane.status, 201);
+  assert.equal(filesPane.json.type, 'files');
+
+  const notepadPane = await request(`/api/panes/${basePaneId}/notepad`, { method: 'POST', body: { path: '' } });
+  assert.equal(notepadPane.status, 201);
+  assert.equal(notepadPane.json.type, 'notepad');
+
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'wps7-no-password-test-'));
+  const listed = await request(`/api/files?path=${encodeURIComponent(folder)}`);
+  assert.equal(listed.status, 200);
+  fs.rmSync(folder, { recursive: true, force: true });
+
+  for (const paneId of [filesPane.json.id, notepadPane.json.id]) {
+    const closed = await request(`/api/panes/${paneId}`, { method: 'DELETE' });
+    assert.equal(closed.status, 200);
+  }
 });
 
 test('setting a password through /api/settings gates every authenticated route after it', async () => {

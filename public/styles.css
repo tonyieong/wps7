@@ -5846,9 +5846,85 @@ a:focus-visible {
 
 .image-empty {
   grid-area: 1 / 1;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
   margin: 0;
   color: var(--muted);
   font: 12px/1.4 "Segoe UI", sans-serif;
+}
+
+.image-empty p {
+  margin: 0;
+}
+
+.image-open-dialog {
+  width: min(480px, calc(100vw - 24px));
+}
+
+.image-open-dialog .app-modal-body {
+  display: grid;
+  gap: 8px;
+}
+
+.image-open-location {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: 3px;
+}
+
+.image-open-location input {
+  min-width: 0;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-raised);
+  color: var(--text);
+  font: 11px/1 "Cascadia Mono", Consolas, monospace;
+}
+
+.image-open-list {
+  min-height: 140px;
+  max-height: min(320px, calc(var(--app-height, 100dvh) * .45));
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--terminal-bg);
+}
+
+.image-open-list button {
+  width: 100%;
+  height: 28px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  padding: 0 7px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.image-open-list button:hover,
+.image-open-list button:focus-visible {
+  background: var(--accent-soft);
+  outline: none;
+}
+
+.image-open-list button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.image-open-empty {
+  padding: 12px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 11px;
 }
 
 .image-status-bar {

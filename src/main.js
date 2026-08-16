@@ -123,20 +123,6 @@ function requireAuth(config) {
   };
 }
 
-function requireFileAuth(config) {
-  return (req, res, next) => {
-    if (!config.file_manager.enabled) {
-      res.status(404).json({ error: 'File manager is disabled.' });
-      return;
-    }
-    if (!config.auth.password_hash) {
-      res.status(403).json({ error: 'Set a strong password before using file manager.' });
-      return;
-    }
-    requireAuth(config)(req, res, next);
-  };
-}
-
 function notepadDefaults(config) {
   return {
     wrap: config.ui.notepad_word_wrap === true,
@@ -227,7 +213,6 @@ function settingsConfig(config, runtimeConfig) {
       notepad_autosave: Boolean(config.ui.notepad_autosave)
     },
     file_manager: {
-      enabled: Boolean(config.file_manager.enabled),
       root_mode: config.file_manager.root_mode === 'drives' ? 'drives' : runtimeConfig.file_manager.root_mode,
       max_upload_bytes: nonNegativeInteger(config.file_manager.max_upload_bytes, runtimeConfig.file_manager.max_upload_bytes),
       show_hidden: Boolean(config.file_manager.show_hidden),
@@ -418,9 +403,6 @@ function sanitizeSettingsUpdates(updates) {
   }
   if (updates.file_manager) {
     next.file_manager = {};
-    if (typeof updates.file_manager.enabled === 'boolean') {
-      next.file_manager.enabled = updates.file_manager.enabled;
-    }
     if (updates.file_manager.root_mode === 'drives') {
       next.file_manager.root_mode = updates.file_manager.root_mode;
     }
@@ -971,7 +953,7 @@ function main() {
     });
   });
 
-  app.post('/api/panes/:paneId/files', requireFileAuth(config), (req, res) => {
+  app.post('/api/panes/:paneId/files', requireAuth(config), (req, res) => {
     const found = store.findPane(req.params.paneId);
     if (!found) {
       res.status(404).json({ error: 'Pane not found.' });
@@ -989,7 +971,7 @@ function main() {
     });
   });
 
-  app.post('/api/panes/:paneId/image', requireFileAuth(config), (req, res) => {
+  app.post('/api/panes/:paneId/image', requireAuth(config), (req, res) => {
     const found = store.findPane(req.params.paneId);
     if (!found) {
       res.status(404).json({ error: 'Pane not found.' });
@@ -1012,7 +994,7 @@ function main() {
     });
   });
 
-  app.patch('/api/panes/:paneId/image/path', requireFileAuth(config), (req, res) => {
+  app.patch('/api/panes/:paneId/image/path', requireAuth(config), (req, res) => {
     const nextPath = req.body.path ? files.normalizeLocalPath(req.body.path) : '';
     if (req.body.path && !nextPath) {
       res.status(400).json({ error: 'Invalid local path.' });
@@ -1070,7 +1052,7 @@ function main() {
     res.json({ ok: true });
   });
 
-  app.patch('/api/panes/:paneId/files/path', requireFileAuth(config), (req, res) => {
+  app.patch('/api/panes/:paneId/files/path', requireAuth(config), (req, res) => {
     const nextPath = req.body.path ? files.normalizeLocalPath(req.body.path) : '';
     if (req.body.path && !nextPath) {
       res.status(400).json({ error: 'Invalid local path.' });
@@ -1084,7 +1066,7 @@ function main() {
     res.json({ id: pane.id, path: pane.path });
   });
 
-  app.post('/api/panes/:paneId/files/tabs', requireFileAuth(config), (req, res) => {
+  app.post('/api/panes/:paneId/files/tabs', requireAuth(config), (req, res) => {
     const targetPath = req.body.path ? files.normalizeLocalPath(req.body.path) : '';
     if (req.body.path && !targetPath) {
       res.status(400).json({ error: 'Invalid local path.' });
@@ -1098,7 +1080,7 @@ function main() {
     res.status(201).json({ tab });
   });
 
-  app.post('/api/panes/:paneId/files/tabs/:tabId/activate', requireFileAuth(config), (req, res) => {
+  app.post('/api/panes/:paneId/files/tabs/:tabId/activate', requireAuth(config), (req, res) => {
     if (!store.activateFilesTab(req.params.paneId, req.params.tabId)) {
       res.status(404).json({ error: 'Files tab not found.' });
       return;
@@ -1106,7 +1088,7 @@ function main() {
     res.json({ ok: true });
   });
 
-  app.delete('/api/panes/:paneId/files/tabs/:tabId', requireFileAuth(config), (req, res) => {
+  app.delete('/api/panes/:paneId/files/tabs/:tabId', requireAuth(config), (req, res) => {
     if (!store.closeFilesTab(req.params.paneId, req.params.tabId)) {
       res.status(404).json({ error: 'Files tab not found.' });
       return;
@@ -1219,7 +1201,7 @@ function main() {
     res.json({ id: req.params.paneId, url: url || '' });
   });
 
-  app.post('/api/panes/:paneId/notepad', requireFileAuth(config), (req, res) => {
+  app.post('/api/panes/:paneId/notepad', requireAuth(config), (req, res) => {
     const found = store.findPane(req.params.paneId);
     const targetPath = req.body.path ? files.normalizeLocalPath(req.body.path) : '';
     if (!found) {
@@ -1242,7 +1224,7 @@ function main() {
     });
   });
 
-  app.post('/api/panes/:paneId/notepad/tabs', requireFileAuth(config), (req, res) => {
+  app.post('/api/panes/:paneId/notepad/tabs', requireAuth(config), (req, res) => {
     const targetPath = req.body.path ? files.normalizeLocalPath(req.body.path) : '';
     if (req.body.path && !targetPath) {
       res.status(400).json({ error: 'Invalid local path.' });
@@ -1256,7 +1238,7 @@ function main() {
     res.status(201).json({ tab });
   });
 
-  app.post('/api/panes/:paneId/notepad/tabs/:tabId/activate', requireFileAuth(config), (req, res) => {
+  app.post('/api/panes/:paneId/notepad/tabs/:tabId/activate', requireAuth(config), (req, res) => {
     if (!store.activateNotepadTab(req.params.paneId, req.params.tabId)) {
       res.status(404).json({ error: 'Notepad tab not found.' });
       return;
@@ -1264,7 +1246,7 @@ function main() {
     res.json({ ok: true });
   });
 
-  app.patch('/api/panes/:paneId/notepad/tabs/:tabId', requireFileAuth(config), (req, res) => {
+  app.patch('/api/panes/:paneId/notepad/tabs/:tabId', requireAuth(config), (req, res) => {
     const updates = {};
     if (req.body.path !== undefined) {
       const targetPath = req.body.path ? files.normalizeLocalPath(req.body.path) : '';
@@ -1320,7 +1302,7 @@ function main() {
     res.json({ ok: true });
   });
 
-  app.delete('/api/panes/:paneId/notepad/tabs/:tabId', requireFileAuth(config), (req, res) => {
+  app.delete('/api/panes/:paneId/notepad/tabs/:tabId', requireAuth(config), (req, res) => {
     if (!store.closeNotepadTab(req.params.paneId, req.params.tabId)) {
       res.status(404).json({ error: 'Notepad tab not found.' });
       return;
@@ -1405,7 +1387,7 @@ function main() {
     setTimeout(() => stopRuntime(), 100).unref();
   });
 
-  app.get('/api/files/drives', requireFileAuth(config), (req, res) => {
+  app.get('/api/files/drives', requireAuth(config), (req, res) => {
     try {
       res.json({ drives: files.listDrives() });
     } catch (error) {
@@ -1413,11 +1395,11 @@ function main() {
     }
   });
 
-  app.get('/api/files/bookmarks', requireFileAuth(config), (req, res) => {
+  app.get('/api/files/bookmarks', requireAuth(config), (req, res) => {
     res.json({ bookmarks: Array.isArray(config.file_manager.bookmarks) ? config.file_manager.bookmarks : [] });
   });
 
-  app.post('/api/files/bookmarks', requireFileAuth(config), (req, res) => {
+  app.post('/api/files/bookmarks', requireAuth(config), (req, res) => {
     try {
       const bookmarkPath = files.normalizeLocalPath(req.body.path);
       if (!bookmarkPath) {
@@ -1436,7 +1418,7 @@ function main() {
     }
   });
 
-  app.delete('/api/files/bookmarks', requireFileAuth(config), (req, res) => {
+  app.delete('/api/files/bookmarks', requireAuth(config), (req, res) => {
     try {
       const bookmarkPath = files.normalizeLocalPath(req.body.path);
       if (!bookmarkPath) {
@@ -1453,7 +1435,7 @@ function main() {
     }
   });
 
-  app.get('/api/files', requireFileAuth(config), (req, res) => {
+  app.get('/api/files', requireAuth(config), (req, res) => {
     try {
       res.json(files.listDirectory(req.query.path));
     } catch (error) {
@@ -1461,7 +1443,7 @@ function main() {
     }
   });
 
-  app.get('/api/files/text', requireFileAuth(config), (req, res) => {
+  app.get('/api/files/text', requireAuth(config), (req, res) => {
     try {
       res.json(files.readTextFile(req.query.path));
     } catch (error) {
@@ -1469,7 +1451,7 @@ function main() {
     }
   });
 
-  app.get('/api/files/image', requireFileAuth(config), (req, res) => {
+  app.get('/api/files/image', requireAuth(config), (req, res) => {
     let image;
     try {
       image = files.imageInfo(req.query.path);
@@ -1494,7 +1476,7 @@ function main() {
     });
   });
 
-  app.get('/api/files/image-siblings', requireFileAuth(config), (req, res) => {
+  app.get('/api/files/image-siblings', requireAuth(config), (req, res) => {
     try {
       res.json(files.listImageSiblings(req.query.path));
     } catch (error) {
@@ -1502,7 +1484,7 @@ function main() {
     }
   });
 
-  app.put('/api/files/text', requireFileAuth(config), (req, res) => {
+  app.put('/api/files/text', requireAuth(config), (req, res) => {
     try {
       res.json(files.writeTextFile(req.body.path, req.body.content, req.body.encoding));
     } catch (error) {
@@ -1591,7 +1573,7 @@ function main() {
     res.json({ bookmarks: config.browser.bookmarks });
   });
 
-  app.post('/api/files/folder', requireFileAuth(config), (req, res) => {
+  app.post('/api/files/folder', requireAuth(config), (req, res) => {
     try {
       res.status(201).json(files.createFolder(req.body.path, req.body.name));
     } catch (error) {
@@ -1599,7 +1581,7 @@ function main() {
     }
   });
 
-  app.post('/api/files/file', requireFileAuth(config), (req, res) => {
+  app.post('/api/files/file', requireAuth(config), (req, res) => {
     try {
       res.status(201).json(files.createFile(req.body.path, req.body.name));
     } catch (error) {
@@ -1607,7 +1589,7 @@ function main() {
     }
   });
 
-  app.get('/api/files/download', requireFileAuth(config), async (req, res) => {
+  app.get('/api/files/download', requireAuth(config), async (req, res) => {
     try {
       const download = await files.prepareDownload(req.query.path);
       res.download(download.path, download.name, (error) => {
@@ -1623,7 +1605,7 @@ function main() {
     }
   });
 
-  app.post('/api/files/download-archive', requireFileAuth(config), async (req, res) => {
+  app.post('/api/files/download-archive', requireAuth(config), async (req, res) => {
     try {
       const download = await files.prepareBulkDownload(req.body.paths);
       res.download(download.path, download.name, (error) => {
@@ -1639,7 +1621,7 @@ function main() {
     }
   });
 
-  app.patch('/api/files/rename', requireFileAuth(config), (req, res) => {
+  app.patch('/api/files/rename', requireAuth(config), (req, res) => {
     try {
       res.json(files.renameItem(req.body.path, req.body.name));
     } catch (error) {
@@ -1647,7 +1629,7 @@ function main() {
     }
   });
 
-  app.patch('/api/files/move', requireFileAuth(config), (req, res) => {
+  app.patch('/api/files/move', requireAuth(config), (req, res) => {
     try {
       res.json(files.moveItem(req.body.path, req.body.destination));
     } catch (error) {
@@ -1655,7 +1637,7 @@ function main() {
     }
   });
 
-  app.post('/api/files/copy', requireFileAuth(config), (req, res) => {
+  app.post('/api/files/copy', requireAuth(config), (req, res) => {
     try {
       res.status(201).json(files.copyItem(req.body.path, req.body.destination));
     } catch (error) {
@@ -1663,7 +1645,7 @@ function main() {
     }
   });
 
-  app.delete('/api/files', requireFileAuth(config), (req, res) => {
+  app.delete('/api/files', requireAuth(config), (req, res) => {
     try {
       res.json(files.deleteItem(req.body.path));
     } catch (error) {
@@ -1671,7 +1653,7 @@ function main() {
     }
   });
 
-  app.post('/api/files/delete-bulk', requireFileAuth(config), (req, res) => {
+  app.post('/api/files/delete-bulk', requireAuth(config), (req, res) => {
     try {
       res.json(files.deleteItems(req.body.paths));
     } catch (error) {
@@ -1679,7 +1661,7 @@ function main() {
     }
   });
 
-  app.post('/api/files/upload', requireFileAuth(config), (req, res) => {
+  app.post('/api/files/upload', requireAuth(config), (req, res) => {
     const targetPath = req.query.path;
     let finished = false;
     let uploadError = null;

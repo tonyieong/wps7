@@ -3,8 +3,9 @@
 English | [繁體中文](README.zh-TW.md)
 
 Portable Windows web terminal workspace inspired by `tmux-continuum`. It serves
-PowerShell sessions, a file manager, a notepad, a browser pane, and a whiteboard
-to any browser on your machine, and rebuilds the layout after a reboot.
+PowerShell sessions, a file manager, a notepad, a browser pane, an image viewer,
+and a whiteboard to any browser on your machine, and rebuilds the layout after a
+reboot.
 
 > [!WARNING]
 > **wps7 gives a web browser access to PowerShell and to your file system.**
