@@ -1673,6 +1673,7 @@
       <div class="image-pane" data-image-pane="${pane.id}">
         <div class="image-toolbar" data-paged-toolbar>
           ${renderToolbarPageButton('previous')}
+          <button class="file-command-button" type="button" data-toolbar-item data-image-open aria-label="Open image" title="Open image (O)">${fileActionIcon('folder')}</button>
           <button class="file-command-button" type="button" data-toolbar-item data-image-step="-1" aria-label="Previous image" title="Previous image (Left arrow)">${fileActionIcon('browser-back')}</button>
           <button class="file-command-button" type="button" data-toolbar-item data-image-step="1" aria-label="Next image" title="Next image (Right arrow)">${fileActionIcon('browser-forward')}</button>
           <button class="file-command-button" type="button" data-toolbar-item data-image-zoom="out" aria-label="Zoom out" title="Zoom out (Ctrl+-)">${fileActionIcon('zoom')}</button>
@@ -1689,7 +1690,10 @@
         </div>
         <div class="image-stage" data-image-stage tabindex="0" role="group" aria-label="Image viewer">
           <img class="image-canvas" data-image-canvas alt="${escapeAttr(name)}" draggable="false" hidden>
-          <p class="image-empty" data-image-empty>No image selected.</p>
+          <div class="image-empty" data-image-empty>
+            <p data-image-empty-text>No image selected.</p>
+            <button type="button" class="primary" data-image-open>Open image…</button>
+          </div>
         </div>
         <div class="image-status-bar">
           <span class="image-status-name" data-image-name title="${escapeAttr(pane.path)}">${escapeHtml(name)}</span>
@@ -1780,6 +1784,7 @@
     }
     const image = paneElement.querySelector('[data-image-canvas]');
     const empty = paneElement.querySelector('[data-image-empty]');
+    const emptyText = paneElement.querySelector('[data-image-empty-text]');
     if (!image) {
       return;
     }
@@ -1797,7 +1802,9 @@
     image.hidden = true;
     if (empty) {
       empty.hidden = Boolean(path);
-      empty.textContent = 'No image selected.';
+    }
+    if (emptyText) {
+      emptyText.textContent = 'No image selected.';
     }
     if (!path) {
       updateImageStatus(paneId);
@@ -1817,7 +1824,9 @@
       image.hidden = true;
       if (empty) {
         empty.hidden = false;
-        empty.textContent = 'Could not load image.';
+      }
+      if (emptyText) {
+        emptyText.textContent = 'Could not load image.';
       }
       updateImageStatus(paneId);
     };
@@ -1967,6 +1976,9 @@
 
   function wireImagePaneElement(paneElement, paneId) {
     const stage = paneElement.querySelector('[data-image-stage]');
+    paneElement.querySelectorAll('[data-image-open]').forEach((button) => {
+      button.onclick = () => chooseImageForPane(paneId);
+    });
     paneElement.querySelectorAll('[data-image-step]').forEach((button) => {
       button.onclick = () => stepImage(paneId, Number(button.dataset.imageStep));
     });
@@ -2035,6 +2047,7 @@
         ArrowRight: () => (event.ctrlKey ? rotateImage(paneId, 90) : stepImage(paneId, 1)),
         '0': () => fitImage(paneId),
         '1': () => actualSizeImage(paneId),
+        o: () => chooseImageForPane(paneId),
         Delete: () => deleteImage(paneId)
       };
       const handler = handlers[event.key];
@@ -2210,6 +2223,9 @@
             </button>
             <button class="rail-button" data-action="notepad" aria-label="New notepad" title="New notepad">
               <span class="rail-icon" aria-hidden="true">${fileActionIcon('notepad')}</span><span class="rail-label">New notepad</span>
+            </button>
+            <button class="rail-button" data-action="image" aria-label="New image" title="New image">
+              <span class="rail-icon" aria-hidden="true">${fileActionIcon('image')}</span><span class="rail-label">New image</span>
             </button>
             <button class="rail-button" data-action="usage" aria-label="New usage pane" title="New usage pane"><span class="rail-icon" aria-hidden="true">${fileActionIcon('usage')}</span><span class="rail-label">Usage pane</span></button>
             <button class="rail-button" data-action="whiteboard" aria-label="New whiteboard" title="New whiteboard"><span class="rail-icon" aria-hidden="true">${fileActionIcon('line')}</span><span class="rail-label">New whiteboard</span></button>
@@ -2540,6 +2556,7 @@
     app.querySelectorAll('[data-action="files"]').forEach((button) => button.onclick = openFilesPane);
     app.querySelectorAll('[data-action="browser"]').forEach((button) => button.onclick = openBrowserPane);
     app.querySelectorAll('[data-action="notepad"]').forEach((button) => button.onclick = () => openNotepadPane());
+    app.querySelectorAll('[data-action="image"]').forEach((button) => button.onclick = () => openImagePane());
     app.querySelectorAll('[data-action="usage"]').forEach((button) => button.onclick = openUsagePane);
     app.querySelectorAll('[data-action="whiteboard"]').forEach((button) => button.onclick = openWhiteboardPane);
     app.querySelectorAll('[data-action="settings"]').forEach((button) => button.onclick = openSettings);
@@ -5242,6 +5259,122 @@
 
   function isImagePath(path) {
     return IMAGE_PATH_PATTERN.test(String(path || ''));
+  }
+
+  // An image pane opened from the sidebar has no path, and a file pane is the
+  // only other way to hand it one, so it browses for a picture itself.
+  function openImagePickerDialog(startLocation) {
+    return new Promise((resolve) => {
+      document.querySelector('.app-modal-overlay')?.remove();
+      const previousFocus = document.activeElement;
+      const overlay = document.createElement('div');
+      overlay.className = 'app-modal-overlay';
+      overlay.innerHTML = `
+        <div class="app-modal image-open-dialog" role="dialog" aria-modal="true" aria-label="Open image">
+          <header class="app-modal-header">Open image</header>
+          <div class="app-modal-body">
+            <div class="image-open-location">
+              <button class="file-command-button" type="button" data-image-open-up aria-label="Up one level" title="Up one level">${fileActionIcon('up')}</button>
+              <input type="text" data-image-open-location value="${escapeAttr(startLocation || '')}" aria-label="Location" autocomplete="off" autocapitalize="off" spellcheck="false">
+              <button class="file-command-button" type="button" data-image-open-refresh aria-label="Refresh" title="Refresh">${fileActionIcon('refresh')}</button>
+            </div>
+            <div class="image-open-list" data-image-open-list role="listbox" aria-label="Folders and images"></div>
+            <div class="app-modal-error" data-modal-error role="alert"></div>
+          </div>
+          <footer class="app-modal-footer">
+            <button type="button" class="secondary" data-modal-cancel>Cancel</button>
+          </footer>
+        </div>`;
+      document.body.appendChild(overlay);
+      const locationInput = overlay.querySelector('[data-image-open-location]');
+      const list = overlay.querySelector('[data-image-open-list]');
+      const errorElement = overlay.querySelector('[data-modal-error]');
+      const upButton = overlay.querySelector('[data-image-open-up]');
+      let currentLocation = startLocation || '';
+      let parentLocation = '';
+
+      const close = (result) => {
+        document.removeEventListener('keydown', onKey, true);
+        overlay.remove();
+        previousFocus?.focus?.();
+        resolve(result);
+      };
+      const renderItems = (items) => {
+        list.innerHTML = items.length ? items.map((item) => `
+          <button type="button" role="option" data-image-open-item="${escapeAttr(item.path)}" data-image-open-kind="${item.kind}" title="${escapeAttr(item.path)}">
+            ${fileActionIcon(item.kind)}
+            <span>${escapeHtml(item.name)}</span>
+          </button>`).join('') : '<div class="image-open-empty">No folders or images here</div>';
+        list.querySelectorAll('[data-image-open-item]').forEach((button) => {
+          button.onclick = () => {
+            if (button.dataset.imageOpenKind === 'image') close(button.dataset.imageOpenItem);
+            else loadLocation(button.dataset.imageOpenItem);
+          };
+        });
+      };
+      const loadLocation = async (location) => {
+        list.innerHTML = '<div class="image-open-empty">Loading…</div>';
+        try {
+          if (!location) {
+            const result = await api('/api/files/drives');
+            currentLocation = '';
+            parentLocation = '';
+            locationInput.value = '';
+            renderItems((result.drives || []).map((drive) => ({ ...drive, kind: 'drive' })));
+          } else {
+            const result = await api(`/api/files?path=${encodeURIComponent(location)}`);
+            currentLocation = result.path;
+            parentLocation = result.parent || '';
+            locationInput.value = currentLocation;
+            renderItems((result.entries || [])
+              .filter((entry) => entry.type === 'directory' || isImagePath(entry.name))
+              .map((entry) => ({ ...entry, kind: entry.type === 'directory' ? 'folder' : 'image' })));
+          }
+          errorElement.textContent = '';
+        } catch (error) {
+          currentLocation = '';
+          parentLocation = '';
+          errorElement.textContent = error.message;
+          list.innerHTML = '<div class="image-open-empty">Location unavailable</div>';
+        }
+        upButton.disabled = !currentLocation;
+      };
+      const onKey = (event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          close(null);
+        } else if (event.key === 'Enter' && event.target === locationInput) {
+          event.preventDefault();
+          loadLocation(locationInput.value.trim());
+        }
+      };
+
+      document.addEventListener('keydown', onKey, true);
+      overlay.addEventListener('mousedown', (event) => {
+        if (event.target === overlay) close(null);
+      });
+      upButton.onclick = () => loadLocation(parentLocation);
+      overlay.querySelector('[data-image-open-refresh]').onclick = () => loadLocation(currentLocation);
+      overlay.querySelector('[data-modal-cancel]').onclick = () => close(null);
+      loadLocation(currentLocation);
+      locationInput.focus();
+    });
+  }
+
+  async function chooseImageForPane(paneId) {
+    const found = findPaneState(paneId);
+    if (!found) {
+      return;
+    }
+    const start = found.pane.path ? localPathDirectory(found.pane.path) : found.pane.cwd;
+    const selected = await openImagePickerDialog(start);
+    if (!selected) {
+      return;
+    }
+    // The picture may live in another folder, so the strip is rebuilt.
+    imagePaneData(paneId).entries = [];
+    await setImagePanePath(paneId, selected);
+    await loadImagePane(found.pane);
   }
 
   async function openImageForFile(path) {

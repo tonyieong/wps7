@@ -54,6 +54,23 @@ test('i18n falls back to English and translates known interface copy', () => {
   assert.equal(i18n.t('A string that has no translation'), 'A string that has no translation');
 });
 
+test('the image pane sidebar button and its open dialog are translated', () => {
+  const { i18n } = loadI18n();
+  i18n.setLocale('zh-HK');
+  for (const label of [
+    'New image',
+    'Open image',
+    'Open image (O)',
+    'Open image…',
+    'Folders and images',
+    'No folders or images here',
+    'No image selected.',
+    'Could not load image.'
+  ]) {
+    assert.notEqual(i18n.t(label), label, `${label} has no zh-HK translation`);
+  }
+});
+
 test('every terminal context menu label has a zh-HK translation', () => {
   const { i18n } = loadI18n();
   i18n.setLocale('zh-HK');

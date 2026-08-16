@@ -2147,6 +2147,21 @@ test('image pane offers stepping, rotation, zoom, fit, download and delete', () 
   }
 });
 
+test('an image pane opened from the sidebar can browse for a picture itself', () => {
+  // A file pane used to be the only thing that could set an image pane's path,
+  // so a sidebar button on its own would hand out a pane with no way to fill it.
+  assert.match(appSource, /data-action="image"[^>]+aria-label="New image"/);
+  assert.match(appSource, /\[data-action="image"\][^\n]+openImagePane\(\)/);
+  assert.ok(appSource.includes('data-image-open'), 'image pane is missing its open control');
+  assert.match(appSource, /o: \(\) => chooseImageForPane\(paneId\)/);
+  assert.match(appSource, /class="app-modal image-open-dialog"/);
+  // Folders to walk into, pictures to pick; everything else stays out.
+  assert.match(appSource, /entry\.type === 'directory' \|\| isImagePath\(entry\.name\)/);
+  assert.match(styles, /\.image-open-list\s*\{[^}]*overflow:\s*auto/s);
+  // The load error writes to its own element so the open button survives it.
+  assert.match(appSource, /emptyText\.textContent = 'Could not load image\.'/);
+});
+
 test('image zoom and rotation are applied as one transform on the picture', () => {
   assert.match(appSource, /translate\(\$\{data\.offsetX\}px, \$\{data\.offsetY\}px\) scale\(\$\{data\.scale\}\) rotate\(\$\{data\.rotation\}deg\) translate\(-50%, -50%\)/);
   // A quarter turn has to swap the edges the fit is measured against.

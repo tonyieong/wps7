@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A "New image" entry in the sidebar. The pane it opens browses for a picture on
+  its own through a new Open image dialog — from the toolbar, from the empty
+  state, or with the `O` key — instead of waiting for a file pane to hand it a
+  path.
+
+### Changed
+
+- The file manager and notepad routes no longer refuse to run while
+  `auth.password_hash` is empty. Without a password the server already refuses
+  to bind anything but `127.0.0.1`, where it hands out an unauthenticated
+  PowerShell session with the same filesystem access. Set
+  `file_manager.enabled = false` to turn those routes off.
+
 ## [0.1.3] - 2026-08-16
 
 ### Added
