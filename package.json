@@ -3,9 +3,32 @@
   "version": "0.1.2",
   "private": true,
   "license": "MIT",
+  "author": "tonyieong",
   "description": "Portable Windows web tmux-continuum style terminal workspace.",
+  "keywords": [
+    "terminal",
+    "powershell",
+    "windows",
+    "conpty",
+    "xterm",
+    "web-terminal",
+    "workspace",
+    "tmux-continuum"
+  ],
+  "homepage": "https://github.com/tonyieong/wps7#readme",
+  "bugs": "https://github.com/tonyieong/wps7/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tonyieong/wps7.git"
+  },
   "main": "src/main.js",
   "bin": "src/main.js",
+  "engines": {
+    "node": ">=22"
+  },
+  "os": [
+    "win32"
+  ],
   "scripts": {
     "start": "node src/main.js",
     "test": "node --test",

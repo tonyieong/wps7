@@ -4,6 +4,8 @@ Security issues go through [SECURITY.md](SECURITY.md), never a public issue.
 wps7 hands out a shell, so a public report is a working exploit against every
 running instance.
 
+Taking part here means following the [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## Project layout
 
 wps7 is a Windows-focused Node.js terminal workspace. Server modules live in

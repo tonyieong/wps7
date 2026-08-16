@@ -15,9 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   own. The behaviour is unchanged; it was previously only implied by one line
   about running at logon.
 - Screenshots in both READMEs.
+- A `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1), GitHub issue forms for bug
+  reports and feature requests, and a pull request template. The issue chooser
+  points security reports at the private advisory form instead of a public
+  issue, and blank issues are turned off.
+- `engines` and `os` fields in `package.json`, declaring the Node 22 floor that
+  CI and the `pkg` target already assumed, and that wps7 is Windows-only.
+  Repository, homepage, bugs, author, and keyword metadata as well.
 
 ### Changed
 
+- The `LICENSE` copyright holder now reads `tonyieong`, matching the account
+  that publishes the repository and releases.
 - Wording that still described wps7 as a Windows service running under
   LocalSystem. `shell.extra_path` is documented against the real reason a folder
   goes missing — the PATH is the one inherited at logon — and the usage pane

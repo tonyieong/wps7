@@ -1,0 +1,107 @@
+name: Bug report
+description: Something in wps7 does not behave the way it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not report a security vulnerability here.** wps7 hands out a shell,
+        so a public report is a working exploit against every running instance.
+        Use the process in [SECURITY.md](../blob/main/SECURITY.md) instead.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you do, what did you expect, and what happened instead?
+      placeholder: |
+        1. Opened a PowerShell pane and ran ...
+        2. Expected ...
+        3. Instead ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: wps7 version
+      description: >-
+        The version from the release you downloaded, or the commit hash if you
+        are running from source.
+      placeholder: v0.1.1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How are you running wps7?
+      options:
+        - Packaged wps7.exe from a release zip
+        - From source (npm start)
+        - Packaged, started at logon via npm run startup:install
+    validations:
+      required: true
+
+  - type: dropdown
+    id: pane
+    attributes:
+      label: Which pane is affected?
+      options:
+        - Terminal
+        - File manager
+        - Notepad
+        - Browser
+        - Whiteboard
+        - Usage
+        - The workspace itself (layout, tabs, restore)
+        - Not pane specific
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      description: Run `winver`, or `[System.Environment]::OSVersion.Version` in PowerShell.
+      placeholder: Windows 11 24H2 (10.0.26100)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: shell
+    attributes:
+      label: Which PowerShell is wps7 using?
+      description: >-
+        wps7 prefers `pwsh.exe` and falls back to `powershell.exe`. The web UI
+        shows a PowerShell 7 install warning when it had to fall back.
+      options:
+        - pwsh.exe (PowerShell 7)
+        - powershell.exe (Windows PowerShell 5.1)
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: client
+    attributes:
+      label: Which browser are you viewing wps7 in?
+      options:
+        - Desktop Chrome or Edge
+        - Desktop Firefox
+        - Mobile browser
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant lines from data/runtime.log
+      description: >-
+        Paste only the lines around the failure. wps7 never writes credentials
+        to this log, but review what you paste before posting it — your paths
+        and machine name are in there.
+      render: text
+    validations:
+      required: false
